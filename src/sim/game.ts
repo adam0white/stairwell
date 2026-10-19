@@ -49,7 +49,7 @@ import {
 } from './people.ts';
 import { DRAW, hashUnit } from './rng.ts';
 
-export const GAME_VERSION = 'stairwell@2';
+export const GAME_VERSION = 'stairwell@3';
 export const DAY_START = 7 * 60;
 export const DAY_END = 21 * 60;
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -145,6 +145,9 @@ export interface RState {
   /** Stories about them that came back to them, with who passed it on; said to the kapıcı at the next meeting. */
   grudges: { prop: string; from: Rid; at: number; lie: boolean; said?: boolean }[];
   vote?: 'yes' | 'no' | 'away';
+  /** Times the kapıcı sat a minute with them, and the day he last did. */
+  sits: number;
+  sitDay: number;
 }
 
 export interface Said {
@@ -236,6 +239,7 @@ export type Input =
   | { at: number; kind: 'tell'; who: Rid; prop: string; value: boolean; sure: boolean }
   | { at: number; kind: 'invent'; who: Rid; about: Rid; trait: string }
   | { at: number; kind: 'word'; who: Rid }
+  | { at: number; kind: 'sit'; who: Rid }
   | { at: number; kind: 'misdeliver'; who: Rid; task: number }
   | { at: number; kind: 'knock'; who: Rid }
   | { at: number; kind: 'prank'; what: 'swap' | 'gate' }
@@ -475,6 +479,8 @@ export function newGame(seed: number): GameState {
       word: null,
       caught: [],
       grudges: [],
+      sits: 0,
+      sitDay: 0,
     })),
     tasks: [],
     nextTask: 1,
@@ -508,7 +514,7 @@ export function newGame(seed: number): GameState {
   say(
     s,
     'riza',
-    'Bread first. They all want it by quarter to eight, and they all say theirs is first.',
+    'Bread first, before anything. They all want it by eight, and they all say theirs is first.',
     'margin',
   );
   say(
@@ -883,7 +889,9 @@ export function talk(s: GameState, a: Rid, b: Rid, where: string, maxClaims?: nu
     const d0 = dayStart(today(s));
     const old = new Set(s.said.filter((x) => x.kind === 'heard' && x.at >= d0).map((x) => x.text));
     const fresh = heard.filter((h) => !old.has(h));
-    say(s, 'narrator', `${nameOf(a)} and ${nameOf(b)} ${place}. You could hear them.`, 'journal');
+    const opener = `${nameOf(a)} and ${nameOf(b)} ${place}. You could hear them.`;
+    if (fresh.length === 0 && s.said.some((x) => x.at >= d0 && x.text === opener)) return;
+    say(s, 'narrator', opener, 'journal');
     for (const h of fresh.slice(0, 4)) say(s, 'narrator', h, 'heard');
     if (fresh.length === 0)
       say(
@@ -1044,6 +1052,10 @@ export function tellables(s: GameState, to: Rid): Tellable[] {
     const value = c > 0.5;
     const side = value ? c : 1 - c;
     if (b.prop.startsWith('kapici:')) continue;
+    // Not back to the person you had it from, nor again to someone you already told.
+    if (b.sources.some((x) => x.id === to && x.value === value)) continue;
+    if (b.prop === 'notice:water' && to === 'huseyin') continue;
+    if (rOf(s, to).told.some((x) => x.prop === b.prop && x.value === value)) continue;
     out.push({
       prop: b.prop,
       value,
@@ -1138,7 +1150,7 @@ const JOB_THANKS: Record<Rid, string[]> = {
   nermin: ['Look at that. Like new. Rıza used to grumble the whole time.', 'Good. Now I can breathe.'],
   sevim: ['Done properly. Thank you.', 'That’s been bothering me for a week.'],
   burak: ['You’re a lifesaver, honestly.', 'I owe you a coffee.'],
-  huseyin: ['Good work. I’ll put it in the book.', 'That will save us money.'],
+  huseyin: ['Good work. I’ll put it in the book.', 'Every lira counts in this building. Thank you.'],
   derya: ['Thank you. One less thing.', 'You didn’t have to do that so well.'],
   elif: ['It fits! Thank you!', 'I couldn’t have done that alone.'],
   tarik: ['My hands used to do that. Thank you, son.', 'Sit, have a tea. Five minutes.'],
@@ -1200,6 +1212,14 @@ function complete(s: GameState, t: Task, hook: boolean) {
     );
     return;
   }
+  const rr = rOf(s, t.for);
+  const present = rr.where === 'home' || (s.k.at === 'step' && rr.where === 'step');
+  if (!present) {
+    if (late) report(s).late++;
+    else report(s).done++;
+    say(s, 'narrator', `${nameOf(t.for)} had gone out. They will find it done.`, 'journal');
+    return;
+  }
   const aff = relationshipWith(p, KAPICI).affection;
   const GIVE: Record<Rid, number> = {
     nermin: 1,
@@ -1256,6 +1276,11 @@ function kapiciMinute(s: GameState) {
   const k = s.k;
   // Waiting at a door: whoever comes home is handed their things.
   if (!k.walk && k.busyTask === null && k.at.startsWith('door:')) deliverAt(s, k.at, true);
+  // On the step: hand people their own things.
+  if (!k.walk && k.busyTask === null && k.at === 'step')
+    for (const id of atStep(s))
+      for (const t of s.tasks)
+        if (!t.done && t.carried && t.kind !== 'bins' && t.for === id) complete(s, t, false);
   if (k.walk && s.minute >= k.walk.at1) {
     k.at = k.walk.to;
     k.walk = null;
@@ -1327,6 +1352,12 @@ function applyInput(s: GameState, inp: Input) {
       if (inp.kind === 'tell') return tell(s, inp.who, inp.prop, inp.value, inp.sure);
       if (inp.kind === 'invent') return invent(s, inp.who, inp.about, inp.trait);
       return askWord(s, inp.who);
+    case 'sit':
+      if (!canTalk(s, inp.who)) {
+        say(s, 'narrator', `${nameOf(inp.who)} is not in front of you.`, 'journal');
+        return;
+      }
+      return sit(s, inp.who);
     case 'misdeliver':
       return misdeliver(s, inp.who, inp.task);
     case 'knock':
@@ -1336,6 +1367,64 @@ function applyInput(s: GameState, inp: Input) {
     case 'next':
       return turnPage(s);
   }
+}
+
+/** Each resident's stories, told one a sitting, in order: what they say when the kapıcı sits with them. */
+const SIT_LINES: Record<Rid, string[]> = {
+  nermin: [
+    'My husband built half this staircase’s railing himself. Badly. Look at the third floor.',
+    'When we came in ’79 there were nine children in this building. Now there is Pamuk the cat, if Elif has her way.',
+    'Sevim and I were friends once. A pot of dolma and one word too many. Thirty years.',
+  ],
+  sevim: [
+    'Forty years of children reading aloud. I still hear them in the evenings.',
+    'Nermin will tell you I started it. I did not start it. I finished it.',
+    'My son sends money and no visits. I would trade.',
+  ],
+  burak: [
+    'Can I ask you something? How did you know, with your wife? No, forget it.',
+    'I’ve been carrying something around for a week. Literally. Don’t ask.',
+    'Saturday. If I’m strange on Saturday, that’s why.',
+  ],
+  huseyin: [
+    'People think a manager likes money. I like the book balancing. It never balances.',
+    'Rıza and I did this building together for eleven years. He never once wrote a thing down. He remembered.',
+    'If the boiler goes, I go to every door with my hat in my hand. I hate that more than the cold.',
+  ],
+  derya: [
+    'Four in the morning is the honest hour. Everybody says what they mean at four.',
+    'I sleep with the pillow over my head. Your bell goes through it anyway.',
+    'People on the step count my visitors. Let them count.',
+  ],
+  elif: [
+    'I moved here because of the light on the top landing at five o’clock. That’s the whole reason.',
+    'I draw everyone in this building. Don’t tell them. You’re in it too, with the bins.',
+    'Burak is sweet. He looks at his shoes when he says good morning.',
+  ],
+  tarik: [
+    'In ’74 the ferry froze in the harbour. Did I tell you? We walked to Karaköy on the ice. Nobody believes me.',
+    'My son rings on Sundays from Köln. He says, Baba, come. What would I do in Köln? Count the trams?',
+    'Forty years on the Kadıköy run. I could do it with my eyes shut. Some mornings I did.',
+    'You climb those stairs for me every day. My legs thank you. The rest of me too.',
+  ],
+};
+
+/** Sit a minute: ten minutes off your legs and a story; once a day each. */
+function sit(s: GameState, who: Rid) {
+  const r = rOf(s, who);
+  if (r.sitDay === today(s)) {
+    say(s, who, 'Another time. You have work, and so do I.', 'voice');
+    return;
+  }
+  r.sitDay = today(s);
+  const lines = SIT_LINES[who];
+  say(s, who, lines[r.sits % lines.length] as string, 'voice');
+  r.sits++;
+  const p = personOf(s, who);
+  tick(p, Math.max(p.now, s.minute));
+  socialEvent(p, { at: s.minute, kind: 'chat', otherId: KAPICI, byMe: false, magnitude: 0.3 });
+  kapiciDoes(s, 'rest', 10, 0.02);
+  s.k.walk = { from: s.k.at, to: s.k.at, at0: s.minute, at1: s.minute + 10 };
 }
 
 function canTalk(s: GameState, who: Rid): boolean {
@@ -1419,7 +1508,14 @@ const SMALL_NEWS: Record<Rid, string[]> = {
     'My son rang. He is too busy, as usual.',
     'Nothing worth repeating.',
   ],
-  burak: ['Month end. I live at the office.', 'Nothing much. Work.', 'Honestly? Tired. That’s the news.'],
+  burak: [
+    'Month end. I live at the office.',
+    'Nothing much. Work.',
+    'Honestly? Tired. That’s the news.',
+    'I’m trying to decide something. Don’t ask.',
+    'My mother rang. She asks when I will settle down. Every call.',
+    'Do you think people can tell when you are nervous?',
+  ],
   huseyin: [
     'The accounts, the accounts.',
     'The roof needs looking at before winter.',
@@ -2103,7 +2199,7 @@ function meeting(s: GameState) {
     s,
     'narrator',
     raise
-      ? `The tea money goes up: ${yes} hands.`
+      ? `The tea money goes up: ${yes} hands. Hüseyin Bey counts ₺300 into your tin.`
       : `The tea money stays as it is: ${yes} hands for, ${no} against.`,
     'event',
   );
@@ -2226,6 +2322,12 @@ function endDay(s: GameState) {
       socialEvent(p, { at: s.minute, kind: 'harm', otherId: KAPICI, byMe: false, magnitude: 0.15 });
       believeSelf(p, 'kapici:reliable', false, 0.65, s.minute);
       t.done = s.minute;
+      say(
+        s,
+        'narrator',
+        `${nameOf(t.for)}: ${t.label}, not done today. ${t.carried ? 'You left it by their door for the morning.' : 'They will have sorted it themselves.'} They noticed.`,
+        'journal',
+      );
     }
   rep.talks = s.talks.filter((t) => dayOf(t.at) === day).length;
   rep.caught = [
@@ -2274,10 +2376,15 @@ function endDay(s: GameState) {
     if (r.word !== 'yes') continue;
     if (credence(personOf(s, r.id), 'kapici:dishonest') < 0.65) continue;
     r.word = 'no';
+    const why = r.caught.length
+      ? 'they caught you telling two stories'
+      : r.grudges.some((g) => g.lie)
+        ? 'what you said about them got back to them'
+        : 'the step says you are not straight with people';
     say(
       s,
       'narrator',
-      `${nameOf(r.id)} would not meet your eye on the stairs. You would not count on that word for Sunday.`,
+      `${nameOf(r.id)} would not meet your eye on the stairs: ${why}. You would not count on that word for Sunday.`,
       'event',
     );
   }
@@ -2387,16 +2494,21 @@ export function readOf(s: GameState, id: Rid): { warmth: string; word: string } 
   const p = personOf(s, id);
   const a = relationshipWith(p, KAPICI).affection;
   const w = trustOf(p, KAPICI);
+  const lie = credence(p, 'kapici:dishonest');
   const warmth =
     a > 0.35 ? 'fond of you' : a > 0.12 ? 'warm' : a > -0.08 ? 'polite' : a > -0.25 ? 'cool' : 'cold';
   const word =
-    w >= 0.72
-      ? 'takes your word'
-      : w >= 0.58
-        ? 'listens to you'
-        : w >= 0.45
-          ? 'not sure of you'
-          : 'doubts you';
+    lie >= 0.65
+      ? 'thinks you lie'
+      : lie >= 0.55 && w >= 0.45
+        ? 'not sure of you'
+        : w >= 0.72
+          ? 'takes your word'
+          : w >= 0.58
+            ? 'listens to you'
+            : w >= 0.45
+              ? 'not sure of you'
+              : 'doubts you';
   return { warmth, word };
 }
 

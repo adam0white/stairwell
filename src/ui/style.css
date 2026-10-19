@@ -309,8 +309,10 @@ label input[type="file"] {
   gap: 2px;
   padding: 4px 12px;
   flex-shrink: 0;
-  max-height: 92px;
+  max-height: 118px;
   overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
 }
 .journal .hand,
 .margin.hand {
@@ -383,15 +385,16 @@ label input[type="file"] {
 }
 .verbs {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
 }
 .verbs button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 6px 4px;
-  min-height: 58px;
+  justify-content: center;
+  padding: 4px 4px;
+  min-height: 44px;
   font-size: 14px;
   line-height: 1.15;
 }

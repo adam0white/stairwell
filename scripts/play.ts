@@ -54,6 +54,7 @@ const HELP = `Commands:
   tell <name> <n> [sure]   pass on item n from your notebook (add "sure" to say it for certain)
   tells <name>         list what you could tell them
   invent <name> <about> <trait>   make something up; traits: ${INVENTABLE.join(', ')}, or sweet:<name>
+  sit <name>           sit a minute with them (ten minutes, once a day each)
   word <name>          ask them for a word for you at Sunday's meeting
   misdeliver <name> <task n>   leave someone else's parcel at this door
   knock <name>         ring the bell even though the flat is quiet
@@ -131,6 +132,7 @@ function screen(s: GameState, seen: number): number {
   console.log(
     `== ${DAY_NAMES[d - 1]} ${clockOf(s.minute)} == You are ${s.k.walk ? `on your way to ${placeName(s.k.walk.to)}` : `at ${placeName(s.k.at)}`}. Tin: ₺${s.k.money}.`,
   );
+  if (s.k.walk && s.k.walk.from === s.k.walk.to) console.log('Sitting a minute.');
   if (s.k.busyTask !== null) console.log(`Working on: ${s.tasks.find((t) => t.id === s.k.busyTask)?.label}.`);
   const where = RIDS.filter((id) => rOf(s, id).where !== 'home' && rOf(s, id).where !== 'asleep').map(
     (id) => `${RESIDENTS[id].name} (${rOf(s, id).where.replace('visit:', 'visiting ')})`,
@@ -232,6 +234,10 @@ function main() {
     case 'word':
       send({ kind: 'word', who: rid(a0) });
       break;
+    case 'sit':
+      send({ kind: 'sit', who: rid(a0) });
+      advance(s, 10, true);
+      break;
     case 'misdeliver': {
       const t = openTasks(s)[Number(args[1]) - 1];
       if (!t) throw new Error('No such board item.');
@@ -245,6 +251,10 @@ function main() {
       send({ kind: 'prank', what: a0 === 'swap' ? 'swap' : 'gate' });
       break;
     case 'next':
+      if (s.phase === 'day') {
+        console.log('The page turns at night (21:00). Use "wait" to let time pass.');
+        return;
+      }
       send({ kind: 'next' });
       break;
     case 'notebook':
@@ -271,6 +281,10 @@ function advance(s: GameState, n: number, untilArrive: boolean) {
     if (untilArrive && !s.k.walk && s.k.busyTask === null) return;
     if (!untilArrive && faceToFace(s).some((f) => !before.has(f))) return;
     if (!untilArrive && openTasks(s).length > tasks) return;
+    if (!untilArrive && openTasks(s).some((t) => t.by - s.minute === 15)) {
+      console.log('(You stop: something on the board is due in a quarter of an hour.)');
+      return;
+    }
   }
 }
 

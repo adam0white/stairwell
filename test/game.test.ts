@@ -41,4 +41,18 @@ describe('The Stairwell', () => {
     act(s, { kind: 'go', to: 'bakery' });
     expect(s.inputs.length).toBe(1);
   });
+
+  it('sitting a minute tells a story once a day and replays exactly', () => {
+    const s = newGame(11);
+    act(s, { kind: 'go', to: 'door:nermin' });
+    for (let i = 0; i < 10; i++) step(s);
+    act(s, { kind: 'sit', who: 'nermin' });
+    expect(rOf(s, 'nermin').sits).toBe(1);
+    expect(s.k.walk?.from).toBe(s.k.walk?.to);
+    for (let i = 0; i < 12; i++) step(s);
+    act(s, { kind: 'sit', who: 'nermin' });
+    expect(s.said.at(-1)?.text).toContain('Another time');
+    expect(rOf(s, 'nermin').sits).toBe(1);
+    expect(fingerprint(replay(11, s.inputs, s.minute))).toBe(fingerprint(s));
+  });
 });

@@ -62,6 +62,41 @@ Three concepts were written (kept below) and sent with the engine summary and th
 - Benign by construction: the player can make up only domestic traits (stingy, nosy, lazy, kind, generous, sweet on someone single). No illness, no affair, no debt, nothing about anyone's faith. Pranks resolve by the next day.
 - Measured: `npm run measure` plays honest, gossip and liar policies over many seeds; the edge should pay a little more in the short run and cost something by Sunday.
 
+## Core loop (as built, 2026-10-19)
+
+- **The day (07:00 to 21:00).** The board lists the day's errands: bread from the bakery by about 08:00, newspapers, shopping, parcels, small jobs, bins at 20:00. You choose the order and the route. Stairs cost minutes, and the kapıcı's legs tire (HF body and fatigue store); a "legs" line on each errand comes from `bodyForecast` over the next errands.
+- **Every errand is a door.** When a resident is face to face, the clock slows to 0.6 game minutes per second. You can ask for news, pass on anything in your notebook (as hearsay or "for certain"), make something up, or, from Thursday, ask for a word at Sunday's meeting.
+- **Delivery.** Shopping can hang on the door handle. Parcels and jobs need someone home. Late errands get a late line and no tip.
+- **The building talks without you.** Residents choose their own free time through HF: the step, the shop, a visit. Nermin on the ground floor is the hub. People who meet relay what they believe through `converse`; you overhear it if you are near.
+- **Sit a minute.** Once a day with each resident: ten minutes off your legs and one of their stories, told in order through the week.
+- **The night page.** It shows the day's jobs and tips, each resident's worded read of you (warmth and whether they take your word), and Rıza's margin note. It ends on an open question.
+- **Sunday.** Each resident votes on your tea money with HF `decide`. A vote for you weighs gratitude for service and whether they believe you are honest and reliable. A promise given for a word can be withdrawn on the night before if the person now believes you are dishonest; the withdrawal is said in the journal. On Saturday night Rıza's margin note counts the likely hands.
+
+## How exposure works
+
+- **Caught by comparison.** If you told two people opposite things and they meet, both catch you. They believe the kapıcı is dishonest, and your word weighs less with them. That belief then spreads like any other.
+- **Caught by the truth.** When a fact comes out (the ring is given, the fund book is opened), HF `confirm` lowers trust in every source that told it wrong, you included.
+- **Witnessed pranks.** A witness to a prank comes to believe you are unreliable. Ringing a sleeping resident's bell escalates over three rings.
+- **Dead ends.** Residents who firmly hold "don't talk behind people's backs" do not repeat a story.
+- **Nothing is final.** Trust rebuilds as true things you said are confirmed.
+
+## Measure (`npm run measure`, 6 seeds, 2026-10-19, iteration 2)
+
+| Style | Tin (₺) | Treats | Times caught | Hands on Sunday (of 7) |
+|---|---|---|---|---|
+| Quiet: errands only | 244 | 3.3 | 0 | 0.5 |
+| Honest: errands, news, true things passed on | 692 | 4.0 | 2 | 6.5 |
+| Gossip: everything passed on "for certain" | 528 | 4.0 | 3 | 6.7 |
+| Liar: makes things up at every door | 432 | 7.3 | 14 | 0.8 |
+
+**The edge in numbers.** Lying earns the most treats (7.3 against 4.0), because people like hearing what they want to hear. It is caught about 14 times a week and loses the vote. Gossip earns less money than honest service and about the same hands, because a kapıcı who tells everything is liked. This is the intended price: naughtiness pays in the short run and costs on Sunday, and honest service wins. Replay is exact for every style.
+
+## Playtests
+
+- Round 1 ([round-1](playtests/round-1-2026-10-19.md)): four testers. Fixed in commit 4b2e041: the clock slows while talking, people answer every verb, the journal no longer goes mute, the door handle, words from Thursday, Rıza counts the hands.
+- Round 2 ([round-2](playtests/round-2-2026-10-19.md)): Murat (casual, phone) would come back "to find out who the man at Derya's door is"; Deniz (mischief) would come back "to find out what I broke", and the costs were "funny, and mostly fair, but only afterwards"; Hale (story) would come back and called the roof proposal the payoff of the week; Bayram (a retired kapıcı) would not, "not for the game", and wants the boiler fund. Fixed in iteration 2: reads show when someone thinks you lie, withdrawn words give their cause, the tea-money line says ₺300, missed errands say so, nobody thanks you from outside, things are handed over on the step, the talk panel stays with the person you chose, "sit a minute", fewer repeated overheard lines, the tell list skips what the listener told you.
+- HF-character harness ([hf-characters](playtests/hf-characters-2026-10-19.md)): before and after iteration 2.
+
 ## Rules taken from the consults
 
 1. Mid-errand in 20 seconds: the bread order is on the board at 07:00 and the first door opens within a minute. The story is three lines on the title page.
@@ -94,3 +129,8 @@ Three concepts were written (kept below) and sent with the engine summary and th
 - The rainstorm under the awning (wildcard; target: week 2 build).
 - Seating at the Sunday meeting (target: week 2 build).
 - The other arcs (Tarık's dues, Nermin and Sevim's feud history) as full arcs (target: week 2 build).
+- A way for the kapıcı to help the boiler fund: ask for the book, put the question to the flats (round 1 story seeker, round 2 wildcard; target: week 2 build).
+- Leaving a parcel with a neighbour on purpose, as a kindness rather than mischief (round 2 wildcard; target: week 2 build).
+- Telling the player why a bins run missed the truck before it happens (round 2 casual; target: week 2 build).
+- The harness returner persona came back 0/3 on iteration 2 against 7/8 before; not yet traced (target: next build).
+- Lab telemetry through `@adam0white/lab-client` (milestones: each night page and the Sunday vote; quit points: the title page and mid-day). Blocked: the package is not on npm as of 2026-10-19. Target: the first build after it is published.

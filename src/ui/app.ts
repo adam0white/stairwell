@@ -464,10 +464,10 @@ function sceneSvg(s: GameState): string {
   // Residents out and about: on the step, on the roof, visiting (drawn at the host's door), on the stairs.
   const stepPeople = RIDS.filter((id) => rOf(s, id).where === 'step');
   stepPeople.forEach((id, i) => {
-    const x = 132 + i * 30;
+    const x = 128 + i * 26;
     parts.push(figure(x, g + 26, 'res'));
     parts.push(
-      `<text class="lbl hand" x="${x}" y="${g - 4 - (i % 2) * 13}" text-anchor="middle">${RESIDENTS[id].name}</text>`,
+      `<text class="lbl hand" x="${x}" y="${g - 4 - (i % 3) * 12}" text-anchor="middle">${RESIDENTS[id].name}</text>`,
     );
   });
   const roofPeople = RIDS.filter((id) => rOf(s, id).where === 'roof');
@@ -563,8 +563,12 @@ function sheet(s: GameState, el: HTMLElement) {
     return;
   }
   if (s.k.walk) {
+    ui.sheetFor = null;
     const line = ui.pendingTo === s.k.walk.to ? '' : '';
-    el.innerHTML = `<div class="soft">On your way to ${placeName(s.k.walk.to)}.</div>${line}`;
+    el.innerHTML =
+      s.k.walk.from === s.k.walk.to
+        ? '<div class="soft">Sitting a minute. Your legs are glad of it.</div>'
+        : `<div class="soft">On your way to ${placeName(s.k.walk.to)}.</div>${line}`;
     return;
   }
   if (s.k.busyTask !== null) {
@@ -572,9 +576,20 @@ function sheet(s: GameState, el: HTMLElement) {
     el.innerHTML = `<div class="soft">Working: ${esc(t?.label ?? '')}.</div>`;
     return;
   }
-  const who = (faces.includes(ui.sheetFor as Rid) ? ui.sheetFor : faces[0]) ?? null;
+  // The panel stays with the person you chose; if they leave mid-sentence it closes rather than switch.
+  let gone = '';
+  if (ui.sheetFor && !faces.includes(ui.sheetFor)) {
+    if (ui.sheet === 'tell' || ui.sheet === 'invent') {
+      gone = `<div class="hand soft">${esc(RESIDENTS[ui.sheetFor].name)} has gone.</div>`;
+      ui.sheet = 'none';
+      ui.inventAbout = null;
+    }
+    ui.sheetFor = null;
+  }
+  const who = ui.sheetFor ?? faces[0] ?? null;
+  if (who) ui.sheetFor = who;
   if (!who) {
-    el.innerHTML = placeHtml(s);
+    el.innerHTML = gone + placeHtml(s);
     el.querySelector('[data-a="gate"]')?.addEventListener('click', () =>
       send({ kind: 'prank', what: 'gate' }),
     );
@@ -596,7 +611,7 @@ function sheet(s: GameState, el: HTMLElement) {
       b.addEventListener('click', () => goTo(s, b.dataset.go as Place));
     return;
   }
-  el.innerHTML = doorHtml(s, who, faces);
+  el.innerHTML = gone + doorHtml(s, who, faces);
   wireDoor(s, el, who);
 }
 
@@ -684,6 +699,7 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
     <div class="verbs">
       <button data-a="news" ${asked ? 'disabled' : ''}>Anything new?</button>
       <button data-a="tell">Tell…</button>
+      <button data-a="sit" ${r.sitDay === dayOf(s.minute) ? 'disabled' : ''}>Sit a minute</button>
       <button data-a="word" ${r.word ? 'disabled' : ''}>A word for me on Sunday<span class="h">${r.word ? (r.word === 'yes' ? 'promised' : 'said no') : dayOf(s.minute) < 4 ? 'too early' : wordHint(s, who)}</span></button>
     </div>
     ${carriedOther.map((t) => `<button class="prank" data-mis="${t.id}">Leave ${esc(RESIDENTS[t.for].name)}’s parcel here</button>`).join('')}`;
@@ -721,6 +737,7 @@ function wireDoor(s: GameState, el: HTMLElement, who: Rid) {
   });
   on('[data-a="news"]', () => send({ kind: 'news', who }));
   on('[data-a="word"]', () => send({ kind: 'word', who }));
+  on('[data-a="sit"]', () => send({ kind: 'sit', who }));
   on('[data-a="tell"]', () => {
     ui.sheet = 'tell';
     ui.sheetFor = who;
