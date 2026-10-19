@@ -167,6 +167,8 @@ function importRun(file: File) {
 function send(inp: NewInput) {
   const s = ui.s;
   if (!s) return;
+  // A new morning starts at the slow speed: the bread run is where a phone player loses the most minutes.
+  if (inp.kind === 'next') ui.speed = 0;
   act(s, inp);
   save();
   render(true);
@@ -386,6 +388,9 @@ function figure(x: number, y: number, cls: string, lean = 0): string {
     <circle cx="0" cy="-27" r="4.5"/><path d="M0 -22 L0 -9 M0 -18 L-5 -12 M0 -18 L5 -12 M0 -9 L-4 0 M0 -9 L4 0"/></g>`;
 }
 
+const guestsOf = (s: GameState, host: Rid): Rid[] =>
+  RIDS.filter((id) => rOf(s, id).where === `visit:${host}`);
+
 function sceneSvg(s: GameState): string {
   const parts: string[] = [];
   const H = floorY(-1) + 30;
@@ -440,16 +445,29 @@ function sceneSvg(s: GameState): string {
       <rect class="hit" x="${x - 34}" y="${y - FLOOR_H + 6}" width="78" height="${FLOOR_H - 6}"/>
       <path class="ink" d="${wob(x, y, x, y - 30, info.flat)} ${wob(x, y - 30, x + 16, y - 30, info.flat + 1)} ${wob(x + 16, y - 30, x + 16, y, info.flat + 2)}"/>
       <text class="lbl hand" x="${x + 20}" y="${y - 18}">${info.flat} ${info.name}</text>
-      ${r.where === 'asleep' ? `<text class="lbl soft" x="${x + 20}" y="${y - 4}">asleep</text>` : r.where === 'home' ? `<text class="lbl soft" x="${x + 20}" y="${y - 4}">in</text>` : ''}
+      ${
+        r.where === 'asleep'
+          ? `<text class="lbl soft" x="${x + 20}" y="${y - 4}">asleep</text>`
+          : r.where === 'home'
+            ? `<text class="lbl soft${guestsOf(s, id).length ? ' visit' : ''}" x="${x + 20}" y="${y - 4}">${
+                guestsOf(s, id).length
+                  ? `in, with ${guestsOf(s, id)
+                      .map((g) => RESIDENTS[g].name)
+                      .join(', ')}`
+                  : 'in'
+              }</text>`
+            : ''
+      }
       ${want ? `<circle class="dot" cx="${x + 8}" cy="${y - 36}" r="3"/>` : ''}
     </g>`);
   }
   // Residents out and about: on the step, on the roof, visiting (drawn at the host's door), on the stairs.
   const stepPeople = RIDS.filter((id) => rOf(s, id).where === 'step');
   stepPeople.forEach((id, i) => {
-    parts.push(figure(150 + i * 12, g + 26, 'res'));
+    const x = 132 + i * 30;
+    parts.push(figure(x, g + 26, 'res'));
     parts.push(
-      `<text class="lbl hand" x="${150 + i * 12 - 4}" y="${g - 6 - (i % 2) * 10}">${RESIDENTS[id].name}</text>`,
+      `<text class="lbl hand" x="${x}" y="${g - 4 - (i % 2) * 13}" text-anchor="middle">${RESIDENTS[id].name}</text>`,
     );
   });
   const roofPeople = RIDS.filter((id) => rOf(s, id).where === 'roof');
@@ -457,14 +475,6 @@ function sceneSvg(s: GameState): string {
     parts.push(figure(170 + i * 20, TOP_Y + 4, 'res'));
     parts.push(`<text class="lbl hand" x="${190 + i * 40}" y="${TOP_Y - 4}">${RESIDENTS[id].name}</text>`);
   });
-  for (const id of RIDS) {
-    const r = rOf(s, id);
-    if (!r.where.startsWith('visit:')) continue;
-    const host = r.where.slice(6) as Rid;
-    parts.push(
-      `<text class="lbl hand visit" x="${doorX(host) + 20}" y="${floorY(RESIDENTS[host].floor) - 32}">+ ${RESIDENTS[id].name}</text>`,
-    );
-  }
   // The kapıcı.
   const kp = kapiciPos(s);
   parts.push(figure(kp.x, kp.y, 'me', s.k.walk ? 6 : 0));
@@ -674,7 +684,7 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
     <div class="verbs">
       <button data-a="news" ${asked ? 'disabled' : ''}>Anything new?</button>
       <button data-a="tell">Tell…</button>
-      <button data-a="word" ${r.word ? 'disabled' : ''}>A word for me on Sunday<span class="h">${r.word ? (r.word === 'yes' ? 'promised' : 'said no') : wordHint(s, who)}</span></button>
+      <button data-a="word" ${r.word ? 'disabled' : ''}>A word for me on Sunday<span class="h">${r.word ? (r.word === 'yes' ? 'promised' : 'said no') : dayOf(s.minute) < 4 ? 'too early' : wordHint(s, who)}</span></button>
     </div>
     ${carriedOther.map((t) => `<button class="prank" data-mis="${t.id}">Leave ${esc(RESIDENTS[t.for].name)}’s parcel here</button>`).join('')}`;
 }

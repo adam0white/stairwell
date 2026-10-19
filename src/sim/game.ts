@@ -49,7 +49,7 @@ import {
 } from './people.ts';
 import { DRAW, hashUnit } from './rng.ts';
 
-export const GAME_VERSION = 'stairwell@1';
+export const GAME_VERSION = 'stairwell@2';
 export const DAY_START = 7 * 60;
 export const DAY_END = 21 * 60;
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -153,6 +153,8 @@ export interface Said {
   who: string;
   text: string;
   kind: 'journal' | 'voice' | 'heard' | 'margin' | 'event';
+  /** Running line number. */
+  n?: number;
 }
 
 export interface Talk {
@@ -220,6 +222,12 @@ export interface GameState {
   meeting: { done: boolean; yes: number; no: number; raise: boolean } | null;
   inputs: Input[];
   applied: number;
+  /** Lines said so far (never trimmed): varies stock lines and lets a reader find new ones. */
+  lineNo: number;
+  /** Small jobs already asked this week (index into JOBS): nobody asks for the same bulb twice. */
+  jobsUsed: number[];
+  /** Times the kapıcı rang Derya's bell while she slept. */
+  knocks: number;
 }
 
 export type Input =
@@ -246,8 +254,8 @@ const tod = (s: GameState) => s.minute - dayStart(today(s));
 const weekday = (s: GameState) => today(s); // day 1 = Monday
 
 function say(s: GameState, who: string, text: string, kind: Said['kind'] = 'journal') {
-  s.said.push({ at: s.minute, who, text, kind });
-  if (s.said.length > 400) s.said.splice(0, s.said.length - 400);
+  s.said.push({ at: s.minute, who, text, kind, n: s.lineNo++ });
+  if (s.said.length > 1500) s.said.splice(0, s.said.length - 1500);
 }
 
 function offer(id: string, over: Partial<Affordance> = {}): Affordance {
@@ -352,7 +360,7 @@ export function planDay(s: GameState, day: number) {
   for (const [i, id] of RIDS.entries()) {
     if (id === 'burak' && day === 6) continue;
     const loaves = 1 + Math.floor(r(DRAW.bread, i) * 2);
-    const by = d + 7 * 60 + 40 + Math.floor(r(DRAW.bread, i + 20) * 35);
+    const by = d + 7 * 60 + 55 + Math.floor(r(DRAW.bread, i + 20) * 35);
     addTask(s, {
       kind: 'bread',
       for: id,
@@ -360,7 +368,7 @@ export function planDay(s: GameState, day: number) {
       pickup: 'bakery',
       place: `door:${id}`,
       from: d + DAY_START,
-      by: id === 'burak' ? d + 8 * 60 + 20 : id === 'derya' ? d + 9 * 60 : by,
+      by: id === 'burak' ? d + 8 * 60 + 25 : id === 'derya' ? d + 9 * 60 : by,
     });
   }
   // Parcels: one or two a day, from the courier, into your room.
@@ -395,11 +403,12 @@ export function planDay(s: GameState, day: number) {
   const used = new Set<number>();
   for (let i = 0; used.size < n && i < 20; i++) {
     const j = Math.floor(r(DRAW.job, i + 1) * JOBS.length);
-    if (used.has(j)) continue;
+    if (used.has(j) || (s.jobsUsed.includes(j) && s.jobsUsed.length < JOBS.length - 2)) continue;
     const job = JOBS[j];
     if (!job) continue;
     if (job.for === 'burak' && day === 6) continue;
     used.add(j);
+    s.jobsUsed.push(j);
     const from = d + job.window[0] - 60 + Math.floor(r(DRAW.jobAt, i) * 60);
     addTask(s, {
       kind: job.kind ?? 'job',
@@ -486,6 +495,9 @@ export function newGame(seed: number): GameState {
     meeting: null,
     inputs: [],
     applied: 0,
+    lineNo: 0,
+    jobsUsed: [],
+    knocks: 0,
   };
   // Derya is coming home from her night shift.
   const d = rOf(s, 'derya');
@@ -718,8 +730,11 @@ function residentMinute(s: GameState, r: RState) {
     else r.until = s.minute + 60;
     return;
   }
-  // Free time: their own choice.
-  const offers = freeOffers(s, r);
+  // Free time: their own choice. A host with a guest stays in.
+  const hosting = s.residents.some((o) => o.where === `visit:${r.id}`);
+  const offers = hosting
+    ? freeOffers(s, r).filter((o) => o.id === 'home' || o.id === 'meal')
+    : freeOffers(s, r);
   const rec: DecisionRecord = decide(p, offers, { now: s.minute });
   const aff = offers.find((o) => o.id === rec.chosenAffordanceId) ?? offers[0];
   if (!aff) return;
@@ -809,7 +824,8 @@ export function talk(s: GameState, a: Rid, b: Rid, where: string, maxClaims?: nu
     for (const ev of res.socialEvents.speaker) socialEvent(sp, ev);
     for (const ev of res.socialEvents.listener) socialEvent(li, ev);
     for (const c of res.told.flatMap((pc) => pc.claims ?? []))
-      heard.push(`${nameOf(sp.id)}: ${claimWords(c.prop, c.value)}`);
+      if (!(c.prop === 'notice:water' && waterGone(s)))
+        heard.push(`${nameOf(sp.id)}: ${claimWords(c.prop, c.value)}`);
     if (near)
       perceive(
         s.kapici,
@@ -863,9 +879,27 @@ export function talk(s: GameState, a: Rid, b: Rid, where: string, maxClaims?: nu
   }
   const place = where === 'step' ? 'on the step' : where === 'the stairs' ? 'on the stairs' : `in ${where}`;
   if (near) {
+    // Only what is new to you today; the rest is the hum of the building.
+    const d0 = dayStart(today(s));
+    const old = new Set(s.said.filter((x) => x.kind === 'heard' && x.at >= d0).map((x) => x.text));
+    const fresh = heard.filter((h) => !old.has(h));
     say(s, 'narrator', `${nameOf(a)} and ${nameOf(b)} ${place}. You could hear them.`, 'journal');
-    for (const h of heard.slice(0, 4)) say(s, 'narrator', h, 'heard');
-    if (heard.length === 0) say(s, 'narrator', 'Only the weather, and the price of bread.', 'heard');
+    for (const h of fresh.slice(0, 4)) say(s, 'narrator', h, 'heard');
+    if (fresh.length === 0)
+      say(
+        s,
+        'narrator',
+        heard.length
+          ? pick(s, ['Nothing you had not heard already today.', 'The same stories, round again.'])
+          : pick(s, [
+              'Only the weather, and the price of bread.',
+              'Grandchildren, mostly.',
+              'The price of tomatoes at the market.',
+              'The football, then the weather.',
+              'Whose turn it is to water the plants on the landing.',
+            ]),
+        'heard',
+      );
   } else if (where !== 'the stairs' || props.length > 0) {
     say(
       s,
@@ -877,6 +911,9 @@ export function talk(s: GameState, a: Rid, b: Rid, where: string, maxClaims?: nu
 }
 
 /** HF's perceive moves relationships for its own trait table only; the building's extra traits are applied here. */
+/** The water went off on Wednesday at ten: after that the notice is old news. */
+const waterGone = (s: GameState) => s.minute >= dayStart(3) + 10 * 60;
+
 function customReputation(p: Person, before: { prop: string; b: number }[], at: number) {
   for (const { prop, b } of before) {
     const trait = prop.split(':')[1];
@@ -1001,6 +1038,7 @@ export function tellables(s: GameState, to: Rid): Tellable[] {
     const [subject] = b.prop.split(':');
     if (subject === to) continue;
     if (b.prop.startsWith('advice:') || b.prop.includes(':should:')) continue;
+    if (b.prop === 'notice:water' && waterGone(s)) continue;
     const c = credence(s.kapici, b.prop);
     if (Math.abs(c - 0.5) < 0.1) continue;
     const value = c > 0.5;
@@ -1031,7 +1069,7 @@ export function faceToFace(s: GameState): Rid[] {
   return [];
 }
 
-function deliverAt(s: GameState, pl: Place) {
+function deliverAt(s: GameState, pl: Place, onlyHome = false) {
   const id = pl.startsWith('door:') ? (pl.slice(5) as Rid) : null;
   for (const t of s.tasks) {
     if (t.done || !t.carried || t.place !== pl) continue;
@@ -1039,7 +1077,7 @@ function deliverAt(s: GameState, pl: Place) {
     if (!id) continue;
     const r = rOf(s, id);
     const there = r.where === 'home';
-    if (!there && (t.kind === 'parcel' || t.kind === 'shopping')) continue;
+    if (!there && (onlyHome || t.kind === 'parcel' || t.kind === 'job')) continue;
     complete(s, t, !there);
   }
   if (pl === 'step')
@@ -1077,9 +1115,9 @@ function pickupAt(s: GameState, pl: Place) {
 /** What each resident says at the door when the job is done: their own words, varied, so no line repeats often. */
 const THANKS: Record<Rid, string[]> = {
   nermin: [
-    'Ah, there you are. Come, I have something to tell you.',
+    'Ah, there you are. Sit a minute. No? Always running.',
     'Good boy. Rıza was never this quick.',
-    'Leave it on the stool. Did you see who came in?',
+    'Leave it on the stool. Mind the cat, if there is a cat.',
   ],
   sevim: [
     'Thank you. Exactly right, for once.',
@@ -1095,6 +1133,15 @@ const THANKS: Record<Rid, string[]> = {
     'Bless your legs. Thank you.',
     'Thank you. Sit a minute, if you can.',
   ],
+};
+const JOB_THANKS: Record<Rid, string[]> = {
+  nermin: ['Look at that. Like new. Rıza used to grumble the whole time.', 'Good. Now I can breathe.'],
+  sevim: ['Done properly. Thank you.', 'That’s been bothering me for a week.'],
+  burak: ['You’re a lifesaver, honestly.', 'I owe you a coffee.'],
+  huseyin: ['Good work. I’ll put it in the book.', 'That will save us money.'],
+  derya: ['Thank you. One less thing.', 'You didn’t have to do that so well.'],
+  elif: ['It fits! Thank you!', 'I couldn’t have done that alone.'],
+  tarik: ['My hands used to do that. Thank you, son.', 'Sit, have a tea. Five minutes.'],
 };
 const LATE_LINES: Record<Rid, string[]> = {
   nermin: [
@@ -1118,14 +1165,20 @@ function complete(s: GameState, t: Task, hook: boolean) {
   const late = s.minute > t.by;
   if (t.kind === 'bins') {
     if (!late) say(s, 'narrator', 'The bins were out before the truck.', 'journal');
-    else say(s, 'narrator', 'The truck had gone. The bins sat on the pavement all night.', 'journal');
+    else
+      say(
+        s,
+        'narrator',
+        'The truck comes at a quarter to nine. It had gone; the bins sat on the pavement all night.',
+        'journal',
+      );
     for (const r of s.residents) {
       socialEvent(personOf(s, r.id), {
         at: s.minute,
         kind: late ? 'harm' : 'help',
         otherId: KAPICI,
         byMe: false,
-        magnitude: late ? 0.15 : 0.1,
+        magnitude: late ? 0.06 : 0.06,
       });
     }
     return;
@@ -1135,8 +1188,18 @@ function complete(s: GameState, t: Task, hook: boolean) {
   socialEvent(p, { at: s.minute, kind: 'help', otherId: KAPICI, byMe: false, magnitude: late ? 0.04 : 0.14 });
   // Word gets around about a kapıcı who does the job, from the person helped.
   if (!late && credence(p, 'kapici:reliable') < 0.8) believeSelf(p, 'kapici:reliable', true, 0.62, s.minute);
-  if (late && s.minute > t.by + 45) believeSelf(p, 'kapici:unreliable', true, 0.6, s.minute);
-  if (hook) return;
+  if (late && s.minute > t.by + 45) believeSelf(p, 'kapici:reliable', false, 0.6, s.minute);
+  if (hook) {
+    if (late) report(s).late++;
+    else report(s).done++;
+    say(
+      s,
+      'narrator',
+      `You hung ${nameOf(t.for)}’s ${t.kind === 'bread' ? 'bread' : 'bag'} on the door handle.`,
+      'journal',
+    );
+    return;
+  }
   const aff = relationshipWith(p, KAPICI).affection;
   const GIVE: Record<Rid, number> = {
     nermin: 1,
@@ -1153,7 +1216,7 @@ function complete(s: GameState, t: Task, hook: boolean) {
     s.k.money += tip;
     report(s).tips += tip;
   }
-  const pool = late ? LATE_LINES[t.for] : THANKS[t.for];
+  const pool = late ? LATE_LINES[t.for] : t.kind === 'job' ? JOB_THANKS[t.for] : THANKS[t.for];
   const line = pool[Math.floor(hashUnit(s.seed, DRAW.tip, s.minute, t.id) * pool.length)] ?? '';
   say(s, t.for, tip > 0 ? `${line} (₺${tip})` : line, 'voice');
   if (t.for === 'tarik' && !late && hashUnit(s.seed, DRAW.tip, s.minute) < 0.5)
@@ -1191,6 +1254,8 @@ function report(s: GameState): DayReport {
 
 function kapiciMinute(s: GameState) {
   const k = s.k;
+  // Waiting at a door: whoever comes home is handed their things.
+  if (!k.walk && k.busyTask === null && k.at.startsWith('door:')) deliverAt(s, k.at, true);
   if (k.walk && s.minute >= k.walk.at1) {
     k.at = k.walk.to;
     k.walk = null;
@@ -1237,19 +1302,30 @@ function applyInput(s: GameState, inp: Input) {
     case 'go': {
       if (s.phase !== 'day' || s.k.walk || s.k.busyTask !== null) return;
       const mins = travelMinutes(s, s.k.at, inp.to);
-      if (mins <= 0) return;
+      if (mins <= 0) {
+        const before = s.tasks.filter((t) => t.carried || t.done).length;
+        pickupAt(s, s.k.at);
+        deliverAt(s, s.k.at);
+        if (s.tasks.filter((t) => t.carried || t.done).length === before)
+          say(s, 'narrator', 'You are already here. Nothing to pick up or hand over just now.', 'journal');
+        return;
+      }
       const up = floorOf(inp.to) > floorOf(s.k.at);
       s.k.walk = { from: s.k.at, to: inp.to, at0: s.minute, at1: s.minute + mins };
       kapiciDoes(s, 'walk', mins, up ? 0.85 : 0.35);
       return;
     }
     case 'news':
-      return askNews(s, inp.who);
     case 'tell':
-      return tell(s, inp.who, inp.prop, inp.value, inp.sure);
     case 'invent':
-      return invent(s, inp.who, inp.about, inp.trait);
     case 'word':
+      if (!canTalk(s, inp.who)) {
+        say(s, 'narrator', `${nameOf(inp.who)} is not in front of you.`, 'journal');
+        return;
+      }
+      if (inp.kind === 'news') return askNews(s, inp.who);
+      if (inp.kind === 'tell') return tell(s, inp.who, inp.prop, inp.value, inp.sure);
+      if (inp.kind === 'invent') return invent(s, inp.who, inp.about, inp.trait);
       return askWord(s, inp.who);
     case 'misdeliver':
       return misdeliver(s, inp.who, inp.task);
@@ -1318,7 +1394,7 @@ function askNews(s: GameState, who: Rid) {
   }
   if (claims.length === 0) {
     const quiet = res.withheld.some((w) => w.reason === 'norm:backbiting');
-    say(s, who, quiet ? 'I don’t carry stories about people.' : 'Nothing new. The usual.', 'voice');
+    say(s, who, quiet ? pick(s, NO_STORIES[who]) : pick(s, SMALL_NEWS[who]), 'voice');
     return;
   }
   for (const c of claims) {
@@ -1331,6 +1407,50 @@ function askNews(s: GameState, who: Rid) {
   }
 }
 
+/** When a resident has nothing about anyone to pass on, they talk about their own life: each in their own words. */
+const SMALL_NEWS: Record<Rid, string[]> = {
+  nermin: [
+    'My knee again. Rain coming, you’ll see.',
+    'The grocer gave me short change. Twice this month.',
+    'Nothing. I sat by the window all morning and nothing.',
+  ],
+  sevim: [
+    'The notice board is a disgrace. Somebody spelled “boiler” wrong.',
+    'My son rang. He is too busy, as usual.',
+    'Nothing worth repeating.',
+  ],
+  burak: ['Month end. I live at the office.', 'Nothing much. Work.', 'Honestly? Tired. That’s the news.'],
+  huseyin: [
+    'The accounts, the accounts.',
+    'The roof needs looking at before winter.',
+    'Nothing. Which is how I like it.',
+  ],
+  derya: [
+    'Long night. Two admissions at four.',
+    'Nothing, I slept through it all.',
+    'I’m off Saturday. That’s my news.',
+  ],
+  elif: [
+    'I sold a drawing! A small one.',
+    'Still unpacking boxes. Don’t look.',
+    'The light up here in the afternoon, honestly.',
+  ],
+  tarik: [
+    'My son may ring on Sunday. May.',
+    'In ’74 the ferry froze in the harbour. Did I tell you?',
+    'The gulls woke me at five. Same as always.',
+  ],
+};
+const NO_STORIES: Record<Rid, string[]> = {
+  nermin: ['Nothing for you today.'],
+  sevim: ['I don’t repeat things.'],
+  burak: ['I don’t really do gossip.', 'I stay out of all that.'],
+  huseyin: ['I don’t carry stories about people.', 'People’s business is their own.'],
+  derya: ['I hear enough at the hospital. Not here.'],
+  elif: ['I don’t know anyone well enough yet.'],
+  tarik: ['Let’s not talk about people.', 'At my age you stop carrying stories.'],
+};
+
 /** The kapıcı tells a resident something: HF told testimony, believed as far as they trust his word. */
 function tell(s: GameState, who: Rid, prop: string, value: boolean, sure: boolean) {
   if (!canTalk(s, who)) return;
@@ -1341,12 +1461,26 @@ function tell(s: GameState, who: Rid, prop: string, value: boolean, sure: boolea
 }
 
 function invent(s: GameState, who: Rid, about: Rid, trait: string) {
-  if (!canTalk(s, who) || about === who) return;
-  if (!(INVENTABLE as readonly string[]).includes(trait) && !trait.startsWith('sweet:')) return;
-  const prop = trait.startsWith('sweet:') ? `${about}:${trait}` : `${about}:${trait}`;
+  if (about === who) {
+    say(s, 'narrator', 'Not to their face.', 'journal');
+    return;
+  }
+  if (!(INVENTABLE as readonly string[]).includes(trait) && !trait.startsWith('sweet:')) {
+    say(s, 'narrator', 'You could not think how to put it.', 'journal');
+    return;
+  }
+  const prop = `${about}:${trait}`;
   if (trait.startsWith('sweet:')) {
     const other = trait.slice(6) as Rid;
-    if (!RESIDENTS[about].single || !RESIDENTS[other]?.single || other === about) return;
+    if (!RESIDENTS[about].single || !RESIDENTS[other]?.single || other === about) {
+      say(
+        s,
+        'narrator',
+        'Nobody would believe that of a married person. Only the single ones: Burak, Derya, Elif.',
+        'journal',
+      );
+      return;
+    }
   }
   const own = credence(s.kapici, prop);
   deliverClaim(s, who, prop, true, 0.9, own < 0.6);
@@ -1389,7 +1523,7 @@ function deliverClaim(s: GameState, who: Rid, prop: string, value: boolean, conf
   else if (unfav && aboutPerson && holds) {
     line = pick(s, [
       'I’d rather not hear it.',
-      'That’s between them and God. Not my business.',
+      'That’s their business, not mine.',
       'Let’s not talk about people.',
     ]);
     socialEvent(p, { at: s.minute, kind: 'conflict', otherId: KAPICI, byMe: false, magnitude: 0.1 });
@@ -1450,7 +1584,7 @@ const TREAT: Record<Rid, string> = {
 };
 
 function pick(s: GameState, xs: string[]): string {
-  return xs[Math.floor(hashUnit(s.seed, s.minute, xs.length, s.said.length) * xs.length)] as string;
+  return xs[Math.floor(hashUnit(s.seed, s.minute, xs.length, s.lineNo) * xs.length)] as string;
 }
 
 /** "Put in a word for me on Sunday": a request the resident weighs through HF; a yes is their own promise. */
@@ -1476,9 +1610,23 @@ export function wordHint(s: GameState, who: Rid): string {
 }
 
 function askWord(s: GameState, who: Rid) {
-  if (!canTalk(s, who)) return;
   const r = rOf(s, who);
-  if (r.word) return;
+  if (r.word) {
+    say(s, who, r.word === 'yes' ? 'I said I would. Don’t ask twice.' : 'I told you already.', 'voice');
+    return;
+  }
+  if (today(s) < 4) {
+    say(
+      s,
+      who,
+      pick(s, [
+        'Sunday? Ask me nearer the day. I hardly know you.',
+        'It’s only the start of the week. We’ll see.',
+      ]),
+      'voice',
+    );
+    return;
+  }
   const p = personOf(s, who);
   tick(p, Math.max(p.now, s.minute));
   const offers = wordOffers();
@@ -1494,7 +1642,7 @@ function askWord(s: GameState, who: Rid) {
       targetId: KAPICI,
       from: dayStart(7) + MEETING - 30,
       until: dayStart(7) + MEETING + 60,
-      importance: 0.02 + 0.12 * Math.max(0, relationshipWith(p, KAPICI).affection),
+      importance: 0.04 + 0.2 * Math.max(0, relationshipWith(p, KAPICI).affection),
       normId: 'keep-promise',
     });
     say(
@@ -1511,9 +1659,20 @@ function askWord(s: GameState, who: Rid) {
 
 /** Leave a parcel at the wrong door: the resident decides whether to peek (their own HF choice). */
 function misdeliver(s: GameState, who: Rid, taskId: number) {
-  if (!canTalk(s, who)) return;
   const t = s.tasks.find((x) => x.id === taskId);
-  if (!t || t.done || !t.carried || t.kind !== 'parcel' || t.for === who) return;
+  if (!canTalk(s, who)) {
+    say(s, 'narrator', 'Nobody here to take it. A parcel is never left on a handle.', 'journal');
+    return;
+  }
+  if (!t || t.done || !t.carried || t.kind !== 'parcel' || t.for === who) {
+    say(
+      s,
+      'narrator',
+      'Only a courier parcel can go to the wrong door. Bread and shopping are expected.',
+      'journal',
+    );
+    return;
+  }
   const p = personOf(s, who);
   tick(p, Math.max(p.now, s.minute));
   t.carried = false;
@@ -1537,7 +1696,15 @@ function misdeliver(s: GameState, who: Rid, taskId: number) {
       conviction: Math.min(0.9, p.traits.honesty),
     });
   const rec = decide(p, [peek, keep], { now: s.minute });
-  say(s, who, `For ${nameOf(t.for)}? I’ll keep it for them.`, 'voice');
+  say(
+    s,
+    who,
+    pick(s, [
+      `For ${nameOf(t.for)}? Leave it, I’ll see it gets there.`,
+      `${nameOf(t.for)}’s? Fine, put it down.`,
+    ]),
+    'voice',
+  );
   stamp(s, 'wrong_door');
   if (rec.chosenAffordanceId === 'peek' && t.label2) {
     confirm(p, t.label2.prop, true, s.minute);
@@ -1566,15 +1733,33 @@ function knock(s: GameState, who: Rid) {
   const p = personOf(s, who);
   if (r.where === 'asleep') {
     tick(p, Math.max(p.now, s.minute));
-    socialEvent(p, { at: s.minute, kind: 'insult', otherId: KAPICI, byMe: false, magnitude: 0.3 });
+    s.knocks++;
+    socialEvent(p, {
+      at: s.minute,
+      kind: 'insult',
+      otherId: KAPICI,
+      byMe: false,
+      magnitude: 0.2 + 0.15 * s.knocks,
+    });
     r.where = 'home';
     r.until = s.minute + 10;
-    say(s, who, 'I’ve been on shift all night. What is it?', 'voice');
-    say(s, 'riza', 'Derya sleeps till three. Bread on the hook, never the bell.', 'margin');
+    if (s.knocks === 1) {
+      say(s, who, 'I’ve been on shift all night. What is it?', 'voice');
+      say(s, 'riza', 'Derya sleeps till three. Bread on the hook, never the bell.', 'margin');
+    } else if (s.knocks === 2) {
+      say(s, who, 'Again? Do you know what time I got in?', 'voice');
+      say(s, 'narrator', 'Across the landing, Hüseyin’s door opened an inch and closed again.', 'event');
+      believeSelf(personOf(s, 'huseyin'), 'kapici:kind', false, 0.65, s.minute);
+    } else {
+      say(s, who, 'That’s it. I’m telling Hüseyin Bey.', 'voice');
+      for (const o of ['huseyin', 'nermin'] as const)
+        believeSelf(personOf(s, o), 'kapici:kind', false, 0.7, s.minute);
+    }
     deliverAt(s, s.k.at);
     // Back to sleep after.
     r.until = s.minute + 6;
   } else if (r.where !== 'home') say(s, 'narrator', 'No answer.', 'journal');
+  else say(s, 'narrator', `${nameOf(who)} is already at the door.`, 'journal');
 }
 
 function prank(s: GameState, what: 'swap' | 'gate') {
@@ -1583,7 +1768,10 @@ function prank(s: GameState, what: 'swap' | 'gate') {
     (r) => r.where === 'step' || (r.id === 'nermin' && r.where === 'home') || r.stairsUntil >= s.minute,
   );
   if (what === 'gate') {
-    if (s.k.at !== 'step' && s.k.at !== 'room' && s.k.at !== 'landing:0') return;
+    if (s.k.at !== 'step' && s.k.at !== 'room' && s.k.at !== 'landing:0') {
+      say(s, 'narrator', 'The courtyard gate is downstairs, by the step.', 'journal');
+      return;
+    }
     s.gateUntil = s.minute + 90;
     say(s, 'narrator', 'You left the courtyard gate on the latch.', 'journal');
     stamp(s, 'gate');
@@ -1591,7 +1779,17 @@ function prank(s: GameState, what: 'swap' | 'gate') {
     // Swap Nermin's and Sevim's newspapers: only while both papers are in the basket.
     const n = s.tasks.find((t) => t.kind === 'bread' && t.for === 'nermin' && t.carried && !t.done);
     const v = s.tasks.find((t) => t.kind === 'bread' && t.for === 'sevim' && t.carried && !t.done);
-    if (!n || !v || s.swappedDay === today(s)) return;
+    if (!n || !v || s.swappedDay === today(s)) {
+      say(
+        s,
+        'narrator',
+        s.swappedDay === today(s)
+          ? 'Once a day is plenty.'
+          : 'You need both Nermin’s and Sevim’s papers in the basket.',
+        'journal',
+      );
+      return;
+    }
     s.swappedDay = today(s);
     say(
       s,
@@ -1621,7 +1819,7 @@ function prank(s: GameState, what: 'swap' | 'gate') {
   const seen = witnesses.find((w) => w.id !== 'derya');
   if (seen) {
     const p = personOf(s, seen.id);
-    believeSelf(p, 'kapici:unreliable', true, 0.7, s.minute);
+    believeSelf(p, 'kapici:reliable', false, 0.6, s.minute);
     say(s, 'narrator', `${nameOf(seen.id)} saw you do it.`, 'event');
   }
 }
@@ -1697,12 +1895,12 @@ function nightEvents(s: GameState, day: number) {
       },
     ]);
     learn(s, FACTS.visitor);
-    say(
-      s,
-      'narrator',
-      '23:40. A man rang flat 5. Derya let him in, and looked down the stairs before she shut the door.',
-      'event',
-    );
+    const lines: Record<number, string> = {
+      2: 'Near midnight a man rang flat 5. Derya let him in, and looked down the stairs before she shut the door.',
+      3: 'The same man at flat 5 again, late. He carried a bag this time. Nermin’s curtain moved.',
+      4: 'Flat 5 again after eleven. You heard him laugh on the landing, and Derya say “shh”.',
+    };
+    say(s, 'narrator', lines[day] ?? '', 'event');
     const n = personOf(s, 'nermin');
     perceive(n, [
       {
@@ -1734,9 +1932,20 @@ function ringEvening(s: GameState) {
   const b = personOf(s, 'burak');
   const re = rOf(s, 'elif');
   s.ring.asked = true;
-  if (re.where !== 'home') {
+  // Where you are decides whether you see it or hear it later.
+  const near =
+    ['roof', 'door:elif', 'door:burak', 'door:tarik', 'landing:3', 'landing:4'].includes(s.k.at) && !s.k.walk;
+  say(
+    s,
+    'narrator',
+    near
+      ? 'Half past six. Burak came up the stairs in his ironed shirt, and you stood very still.'
+      : 'Half past six. Burak went up the stairs in his ironed shirt. (From the roof, you would have seen it.)',
+    'event',
+  );
+  if (re.where === 'shop' || re.where === 'work') {
     s.ring.answer = 'no roof';
-    say(s, 'narrator', 'Burak knocked at flat 6. Nobody home. He sat on the roof alone until dark.', 'event');
+    say(s, 'narrator', 'Elif was out. Burak sat on the roof alone until dark.', 'event');
     return;
   }
   tick(e, Math.max(e.now, s.minute));
@@ -1982,15 +2191,40 @@ function hostMeal(p: Person, at: number) {
   });
 }
 
+/** Rıza's Saturday-night estimate of a hand at the meeting: the host's guess from warmth, word and doubt, not a ruling. */
+export function handsLean(s: GameState, id: Rid): 'likely' | 'maybe' | 'unlikely' {
+  const p = personOf(s, id);
+  const r = rOf(s, id);
+  const aff = relationshipWith(p, KAPICI).affection;
+  const doubt = credence(p, 'kapici:dishonest');
+  if (doubt >= 0.65 || aff < 0) return 'unlikely';
+  if ((r.word === 'yes' && aff > 0.1) || aff > 0.24) return 'likely';
+  return aff > 0.1 || r.word === 'yes' ? 'maybe' : 'unlikely';
+}
+
 function endDay(s: GameState) {
   const day = today(s);
   const rep = report(s);
+  for (const t of s.tasks)
+    if (!t.done && dayOf(t.from) === day && t.kind === 'bins') {
+      t.done = s.minute;
+      rep.missed++;
+      say(s, 'narrator', 'Nobody took the bins down. The landing smelled of it all night.', 'journal');
+      for (const r of s.residents)
+        socialEvent(personOf(s, r.id), {
+          at: s.minute,
+          kind: 'harm',
+          otherId: KAPICI,
+          byMe: false,
+          magnitude: 0.05,
+        });
+    }
   for (const t of s.tasks)
     if (!t.done && dayOf(t.from) === day && t.kind !== 'bins') {
       rep.missed++;
       const p = personOf(s, t.for);
       socialEvent(p, { at: s.minute, kind: 'harm', otherId: KAPICI, byMe: false, magnitude: 0.15 });
-      believeSelf(p, 'kapici:unreliable', true, 0.65, s.minute);
+      believeSelf(p, 'kapici:reliable', false, 0.65, s.minute);
       t.done = s.minute;
     }
   rep.talks = s.talks.filter((t) => dayOf(t.at) === day).length;
@@ -2034,6 +2268,28 @@ function endDay(s: GameState) {
       say(s, 'narrator', 'Elif bought a bowl. Pamuk is the building’s cat now.', 'event');
       stamp(s, 'cat');
     }
+  }
+  // A promise made to a man you now think a liar: it shows on the stairs before Sunday.
+  for (const r of s.residents) {
+    if (r.word !== 'yes') continue;
+    if (credence(personOf(s, r.id), 'kapici:dishonest') < 0.65) continue;
+    r.word = 'no';
+    say(
+      s,
+      'narrator',
+      `${nameOf(r.id)} would not meet your eye on the stairs. You would not count on that word for Sunday.`,
+      'event',
+    );
+  }
+  if (day === 6) {
+    const likely = s.residents.filter((r) => handsLean(s, r.id) === 'likely').map((r) => nameOf(r.id));
+    const maybe = s.residents.filter((r) => handsLean(s, r.id) === 'maybe').map((r) => nameOf(r.id));
+    say(
+      s,
+      'riza',
+      `Count the hands before you sleep. ${likely.length ? `${likely.join(', ')}: likely.` : 'Nobody you can be sure of.'} ${maybe.length ? `${maybe.join(', ')}: maybe.` : ''} Four hands raise the tea money.`,
+      'margin',
+    );
   }
   s.phase = 'night';
   s.minute = dayStart(day) + DAY_END;

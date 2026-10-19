@@ -49,7 +49,7 @@ const HELP = `Commands:
   look                 what is in front of you
   go <place>           walk somewhere: room, step, bakery, shop, roof, landing:<0-4>, or a name (nermin, sevim, burak, huseyin, derya, elif, tarik) for their door
   task <n>             walk to where board item n needs you
-  wait [minutes]       let time pass (default 15); stops early when someone is in front of you or something happens
+  wait [minutes]       let time pass (default 15); stops early when someone new is in front of you or a new job appears
   news <name>          ask the person in front of you "Anything new?"
   tell <name> <n> [sure]   pass on item n from your notebook (add "sure" to say it for certain)
   tells <name>         list what you could tell them
@@ -86,7 +86,7 @@ const place = (x: string | undefined): Place => {
 
 function screen(s: GameState, seen: number): number {
   const out: string[] = [];
-  const fresh = s.said.slice(seen).filter((x) => x.kind !== 'heard' || true);
+  const fresh = s.said.filter((x) => (x.n ?? 0) >= seen);
   for (const x of fresh) {
     const who =
       x.kind === 'voice'
@@ -113,7 +113,7 @@ function screen(s: GameState, seen: number): number {
       console.log(`  ${RESIDENTS[id].name}: ${r.warmth}; ${r.word}`);
     }
     console.log(`\n(next) to turn the page.`);
-    return s.said.length;
+    return s.lineNo;
   }
   if (s.phase === 'sunday' || s.phase === 'end') {
     console.log(`== Sunday, the meeting ==`);
@@ -126,7 +126,7 @@ function screen(s: GameState, seen: number): number {
     console.log(
       `Tea money ${s.meeting?.raise ? 'goes up' : 'stays'}; ${s.meeting?.yes ?? 0} hands. Tin: ₺${s.k.money}. Week 2 is not written yet.`,
     );
-    return s.said.length;
+    return s.lineNo;
   }
   console.log(
     `== ${DAY_NAMES[d - 1]} ${clockOf(s.minute)} == You are ${s.k.walk ? `on your way to ${placeName(s.k.walk.to)}` : `at ${placeName(s.k.at)}`}. Tin: ₺${s.k.money}.`,
@@ -171,7 +171,7 @@ function screen(s: GameState, seen: number): number {
     );
   });
   if (!open.length) console.log('  (nothing)');
-  return s.said.length;
+  return s.lineNo;
 }
 
 function main() {
@@ -265,10 +265,12 @@ function main() {
 /** Let time pass until arrival (walking) or for n minutes, stopping when someone new is in front of you. */
 function advance(s: GameState, n: number, untilArrive: boolean) {
   const before = new Set(faceToFace(s));
+  const tasks = openTasks(s).length;
   for (let i = 0; i < n && s.phase === 'day'; i++) {
     step(s);
     if (untilArrive && !s.k.walk && s.k.busyTask === null) return;
     if (!untilArrive && faceToFace(s).some((f) => !before.has(f))) return;
+    if (!untilArrive && openTasks(s).length > tasks) return;
   }
 }
 
