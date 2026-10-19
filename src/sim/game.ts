@@ -438,8 +438,13 @@ export function planDay(s: GameState, day: number) {
 
 export function newGame(seed: number): GameState {
   const now = DAY_START;
-  const people = RIDS.map((id) => makeResident(id, seed, now));
-  const kapici = makeKapici(seed, now);
+  // Everyone wakes at 06:20 and has breakfast before the day starts.
+  const people = RIDS.map((id) => makeResident(id, seed, now - 40));
+  const kapici = makeKapici(seed, now - 40);
+  for (const p of [...people, kapici]) {
+    hostMeal(p, now - 30);
+    tick(p, now);
+  }
   const s: GameState = {
     version: GAME_VERSION,
     seed,
@@ -532,7 +537,7 @@ export function legsLine(s: GameState, to: Place): string {
   const floors = Math.max(0, floorOf(to) - floorOf(s.k.at));
   if (floors < 2) return '';
   const aff = offer('climb', { duration: mins, effort: 0.85 });
-  aff.followedBy = [{ label: 'the rest of the day', duration: Math.max(30, DAY_END - tod(s)), effort: 0.4 }];
+  aff.followedBy = [{ label: 'the next errands', duration: 120, effort: 0.5 }];
   return bodyForecast(s.kapici, aff).line;
 }
 
@@ -1069,6 +1074,44 @@ function pickupAt(s: GameState, pl: Place) {
 }
 
 /** A task is done: the resident's thanks (HF social event) and their tip, which depends on how they feel about you. */
+/** What each resident says at the door when the job is done: their own words, varied, so no line repeats often. */
+const THANKS: Record<Rid, string[]> = {
+  nermin: [
+    'Ah, there you are. Come, I have something to tell you.',
+    'Good boy. Rıza was never this quick.',
+    'Leave it on the stool. Did you see who came in?',
+  ],
+  sevim: [
+    'Thank you. Exactly right, for once.',
+    'Put it there, please. Mind the mat.',
+    'On time. I noticed.',
+  ],
+  burak: ['Thanks, abi. Really.', 'Perfect, thank you.', 'You’re a lifesaver.'],
+  huseyin: ['Thank you. I’ll note it.', 'Good. Good.', 'Thank you, son.'],
+  derya: ['You’re kind. Thank you.', 'Oh, thank you. I’m dead on my feet.', 'Thanks, really.'],
+  elif: ['Oh! Thank you so much.', 'Thank you! Do you want a biscuit?', 'You’re a star.'],
+  tarik: [
+    'Thank you, son. These stairs.',
+    'Bless your legs. Thank you.',
+    'Thank you. Sit a minute, if you can.',
+  ],
+};
+const LATE_LINES: Record<Rid, string[]> = {
+  nermin: [
+    'Finally. I nearly sent someone down for you.',
+    'Late. Rıza would have been late too, but he would have had a story.',
+  ],
+  sevim: ['It’s gone cold. Never mind.', 'I had given up on you.'],
+  burak: ['No problem, I managed. Thanks anyway.', 'Ah, I’d already gone without. Thanks.'],
+  huseyin: ['Late. I’ll mention it.', 'Hm. Next time on time, please.'],
+  derya: ['It’s fine. Everyone’s late today.', 'Thanks. I nearly went myself.'],
+  elif: ['Oh, it’s fine! Thank you.', 'No worries. Thank you.'],
+  tarik: [
+    'I waited. It doesn’t matter. Thank you.',
+    'There you are. I thought you had forgotten the old man.',
+  ],
+};
+
 function complete(s: GameState, t: Task, hook: boolean) {
   t.done = s.minute;
   t.hook = hook;
@@ -1110,6 +1153,9 @@ function complete(s: GameState, t: Task, hook: boolean) {
     s.k.money += tip;
     report(s).tips += tip;
   }
+  const pool = late ? LATE_LINES[t.for] : THANKS[t.for];
+  const line = pool[Math.floor(hashUnit(s.seed, DRAW.tip, s.minute, t.id) * pool.length)] ?? '';
+  say(s, t.for, tip > 0 ? `${line} (₺${tip})` : line, 'voice');
   if (t.for === 'tarik' && !late && hashUnit(s.seed, DRAW.tip, s.minute) < 0.5)
     report(s).treats.push('a lemon candy from Tarık Bey');
   if (late) report(s).late++;

@@ -54,6 +54,7 @@ interface Ui {
   lastKey: string;
   sheetKey: string;
   dismissed: string;
+  grudgeSaid: Set<string>;
 }
 
 const ui: Ui = {
@@ -68,6 +69,7 @@ const ui: Ui = {
   lastKey: '',
   sheetKey: '',
   dismissed: '',
+  grudgeSaid: new Set(),
 };
 
 const app = () => document.getElementById('app') as HTMLElement;
@@ -195,8 +197,10 @@ function loop(t: number) {
   const dt = ui.last ? Math.min(0.25, (t - ui.last) / 1000) : 0;
   ui.last = t;
   if (s && s.phase === 'day' && !document.hidden) {
-    const talking = faceToFace(s).length > 0 && ui.sheet !== 'none' && ui.sheet !== 'notebook';
-    const rate = ui.sheet === 'notebook' ? 0 : talking ? SLOW : (SPEEDS[ui.speed] ?? 3);
+    // Tactical slowdown, never a pause: the clock crawls while someone is in front of you or the notebook is open.
+    const faces = s.k.walk ? [] : faceToFace(s);
+    const talking = faces.some((f) => ui.dismissed !== `${s.k.at}:${f}`);
+    const rate = ui.sheet === 'notebook' || talking ? SLOW : (SPEEDS[ui.speed] ?? 3);
     ui.acc += dt * rate;
     let n = 0;
     while (ui.acc >= 1 && n < 30 && s.phase === 'day') {
@@ -634,7 +638,7 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
       : '';
   const head = `${tabs}<div class="who"><b>${esc(info.call)}</b><span class="soft small">flat ${info.flat} · ${read.warmth}, ${read.word}</span><button class="x" data-a="close">✕</button></div>
     ${lastLine ? `<div class="hand said">${esc(lastLine.text)}</div>` : `<div class="soft small">${esc(info.blurb)}</div>`}`;
-  const grudge = r.grudges.find((g) => !g.said);
+  const grudge = r.grudges.find((g) => !ui.grudgeSaid.has(`${who}:${g.at}`));
   if (ui.sheet === 'tell') {
     const items = tellables(s, who);
     return `${head}<div class="soft small">Tell ${esc(info.name)}…</div><div class="tells">${items
@@ -694,8 +698,7 @@ function wireDoor(s: GameState, el: HTMLElement, who: Rid) {
     render(false);
   };
   const r = rOf(s, who);
-  const grudge = r.grudges.find((g) => !g.said);
-  if (grudge) grudge.said = true;
+  for (const g of r.grudges) ui.grudgeSaid.add(`${who}:${g.at}`);
   on('[data-face]', (b) => {
     ui.sheetFor = b.dataset.face as Rid;
     ui.sheet = 'none';
@@ -838,7 +841,7 @@ function sundayPage(s: GameState) {
   const total = s.reports.reduce((a, x) => a + x.tips, 0);
   const secrets = Object.keys(s.secrets).length;
   const caught = s.residents.reduce((a, r) => a + r.caught.length + r.grudges.length, 0);
-  const share = `The Stairwell, week 1: ₺${s.k.money} in the tin, ${secrets}/${SECRET_PROPS.length} secrets, caught ${caught}×, tea money ${m?.raise ? 'up' : 'unchanged'} (${m?.yes ?? 0} hands). ${s.ring.answer === 'yes' ? '💍' : ''}${s.catHome ? '🐈' : ''}`;
+  const share = `The Stairwell, week 1: ₺${s.k.money} in the tin, ${secrets}/${SECRET_PROPS.length} secrets, caught ${caught}×, tea money ${m?.raise ? 'up' : 'unchanged'} (${m?.yes ?? 0} hands).${s.ring.answer === 'yes' ? ' A ring on the roof.' : ''}${s.catHome ? ' A cat on the step.' : ''} ◇`;
   app().innerHTML = `<div class="page sunday">
     <h2>Sunday, the meeting</h2>
     ${lines.map(saidLine).join('')}
