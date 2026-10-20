@@ -135,3 +135,8 @@ Three concepts were written (kept below) and sent with the engine summary and th
 - Telling the player why a bins run missed the truck before it happens (round 2 casual; target: week 2 build).
 - The harness returner persona came back 0/3 on iteration 2 against 7/8 before; not yet traced (target: next build).
 - Lab telemetry through `@adam0white/lab-client` (milestones: each night page and the Sunday vote; quit points: the title page and mid-day). Blocked: the package is not on npm as of 2026-10-19. Target: the first build after it is published.
+
+
+## DL-4 exceptions: daily conversations (2026-10-20)
+
+News and sitting are intentional fiction rules: each resident gives one news conversation and one ten-minute sitting story per game day. They preserve the day's pacing and the ordered stories through the week. These are daily quotas, not checks for newly learned news or physical capability. The interface says “Already asked · ask tomorrow” and “Sat together today · return tomorrow”; each action returns on the next game day. Existing simulation rules and exported notebook replay remain unchanged.

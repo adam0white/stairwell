@@ -144,6 +144,7 @@ button:disabled {
   color: var(--rope);
 }
 details summary {
+  min-height: 44px;
   cursor: pointer;
   padding: 6px 0;
 }
@@ -162,9 +163,10 @@ label input[type="file"] {
 }
 .top {
   display: flex;
+  flex-wrap: wrap;
   flex-shrink: 0;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   padding: 4px 12px;
   font-size: 15px;
   min-height: 44px;
@@ -176,7 +178,7 @@ label input[type="file"] {
   font-variant-numeric: tabular-nums;
 }
 .top .nb {
-  min-height: 36px;
+  min-height: 44px;
   padding: 2px 12px;
 }
 .speed {
@@ -282,7 +284,7 @@ label input[type="file"] {
 }
 .task {
   text-align: left;
-  min-height: 40px;
+  min-height: 44px;
   padding: 4px 10px;
   font-size: 14px;
   border-color: var(--ink-soft);
@@ -301,7 +303,7 @@ label input[type="file"] {
   border-color: var(--ink);
 }
 .prank {
-  min-height: 40px;
+  min-height: 44px;
   font-size: 14px;
   border-style: dashed;
 }
@@ -312,8 +314,10 @@ label input[type="file"] {
   gap: 2px;
   padding: 4px 12px;
   flex: 1 1 118px;
-  min-height: 80px;
+  min-height: 0;
   overflow-y: auto;
+  /* journalPosition owns anchoring; avoid a second browser scroll adjustment. */
+  overflow-anchor: none;
 }
 .journal > div {
   flex-shrink: 0;
@@ -362,7 +366,8 @@ label input[type="file"] {
   position: absolute;
   right: 0;
   top: -2px;
-  min-height: 36px;
+  min-height: 44px;
+  min-width: 44px;
   padding: 2px 12px;
 }
 .sheet .said {
@@ -377,7 +382,7 @@ label input[type="file"] {
 }
 .faces button,
 .chips button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 4px 12px;
   font-size: 15px;
 }
@@ -388,7 +393,7 @@ label input[type="file"] {
 }
 .row button {
   flex: 1;
-  min-height: 40px;
+  min-height: 44px;
   font-size: 14px;
   padding: 4px 8px;
 }
@@ -507,4 +512,24 @@ label input[type="file"] {
 }
 .lk-notebook::backdrop {
   background: #0006;
+}
+
+/* Give the conversation room before taking space from its response row. */
+.day:has(.verbs) .scene {
+  height: clamp(140px, 22dvh, 200px);
+}
+.day:has(.verbs) .board {
+  max-height: 104px;
+}
+.sheet:has(.verbs) {
+  max-height: 55%;
+  flex-shrink: 0;
+}
+.lk-notebook label {
+  display: block;
+  margin-top: 10px;
+}
+.lk-notebook input[type="file"] {
+  width: 100%;
+  min-height: 44px;
 }

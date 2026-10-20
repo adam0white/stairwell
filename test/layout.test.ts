@@ -1,6 +1,7 @@
 import { type Browser, chromium, type Page } from 'playwright';
 import { createServer, type ViteDevServer } from 'vite';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { playWeek } from '../scripts/policy.ts';
 import { fingerprint, GAME_VERSION, replay } from '../src/sim/game.ts';
 
 let server: ViteDevServer;
@@ -51,6 +52,7 @@ it.each([
     await page.goto(url);
     await page.evaluate(() => document.fonts.ready);
     // A public, deterministic notebook with a long day's history and a resident at the door.
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     await page.locator('input[type=file]').setInputFiles({
       name: 'layout.json',
       mimeType: 'application/json',
@@ -63,6 +65,7 @@ it.each([
         }),
       ),
     });
+    await page.clock.runFor(100);
     await page.locator('.verbs').waitFor();
     const journal = page.locator('.journal');
     expect((await journal.boundingBox())?.height).toBeGreaterThanOrEqual(minLogHeight);
@@ -106,6 +109,7 @@ async function openResidentsNotebook(page: Page) {
 async function importNotebook(page: Page, minute = 440) {
   await page.clock.install();
   await page.goto(url);
+  await page.getByRole('button', { name: 'Game menu', exact: true }).click();
   await page.locator('input[type=file]').setInputFiles({
     name: 'clarity.json',
     mimeType: 'application/json',
@@ -118,6 +122,7 @@ async function importNotebook(page: Page, minute = 440) {
       }),
     ),
   });
+  await page.clock.runFor(100);
   await page.locator('.journal').waitFor();
   await page.evaluate(() => document.fonts.ready);
 }
@@ -221,11 +226,11 @@ it('explains exhausted news beside Anything new and resets it on a new day', asy
     expect(await news.isEnabled()).toBe(true);
     await news.click();
     expect(await news.isDisabled()).toBe(true);
-    expect(await news.textContent()).toContain('Already asked today');
+    expect(await news.textContent()).toContain('Already asked · ask tomorrow');
     await visibleInViewport(page, '[data-a=news]');
     await page.reload();
     await page.locator('[data-a=continue]').click();
-    expect(await page.locator('[data-a=news]').textContent()).toContain('Already asked today');
+    expect(await page.locator('[data-a=news]').textContent()).toContain('Already asked · ask tomorrow');
     await importNotebook(page, 1254);
     await page.locator('[data-a=news]').click();
     await page.clock.runFor(10_000);
@@ -233,7 +238,7 @@ it('explains exhausted news beside Anything new and resets it on a new day', asy
     await page.locator('.scene [data-go="door:nermin"]').click();
     await page.clock.runFor(30_000);
     expect(await page.locator('[data-a=news]').isEnabled()).toBe(true);
-    expect(await page.locator('[data-a=news]').textContent()).not.toContain('Already asked today');
+    expect(await page.locator('[data-a=news]').textContent()).not.toContain('Already asked · ask tomorrow');
   } finally {
     await page.close();
   }
@@ -328,13 +333,27 @@ it('keeps the mandatory opening short and preserves the original story on reques
   }
 });
 
-it('does not offer Continue for a malformed saved notebook', async () => {
+it.each([
+  { inputs: null },
+  { inputs: [{ kind: 'bogus', at: 420 }] },
+  { inputs: [{ kind: 'go', to: 'door:missing', at: 420 }] },
+  {
+    inputs: [
+      { kind: 'news', who: 'nermin', at: 440 },
+      { kind: 'news', who: 'nermin', at: 420 },
+    ],
+  },
+])('does not offer Continue for malformed inputs $inputs', async ({ inputs }) => {
   const page = await browser.newPage();
   try {
     await page.goto(url);
     await page.evaluate(
-      (game) => localStorage.setItem('stairwell:notebook', JSON.stringify({ game, seed: 7, inputs: null })),
-      GAME_VERSION,
+      (inputs) =>
+        localStorage.setItem(
+          'stairwell:notebook',
+          JSON.stringify({ game: 'stairwell@3', seed: 7, inputs, minute: 440 }),
+        ),
+      inputs,
     );
     await page.reload();
     expect(await page.locator('[data-a=continue]').count()).toBe(0);
@@ -356,6 +375,88 @@ it('saves the current minute before returning through Game menu to Title page', 
     expect(await page.locator('[data-save-summary]').textContent()).toContain('Monday · 07:21 · flat 1');
     await page.locator('[data-a=continue]').click();
     expect(await page.locator('.clock').textContent()).toBe('Mon 07:21');
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps rewind and import inside a reachable Game menu for a completed notebook', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await page.clock.install();
+    await page.goto(url);
+    const s = playWeek(11, 'honest');
+    await page.evaluate((saved) => localStorage.setItem('stairwell:notebook', JSON.stringify(saved)), {
+      game: GAME_VERSION,
+      seed: s.seed,
+      inputs: s.inputs,
+      minute: s.minute,
+    });
+    await page.reload();
+    await page.evaluate(() => document.fonts.ready);
+    expect(await page.locator('.title input[type=file], .title [data-a=morning]').count()).toBe(0);
+    await page.getByText('More about the job', { exact: true }).click();
+    await visibleInViewport(page, '.title .game-menu');
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
+    await menu.getByText('Turn back to a morning', { exact: true }).click();
+    expect(await menu.getByRole('button', { name: 'Tuesday morning', exact: true }).isVisible()).toBe(true);
+    expect(await menu.locator('input[type=file]').count()).toBe(1);
+    await page.keyboard.press('Escape');
+    await visibleInViewport(page, '.title .game-menu');
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    await menu.getByText('Turn back to a morning', { exact: true }).click();
+    await menu.getByRole('button', { name: 'Tuesday morning', exact: true }).click();
+    await page.clock.runFor(100);
+    await page.locator('.day').waitFor();
+    expect(await page.locator('.clock').textContent()).toBe('Tue 07:00');
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps every header control within 320px at doubled text size', async () => {
+  const page = await browser.newPage({ viewport: { width: 320, height: 690 } });
+  try {
+    await importNotebook(page);
+    await page.evaluate(() => {
+      const sizes = [...document.querySelectorAll('*')]
+        .filter((el): el is HTMLElement => el instanceof HTMLElement)
+        .map((el) => [el, Number.parseFloat(getComputedStyle(el).fontSize)] as const);
+      for (const [el, size] of sizes) el.style.fontSize = `${size * 2}px`;
+    });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+    await visibleInViewport(page, '.top button');
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([
+  [360, 690],
+  [1280, 800],
+])('fits conversation responses and 44px standalone targets at %ix%i', async (width, height) => {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await importNotebook(page);
+    await page.locator('[data-a=news]').click();
+    await visibleInViewport(page, '.verbs button, .who .x');
+    for (const control of await page.locator('.top button, .task, .verbs button, .who .x').all()) {
+      const box = await control.boundingBox();
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+    }
+    await page.locator('[data-a=sit]').click();
+    await page.clock.runFor(25000);
+    expect(await page.locator('[data-a=sit]').isDisabled()).toBe(true);
+    expect(await page.locator('[data-a=sit]').textContent()).toContain(
+      'Sat together today · return tomorrow',
+    );
+    await visibleInViewport(page, '.verbs button, .who .x');
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    await page.getByRole('button', { name: 'Title page', exact: true }).click();
+    const box = await page.getByText('More about the job', { exact: true }).boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
   } finally {
     await page.close();
   }

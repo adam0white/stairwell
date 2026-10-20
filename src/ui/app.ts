@@ -38,6 +38,7 @@ import {
 } from '../sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
 import { gameMenu, labScreen } from './lab.ts';
+import { isSaved, type Saved } from './save.ts';
 
 const SAVE_KEY = 'stairwell:notebook';
 const SPEEDS = [3, 6, 12];
@@ -78,13 +79,6 @@ const esc = (x: string) => x.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 // ---------- saves ----------
 
-interface Saved {
-  game: string;
-  seed: number;
-  inputs: Input[];
-  minute?: number;
-}
-
 function save() {
   const s = ui.s;
   if (!s) return;
@@ -100,9 +94,8 @@ function loadSaved(): Saved | null {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
-    const x = JSON.parse(raw) as Saved;
-    if (!canReplay(x.game) || !Number.isFinite(x.seed) || !Array.isArray(x.inputs)) return null;
-    if (x.minute !== undefined && (!Number.isInteger(x.minute) || x.minute < 420)) return null;
+    const x: unknown = JSON.parse(raw);
+    if (!isSaved(x)) return null;
     replay(x.seed, x.inputs, x.minute);
     return x;
   } catch {
@@ -150,6 +143,10 @@ function importRun(file: File) {
       const x = JSON.parse(t) as Saved;
       if (!canReplay(x.game)) {
         alert('This notebook is from another edition of the game.');
+        return;
+      }
+      if (!isSaved(x)) {
+        alert('Could not read that notebook. Check its inputs or choose another file.');
         return;
       }
       begin(replay(x.seed, x.inputs, x.minute));
@@ -226,9 +223,18 @@ function loop(t: number) {
 
 const footer = `<div class="footer"><a href="https://human.adamwhite.work/games/">All games</a></div>`;
 
-function mountMenu(target: Element | null, s: GameState) {
+function mountMenu(target: Element | null, s: GameState | null) {
   if (!target) return;
+  const saved = s ? { game: GAME_VERSION, seed: s.seed, inputs: s.inputs, minute: s.minute } : null;
   const entry = gameMenu({
+    hasRun: !!s,
+    importRun,
+    mornings: saved
+      ? mornings(saved).map((m) => ({
+          label: `${DAY_NAMES[m.day - 1]} morning`,
+          action: () => begin(replay(saved.seed, m.inputs)),
+        }))
+      : [],
     getRun: () => runOf(ui.s ?? s),
     beforeOpen: () => {
       ui.sheet = 'none';
@@ -236,7 +242,7 @@ function mountMenu(target: Element | null, s: GameState) {
       if (ui.s?.phase === 'day') render(false);
     },
     readNotebook:
-      s.phase === 'day' && ui.s
+      s?.phase === 'day' && ui.s
         ? () => {
             ui.sheet = 'notebook';
             ui.sheetKey = '';
@@ -246,8 +252,7 @@ function mountMenu(target: Element | null, s: GameState) {
         : undefined,
     title: ui.s ? titlePage : undefined,
   });
-  if (target.classList.contains('title')) target.querySelector('.actions')?.after(entry);
-  else if (target.classList.contains('page')) target.prepend(entry);
+  if (target.classList.contains('page')) target.prepend(entry);
   else target.append(entry);
 }
 
@@ -257,7 +262,6 @@ function titlePage() {
   ui.s = null;
   const saved = loadSaved();
   const savedState = saved ? replay(saved.seed, saved.inputs, saved.minute) : null;
-  const ms = saved ? mornings(saved) : [];
   app().innerHTML = `<div class="page title">
     <a class="mark" href="https://human.adamwhite.work">◇ human framework</a>
     <h1>The Stairwell</h1>
@@ -266,16 +270,6 @@ function titlePage() {
     <div class="actions">
       ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${DAY_NAMES[dayOf(savedState.minute) - 1]} · ${clockOf(savedState.minute)} · ${esc(savedState.k.walk ? `on the way to ${placeName(savedState.k.walk.to)}` : placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
       <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'A new notebook' : 'Begin on Monday'}</button>
-      ${
-        ms.length > 1
-          ? `<details><summary class="soft">Turn back to a morning</summary><div class="actions">${ms
-              .map(
-                (m, i) => `<button data-a="morning" data-i="${i}">${DAY_NAMES[m.day - 1]} morning</button>`,
-              )
-              .join('')}</div></details>`
-          : ''
-      }
-      <label class="soft small">Replay a notebook file <input type="file" accept="application/json" data-a="import"></label>
     </div>
     <details><summary>More about the job</summary>
       <p>Rıza Efendi kept the door of Lale Apartmanı for forty years. Now he has gone back to his village, and the job is yours: bread, bins, parcels, five flights of stairs.</p>
@@ -286,22 +280,13 @@ function titlePage() {
     ${footer}
   </div>`;
   const el = app();
-  if (savedState) mountMenu(el.querySelector('.page'), savedState);
+  mountMenu(el.querySelector('.page'), savedState);
   el.querySelector('[data-a="continue"]')?.addEventListener('click', () => {
     if (saved) begin(replay(saved.seed, saved.inputs, saved.minute));
   });
   el.querySelector('[data-a="new"]')?.addEventListener('click', () => {
     if (saved && !confirm('Start a new notebook? The old one will be replaced.')) return;
     begin(newGame((Date.now() % 1_000_000) + 1));
-  });
-  for (const b of el.querySelectorAll<HTMLElement>('[data-a="morning"]'))
-    b.addEventListener('click', () => {
-      const m = ms[Number(b.dataset.i)];
-      if (saved && m) begin(replay(saved.seed, m.inputs));
-    });
-  el.querySelector<HTMLInputElement>('[data-a="import"]')?.addEventListener('change', (e) => {
-    const f = (e.target as HTMLInputElement).files?.[0];
-    if (f) importRun(f);
   });
 }
 
@@ -754,11 +739,12 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
   }
   const carriedOther = openTasks(s).filter((t) => t.carried && t.kind === 'parcel' && t.for !== who);
   const asked = r.newsDay === dayOf(s.minute);
+  const sat = r.sitDay === dayOf(s.minute);
   return `${head}${grudge ? `<div class="hand rope">“I hear you’ve been saying things about me.”</div>` : ''}
     <div class="verbs">
-      <button data-a="news" ${asked ? 'disabled' : ''}>Anything new?${asked ? '<span class="h">Already asked today</span>' : ''}</button>
+      <button data-a="news" ${asked ? 'disabled' : ''}>Anything new?${asked ? '<span class="h">Already asked · ask tomorrow</span>' : ''}</button>
       <button data-a="tell">Tell…</button>
-      <button data-a="sit" ${r.sitDay === dayOf(s.minute) ? 'disabled' : ''}>Sit a minute</button>
+      <button data-a="sit" ${sat ? 'disabled' : ''}>Sit a minute${sat ? '<span class="h">Sat together today · return tomorrow</span>' : ''}</button>
       <button data-a="word" ${r.word ? 'disabled' : ''}>A word for me on Sunday<span class="h">${r.word ? (r.word === 'yes' ? 'promised' : 'said no') : dayOf(s.minute) < 4 ? 'too early' : wordHint(s, who)}</span></button>
     </div>
     ${carriedOther.map((t) => `<button class="prank" data-mis="${t.id}">Leave ${esc(RESIDENTS[t.for].name)}’s parcel here</button>`).join('')}`;
