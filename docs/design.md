@@ -140,3 +140,28 @@ Three concepts were written (kept below) and sent with the engine summary and th
 ## DL-4 exceptions: daily conversations (2026-10-20)
 
 News and sitting are intentional fiction rules: each resident gives one news conversation and one ten-minute sitting story per game day. They preserve the day's pacing and the ordered stories through the week. These are daily quotas, not checks for newly learned news or physical capability. The interface says “Already asked · ask tomorrow” and “Sat together today · return tomorrow”; each action returns on the next game day. Existing simulation rules and exported notebook replay remain unchanged.
+
+## F-232 clarity follow-up (2026-10-20)
+
+Monday's first bread window plays at 0.3 game minutes per real second, including
+travel. This changes only UI playback. Each simulation step still advances one
+minute. The selected speed returns when all first-morning bread has been
+delivered or its final deadline has passed. Conversations and inspection continue
+at 0.6 min/s outside that window. One clock-rate line shows the effective speed
+and its reason. The simulation, save edition and HF 2.8.0 pin are unchanged.
+
+The scene shows one complete current order. All orders opens the full readable
+list; Residents opens named destinations with full-size targets. Those sheets
+keep their controls when time advances. Newly arriving orders append below the
+ones already being read. Resident selection retains the person's identity when
+several people share a location.
+
+The conversation stays with its selected resident after they leave or sleep.
+The existing actions become unavailable and the panel explains the departure.
+Closing the panel reveals routes. Speech and availability use a scrolling region
+above a fixed action row. Tell choices retain their displayed payload and become
+unavailable if the listener leaves.
+
+Acceptance for this round: the coordinator reviews the three fixes, browser
+renders at 360×690 touch and 1280×800, tests and old-export continuation evidence,
+and a clean live release. The owner still accepts game feel separately.

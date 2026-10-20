@@ -461,9 +461,8 @@ label input[type="file"] {
   gap: 6px;
 }
 .task {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
   flex-shrink: 0;
 }
 
@@ -475,9 +474,6 @@ label input[type="file"] {
   overflow: visible;
   font-size: 15px;
   min-height: 48px;
-}
-.task.current .hand {
-  display: block;
 }
 .top .game-menu {
   padding: 4px 8px;
@@ -516,7 +512,7 @@ label input[type="file"] {
 
 /* Give the conversation room before taking space from its response row. */
 .day:has(.verbs) .scene {
-  height: clamp(140px, 22dvh, 200px);
+  height: clamp(120px, 20dvh, 180px);
 }
 .day:has(.verbs) .board {
   max-height: 104px;
@@ -532,4 +528,90 @@ label input[type="file"] {
 .lk-notebook input[type="file"] {
   width: 100%;
   min-height: 44px;
+}
+
+/* One effective playback rate, including the reason for automatic slowdown. */
+.clock-rate {
+  flex-shrink: 0;
+  padding: 0 12px 2px;
+  min-height: 22px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.navigation {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 2px 12px 6px;
+}
+.navigation button {
+  flex: 1;
+  min-height: 44px;
+  padding: 4px 8px;
+  font-size: 15px;
+}
+.task .hand {
+  display: block;
+}
+.sheet.directory {
+  flex: 1 1 auto;
+  max-height: none;
+  overflow: hidden;
+}
+.directory-items {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.directory-items > button {
+  flex-shrink: 0;
+}
+.resident-list button {
+  text-align: left;
+  font-size: 17px;
+  padding: 8px 10px;
+  min-height: 48px;
+}
+.day:has(.directory) .board,
+.day:has(.directory) .scene,
+.day:has(.directory) .journal {
+  display: none;
+}
+.sheet.directory .who {
+  min-height: 44px;
+}
+/* Speech and availability may change; the action buttons keep their positions. */
+.sheet.conversation {
+  height: 286px;
+  max-height: 55%;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.sheet.conversation .who {
+  min-height: 44px;
+}
+.conversation .door-context {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.conversation .verbs {
+  flex-shrink: 0;
+  grid-auto-rows: 60px;
+}
+@media (max-height: 720px) {
+  .day .scene,
+  .day:has(.verbs) .scene {
+    height: 116px;
+  }
+  .day:has(.verbs) .board {
+    max-height: 84px;
+  }
+}
+
+.availability {
+  min-height: 48px;
 }
