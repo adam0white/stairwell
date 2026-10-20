@@ -798,10 +798,16 @@ label input[type="file"] {
   flex-shrink: 1;
   padding: 0;
 }
-.sheet.submenu > .lk-sheet-head,
-.sheet.submenu > .lk-commit {
+.sheet.submenu > .lk-sheet-head {
+  padding: 0 52px 0 0;
+  border: 0;
+}
+.sheet.submenu > .lk-commit:not(button) {
   padding: 0;
   border: 0;
+}
+.sheet.submenu > button.lk-commit {
+  display: block;
 }
 .sheet.submenu > .lk-commit {
   flex-shrink: 0;

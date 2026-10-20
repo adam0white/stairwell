@@ -1012,3 +1012,30 @@ it('keeps enlarged building destinations separate and at least 44px', async () =
     await page.close();
   }
 });
+
+it('keeps submenu Back visibly framed and resident text clear of Close', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page);
+    await page.locator('[data-a=tell]').click();
+    await page.locator('[data-a=invent]').click();
+    const back = page.locator('.sheet [data-a=back]');
+    expect(
+      await back.evaluate((el) => Number.parseFloat(getComputedStyle(el).borderLeftWidth)),
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      await page.locator('.sheet .who').evaluate((el) => {
+        const close = el.querySelector('.x')?.getBoundingClientRect();
+        return (
+          !!close &&
+          [...el.querySelectorAll('b, span')].every((text) => {
+            const r = text.getBoundingClientRect();
+            return r.right <= close.left || r.top >= close.bottom;
+          })
+        );
+      }),
+    ).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
