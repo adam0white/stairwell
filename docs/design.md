@@ -111,7 +111,7 @@ Three concepts were written (kept below) and sent with the engine summary and th
 - The day: 07:00 to 21:00. Bread and newspapers in the morning, parcels and small jobs, the evening on the stairs, bins at 20:00. Requests are pre-rolled from the seed per day.
 - Residents decide their own free time through HF (stay in, sit on the step, go to the shop, visit a neighbour). Two residents on the step, on the stairs at the same time, or visiting talk through `converse`.
 
-## The people (HF 2.8.0, pinned exactly)
+## The people (HF 2.10.0, pinned exactly)
 - **Nermin Hanım**, flat 1, 72, widow, watches the door. Talks. Old feud with Sevim.
 - **Sevim Hanım**, flat 2, 69, retired teacher. Feud with Nermin.
 - **Burak**, flat 3, 31, accountant, quiet, honest. Sweet on Elif.
@@ -186,3 +186,19 @@ semantics or HF version changes accompany this layout. Browser regressions cover
 A public synthetic fixture follows the owner's documented 130-input mix and
 freezes the complete replay state and continuation. Owner acceptance of the new
 layout's feel remains separate from these builder checks.
+
+## HF 2.10.0 upgrade (2026-10-20)
+
+The dependency advances from 2.8.0 to 2.10.0. Source-trust setup and the existing
+host penalties use `seedSourceTrust`; their values and timing are unchanged.
+The game remains `stairwell@3`. Belief setup, contradictory-testimony rules and
+the testimony ledger remain unchanged for replay compatibility. The new belief
+setup API rejects the self-source markers used here. Contradiction evidence has
+different eligibility and repeat rules. First-acquisition provenance cannot
+replace the complete testimony ledger. Adoption details are in
+[HF requests](hf-requests.md#delivery-and-adoption-2026-10-20).
+
+Acceptance for this upgrade: the existing full check passes, frozen notebook
+states and continuations match with only HF person engine stamps normalized,
+GitHub CI passes, and the live game loads from a clean commit with HF 2.10.0.
+Acceptance owner: the user. Game-feel acceptance remains separate.

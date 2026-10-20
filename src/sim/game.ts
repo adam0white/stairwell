@@ -32,6 +32,7 @@ import {
   readBody,
   relationshipWith,
   type Suggestion,
+  seedSourceTrust,
   socialEvent,
   tick,
   trustOf,
@@ -937,7 +938,7 @@ function wordGetsBack(s: GameState, subj: Rid, from: Rid, prop: string, value: b
   socialEvent(p, { at: s.minute, kind: 'insult', otherId: KAPICI, byMe: false, magnitude: lie ? 0.4 : 0.25 });
   if (lie) {
     believeSelf(p, 'kapici:dishonest', true, 0.75, s.minute);
-    p.memory.sourceTrust[KAPICI] = trustOf(p, KAPICI) * 0.8;
+    seedSourceTrust(p, KAPICI, trustOf(p, KAPICI) * 0.8);
   }
   say(s, 'narrator', `${nameOf(from)} told ${nameOf(subj)} what you had been saying about them.`, 'event');
   stamp(s, 'word_back');
@@ -947,7 +948,7 @@ function wordGetsBack(s: GameState, subj: Rid, from: Rid, prop: string, value: b
 function doubtKapici(s: GameState, who: Rid, from: Rid, prop: string, value: boolean) {
   const p = personOf(s, who);
   believeSelf(p, 'kapici:dishonest', true, 0.68, s.minute);
-  p.memory.sourceTrust[KAPICI] = trustOf(p, KAPICI) * 0.85;
+  seedSourceTrust(p, KAPICI, trustOf(p, KAPICI) * 0.85);
   rOf(s, who).caught.push(s.minute);
   say(
     s,
@@ -975,9 +976,9 @@ function catchKapici(s: GameState, a: Rid, b: Rid) {
     ]);
     if (credence(p, 'kapici:dishonest') <= before)
       applyReputationBelief(p, 'kapici:dishonest', before, credence(p, 'kapici:dishonest'), s.minute);
-    // Their trust in your word: HF moves source trust only by `confirm`; two stories are not a confirmation, so the
-    // host lowers it as `confirm` would on a false claim (docs/hf-requests.md, 2).
-    p.memory.sourceTrust[KAPICI] = trustOf(p, KAPICI) * 0.75;
+    // Preserve v3's fixed loss on each comparison. HF contradicted requires a retained
+    // opposite account and caps loss per source/proposition (docs/hf-requests.md, 2).
+    seedSourceTrust(p, KAPICI, trustOf(p, KAPICI) * 0.75);
     rOf(s, id).caught.push(s.minute);
   }
   stamp(s, 'caught');

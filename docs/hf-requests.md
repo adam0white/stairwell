@@ -2,6 +2,24 @@
 
 Written 2026-10-19 against `@adam0white/human-framework` 2.8.0. Each item says what the game needed, what it did instead, and a proposal. Confirmed means read in the HF source or observed in a probe; assumed is marked.
 
+## Delivery and adoption (2026-10-20)
+
+HF is now pinned to **2.10.0**. The original requests below remain as history.
+Delivery is confirmed in HF's [changelog](https://github.com/adam0white/human-framework/blob/main/CHANGELOG.md).
+
+| Request | Delivered | Stairwell adoption |
+|---|---|---|
+| 1. Source trust setup and trust-store documentation | 2.9.1: `seedSourceTrust` and host-kit documentation | Replaced `seedWord` and direct source-trust writes with the public setter. Existing values and multipliers stay unchanged. |
+| 2. Contradictory testimony | 2.10.0: `contradicted` and `Percept.reports` | Skipped for `stairwell@3`. HF requires a retained opposite account, weights reporters and caps cumulative loss per source/proposition at the strongest reported evidence. The game compares historical testimony and can apply repeated fixed losses. Adopting this needs separate replay rules and play verification. The dishonest belief also drives dialogue, reputation and votes; the new trust-only API cannot replace it. |
+| 4. First-acquisition provenance | 2.10.0: `Belief.provenance`, `provenanceOf`, `converse(..., { provenance: true })`, opaque lineage tokens | Skipped for `stairwell@3`. First acquisition cannot replace the complete `RState.told` history, lie flags and grudge bookkeeping. Enabling metadata also changes frozen full-state replays. HF delivered origin and lineage, not a complete provenance chain. |
+| 7. Belief setup | 2.9.1: `seedBelief` | Skipped for `stairwell@3`. The existing setup marks beliefs with the person's own source id. HF's API deliberately rejects that observation marker. Omitting it changes later testimony weighting; `confirm` would change the authored belief strength. Keep the legacy setup until a separate rules edition. |
+| 8. Feeding residents (documentation) | 2.9.1: host-kit recipes | Documentation delivered. Existing meals and lunch remain unchanged. |
+
+Requests 3, 5 and 6 remain open. No new rule edition or save migration accompanies
+this upgrade. The frozen fixture hashes stay pinned; only each HF person's
+`engine` stamp is normalized to the fixture's original 2.8.0 for comparison.
+Review target for the three skipped adoptions: 2026-11-03.
+
 1. **Source trust has no public setter and three trust stores are not linked.** The game seeds Rıza's notebook and each resident's first impression of the new kapıcı by writing `memory.sourceTrust` directly (`seedWord` in `src/sim/people.ts`). Relationship trust (`trustOf`), voice trust and source trust are separate stores, and nothing documents which one `perceive` uses for testimony (it is source trust, confirmed in the source). Proposal: `seedSourceTrust(p, sourceId, t)` for setup, and one paragraph in the docs naming the three stores and what moves each.
 2. **Being caught in contradictory testimony has no HF path.** When two residents compare notes and find the kapıcı told them opposite things, the game writes a `kapici:dishonest` belief and multiplies source trust by 0.75 itself. `confirm` only recalibrates against a revealed truth, not against a contradiction between two sources. Proposal: `contradicted(p, sourceId, prop, at)` that lowers source trust by a documented rule.
 3. **Reputation from testimony uses only the default trait table.** `perceive` applies reputation for default traits; a host trait (`nosy`) needs a manual `applyReputationBelief` with the host table. Proposal: a trait table per person or per `perceive` call.

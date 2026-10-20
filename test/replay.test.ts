@@ -10,7 +10,16 @@ import { isSaved } from '../src/ui/save.ts';
 const fixture = JSON.parse(
   readFileSync(new URL('./fixtures/stairwell-v3-notebook.json', import.meta.url), 'utf8'),
 );
-const stateHash = (state: GameState) => createHash('sha256').update(JSON.stringify(state)).digest('hex');
+function stateHash(state: GameState, fixtureEngine: string) {
+  const saved = structuredClone(state);
+  // HF 2.10.0 changes only Person.engine in these legacy replays. Normalize that
+  // stamp to the fixture's HF version; keep every other field and the pinned hashes.
+  for (const person of [...saved.people, saved.kapici]) {
+    expect(person.engine).toBe('2.10.0');
+    person.engine = fixtureEngine;
+  }
+  return createHash('sha256').update(JSON.stringify(saved)).digest('hex');
+}
 
 function restore() {
   const notebook: unknown = fixture.notebook;
@@ -24,14 +33,14 @@ describe('pre-playback-change notebook compatibility', () => {
     const state = restore();
     expect(state.minute).toBe(480);
     expect(rOf(state, 'nermin').sits).toBe(1);
-    expect(stateHash(state)).toBe(fixture.savedStateSha256);
+    expect(stateHash(state, fixture.humanFramework)).toBe(fixture.savedStateSha256);
   });
 
   it('continues the restored notebook to the pre-change complete state', () => {
     const state = restore();
     while (state.phase === 'day' && state.minute < fixture.continuation.minute) step(state);
     expect(state.minute).toBe(fixture.continuation.minute);
-    expect(stateHash(state)).toBe(fixture.continuation.stateSha256);
+    expect(stateHash(state, fixture.humanFramework)).toBe(fixture.continuation.stateSha256);
   });
 });
 
@@ -60,7 +69,7 @@ describe('frozen owner-style export compatibility', () => {
     ).toEqual({ go: 53, tell: 29, invent: 29, news: 7, sit: 6, prank: 5, word: 1 });
     expect(state.minute).toBe(1260);
     expect(state.phase).toBe('night');
-    expect(stateHash(state)).toBe(ownerStyleFixture.savedStateSha256);
+    expect(stateHash(state, ownerStyleFixture.humanFramework)).toBe(ownerStyleFixture.savedStateSha256);
   });
 
   it('continues the imported export into the next day with the complete frozen state', () => {
@@ -69,6 +78,8 @@ describe('frozen owner-style export compatibility', () => {
     while (state.phase === 'day' && state.minute < ownerStyleFixture.continuation.minute) step(state);
     expect(state.minute).toBe(1920);
     expect(state.phase).toBe('day');
-    expect(stateHash(state)).toBe(ownerStyleFixture.continuation.stateSha256);
+    expect(stateHash(state, ownerStyleFixture.humanFramework)).toBe(
+      ownerStyleFixture.continuation.stateSha256,
+    );
   });
 });

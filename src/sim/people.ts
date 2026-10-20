@@ -3,14 +3,15 @@
  * ties and beliefs, and their trust in the new kapıcı's word. The game reads them back through HF (converse, perceive,
  * credence, decide, predict) and keeps no parallel model of their minds.
  *
- * Source trust (how much a person believes what someone tells them) is HF's `memory.sourceTrust`; HF has no public
- * way to seed it, so `seedWord` writes it at creation (docs/hf-requests.md, 1).
+ * Source trust (how much a person believes what someone tells them) is authored through HF's `seedSourceTrust`.
+ * Legacy self-source beliefs remain for stairwell@3 replay compatibility (docs/hf-requests.md, 7).
  */
 import {
   createPerson,
   MINUTES_PER_YEAR,
   type Person,
   REPUTATION_TRAITS,
+  seedSourceTrust,
   seedTie,
   type TraitEffect,
 } from '@adam0white/human-framework';
@@ -151,11 +152,7 @@ export const FACTS = {
 
 const yearsAgo = (now: number, y: number) => now - y * MINUTES_PER_YEAR;
 
-/** How much a person believes what `sourceId` tells them (HF `memory.sourceTrust`; no public seeding API). */
-export function seedWord(p: Person, sourceId: string, trust: number) {
-  p.memory.sourceTrust[sourceId] = trust;
-}
-
+/** Legacy v3 setup: HF seedBelief rejects these self-source observation markers. */
 function seedBelief(p: Person, prop: string, value: boolean, cred: number, now: number) {
   const logOdds = Math.log(cred / (1 - cred)) * (value ? 1 : -1);
   p.memory.beliefs.push({ prop, logOdds, updatedAt: now, sources: [{ id: p.id, value }] });
@@ -293,7 +290,7 @@ function seedNeighbours(p: Person, now: number) {
     if (id === 'sevim' && o === 'elif') affection = -0.05;
     seedTie(p, { otherId: o, affection, familiarity, trust: 0.45 + 0.3 * familiarity });
     // Neighbours of many years believe each other more; the newcomer's word weighs little yet.
-    seedWord(p, o, o === 'elif' ? 0.45 : Math.min(0.8, 0.5 + 0.3 * familiarity));
+    seedSourceTrust(p, o, o === 'elif' ? 0.45 : Math.min(0.8, 0.5 + 0.3 * familiarity));
   }
   // The feud: each believes the other is nosy. Nermin thinks Hüseyin is stingy; everyone thinks Tarık is kind.
   if (id === 'nermin') {
@@ -320,7 +317,7 @@ function seedNeighbours(p: Person, now: number) {
     elif: 0.62,
     tarik: 0.6,
   };
-  seedWord(p, KAPICI, word[id]);
+  seedSourceTrust(p, KAPICI, word[id]);
   seedTie(p, { otherId: KAPICI, affection: 0.05, familiarity: 0.02, trust: 0.5 });
 }
 
@@ -342,6 +339,6 @@ export function makeKapici(seed: number, now: number): Person {
   seedBelief(p, 'tarik:kind', true, 0.85, now);
   // Hüseyin Bey's notice on the board by your door: the water goes off on Wednesday morning.
   seedBelief(p, 'notice:water', true, 0.95, now);
-  for (const r of RIDS) seedWord(p, r, 0.6);
+  for (const r of RIDS) seedSourceTrust(p, r, 0.6);
   return p;
 }
