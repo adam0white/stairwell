@@ -328,6 +328,8 @@ function dayView(s: GameState, full: boolean) {
     `${DAY_NAMES[d - 1]?.slice(0, 3)} ${clockOf(s.minute)}`;
   for (const b of root.querySelectorAll<HTMLElement>('[data-sp]'))
     b.classList.toggle('on', Number(b.dataset.sp) === ui.speed);
+  const log = root.querySelector('.journal') as HTMLElement;
+  const atEnd = log.scrollHeight - log.clientHeight - log.scrollTop <= 2;
   (root.querySelector('.scene') as HTMLElement).innerHTML = sceneSvg(s);
   const boardKey = JSON.stringify([
     openTasks(s).map((t) => [t.id, t.carried, s.minute > t.by]),
@@ -338,8 +340,8 @@ function dayView(s: GameState, full: boolean) {
     ui.lastKey = boardKey;
     board(s, root.querySelector('.board') as HTMLElement);
   }
-  journal(s, root.querySelector('.journal') as HTMLElement);
   sheet(s, root.querySelector('.sheet') as HTMLElement);
+  journal(s, log, atEnd);
 }
 
 function goTo(s: GameState, to: Place) {
@@ -540,12 +542,14 @@ function saidLine(x: Said): string {
   return `<div class="${x.kind === 'event' ? 'event' : ''}">${esc(x.text)}</div>`;
 }
 
-function journal(s: GameState, el: HTMLElement) {
-  const lines = s.said.filter((x) => dayOf(x.at) === dayOf(s.minute) || x.kind === 'margin').slice(-4);
+function journal(s: GameState, el: HTMLElement, atEnd: boolean) {
+  const lines = s.said.filter((x) => dayOf(x.at) === dayOf(s.minute) || x.kind === 'margin').slice(-40);
   const key = lines.map((x) => x.at + x.text).join('|');
-  if (el.dataset.k === key) return;
-  el.dataset.k = key;
-  el.innerHTML = lines.map(saidLine).join('');
+  if (el.dataset.k !== key) {
+    el.dataset.k = key;
+    el.innerHTML = lines.map(saidLine).join('');
+  }
+  if (atEnd) el.scrollTop = el.scrollHeight;
 }
 
 // ---------- the sheet: whoever is in front of you ----------

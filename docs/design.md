@@ -125,6 +125,7 @@ Three concepts were written (kept below) and sent with the engine summary and th
 - **C. The Hostel**, a summer backpackers' hostel. Rejected: guests leave in a few nights, so lies never come back and memory and trust go unused; "I already run a booking desk" (wildcard).
 
 ## Deferred
+- Hidden resident backstories that progress with real outcomes, including hidden achievements and unlockable story paths and events (owner run `r-9m8bdyfbac`, [verbatim note](playtests/owner-2026-10-20.md); target: 2026-11-03). Not implemented in the log layout change.
 - Weeks 2 to 4 and the final vote on whether you stay (target: after round 2 of playtests).
 - The rainstorm under the awning (wildcard; target: week 2 build).
 - Seating at the Sunday meeting (target: week 2 build).

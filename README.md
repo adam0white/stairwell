@@ -9,5 +9,6 @@ Built on [Human Framework](https://github.com/adam0white/human-framework) (`@ada
 - `npm run dev`, `npm run check` (lint, typecheck, tests), `npm run measure` (headless policies over many seeds), `npm run deploy`.
 - Design and the cravings map: [docs/design.md](docs/design.md). Requests to HF: [docs/hf-requests.md](docs/hf-requests.md). Playtests: [docs/playtests/](docs/playtests/).
 - The save is the seed plus the input log. The notebook menu exports a playtest file that replays the run exactly.
+- Browser layout tests run with `npm run check`; install their browser once with `npx playwright install chromium`.
 
 MIT licence.

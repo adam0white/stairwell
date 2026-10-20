@@ -162,6 +162,7 @@ label input[type="file"] {
 }
 .top {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
   padding: 4px 12px;
@@ -195,7 +196,7 @@ label input[type="file"] {
 }
 .scene {
   flex: 0 0 auto;
-  height: 244px;
+  height: clamp(200px, 28dvh, 244px);
   padding: 0 4px;
 }
 .scene svg {
@@ -305,14 +306,14 @@ label input[type="file"] {
   font-size: 14px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   gap: 2px;
   padding: 4px 12px;
+  flex: 1 1 118px;
+  min-height: 80px;
+  overflow-y: auto;
+}
+.journal > div {
   flex-shrink: 0;
-  max-height: 118px;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
 }
 .journal .hand,
 .margin.hand {
@@ -332,12 +333,16 @@ label input[type="file"] {
   border-top: 1.5px solid var(--ink);
   background: var(--paper);
   padding: 8px 12px calc(12px + var(--safe-b));
-  flex: 1;
+  flex: 0 1 auto;
+  max-height: 45%;
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.sheet > * {
+  flex-shrink: 0;
 }
 .sheet .who {
   display: flex;

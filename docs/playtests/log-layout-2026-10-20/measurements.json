@@ -1,0 +1,35 @@
+[
+  {
+    "width": 360,
+    "height": 780,
+    "journal": {
+      "x": 0,
+      "y": 319.265625,
+      "width": 360,
+      "height": 206.09375
+    },
+    "entries": 40
+  },
+  {
+    "width": 412,
+    "height": 891,
+    "journal": {
+      "x": 0,
+      "y": 320.4375,
+      "width": 412,
+      "height": 359.609375
+    },
+    "entries": 40
+  },
+  {
+    "width": 1440,
+    "height": 900,
+    "journal": {
+      "x": 480,
+      "y": 320.4375,
+      "width": 480,
+      "height": 368.609375
+    },
+    "entries": 40
+  }
+]
