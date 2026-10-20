@@ -218,6 +218,82 @@ it('follows new entries at the newest end of a full log', async () => {
   }
 });
 
+// Load a real local font after rendering, without relying on Google's network timing.
+// Courier New ships on macOS; Playwright's Linux dependencies include Liberation Mono.
+it.each(['newest', 'older', 'pending scroll'])(
+  'preserves the journal through a late font load (%s)',
+  async (reading) => {
+    const page = await browser.newPage({ viewport: { width: 360, height: 780 } });
+    try {
+      await page.route('https://fonts.googleapis.com/**', (route) => route.abort());
+      await importNotebook(page, 1254);
+      await page.addStyleTag({ content: '.journal { font-family: "Journal test", monospace; }' });
+      await page.locator('[data-sp="0"]').click();
+      const journal = page.locator('.journal');
+      await journal.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+      if (reading === 'older') {
+        await journal.evaluate((el) => {
+          const row = el.children[10];
+          if (!row) throw new Error('Expected an older journal entry');
+          el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top + 7;
+        });
+      }
+      // Deliver the fixture's scroll before changing the font metrics.
+      await page.clock.runFor(20);
+      const before = await journal.evaluate((el) => {
+        const bounds = el.getBoundingClientRect();
+        const row = [...el.children].find((row) => row.getBoundingClientRect().bottom > bounds.top);
+        if (!row) throw new Error('Expected a visible journal entry');
+        return {
+          height: el.scrollHeight,
+          n: row.getAttribute('data-n'),
+          offset: row.getBoundingClientRect().top - bounds.top,
+        };
+      });
+      await page.evaluate(async (pending) => {
+        const descriptors: FontFaceDescriptors & { sizeAdjust: string } = { sizeAdjust: '150%' };
+        const font = new FontFace(
+          'Journal test',
+          'local("Courier New"), local("Liberation Mono")',
+          descriptors,
+        );
+        document.fonts.add(font);
+        const loaded = document.fonts.load('14px "Journal test"');
+        if (pending) {
+          const journal = document.querySelector<HTMLElement>('.journal');
+          if (!journal) throw new Error('Expected the journal');
+          journal.scrollTop = 0;
+        }
+        await loaded;
+        await document.fonts.ready;
+      }, reading === 'pending scroll');
+      expect(await journal.evaluate((el) => el.scrollHeight)).toBeGreaterThan(before.height);
+      if (reading === 'older') {
+        const offset = await journal.evaluate((el, n) => {
+          const row = [...el.children].find((row) => row.getAttribute('data-n') === n);
+          if (!row) throw new Error('The entry being read should still exist');
+          return row.getBoundingClientRect().top - el.getBoundingClientRect().top;
+        }, before.n);
+        expect(Math.abs(offset - before.offset)).toBeLessThanOrEqual(1);
+      } else if (reading === 'pending scroll') {
+        expect(await journal.evaluate((el) => el.scrollTop)).toBe(0);
+      } else {
+        expect(
+          await journal.evaluate((el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop)),
+        ).toBeLessThanOrEqual(1);
+        await arrive(page, 3);
+        expect(
+          await journal.evaluate((el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop)),
+        ).toBeLessThanOrEqual(1);
+      }
+    } finally {
+      await page.close();
+    }
+  },
+);
+
 it('explains exhausted news beside Anything new and resets it on a new day', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {

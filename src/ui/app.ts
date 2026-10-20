@@ -43,6 +43,10 @@ import { isSaved, type Saved } from './save.ts';
 
 const SAVE_KEY = 'stairwell:notebook';
 const SPEEDS = [3, 6, 12];
+const journalPositions = new WeakMap<
+  HTMLElement,
+  { position: ReturnType<typeof journalPosition>; top: number }
+>();
 
 interface Ui {
   s: GameState | null;
@@ -184,6 +188,16 @@ function begin(s: GameState) {
 
 export function start() {
   titlePage();
+  // Font swaps can reflow the log after render, without advancing the game clock.
+  document.fonts.addEventListener('loadingdone', () => {
+    const el = app().querySelector<HTMLElement>('.journal');
+    const saved = el && journalPositions.get(el);
+    if (el && saved && el.clientHeight > 0) {
+      // A reader may have scrolled before its queued scroll event is delivered.
+      const position = el.scrollTop === saved.top ? saved.position : journalPosition(el);
+      restoreJournalPosition(el, position);
+    }
+  });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) save();
   });
@@ -590,12 +604,24 @@ function journalPosition(el: HTMLElement | null) {
 }
 
 function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof journalPosition>) {
+  if (!journalPositions.has(el)) {
+    el.addEventListener('scroll', () => {
+      const saved = journalPositions.get(el);
+      // Ignore our own scroll events, which may arrive after a font has reflowed.
+      if (saved && el.scrollTop !== saved.top)
+        journalPositions.set(el, { position: journalPosition(el), top: el.scrollTop });
+    });
+  }
   const lines = s.said.filter((x) => dayOf(x.at) === dayOf(s.minute) || x.kind === 'margin').slice(-40);
   const key = lines.map((x) => `${x.n}:${x.at}:${x.text}`).join('|');
   if (el.dataset.k !== key) {
     el.dataset.k = key;
     el.innerHTML = lines.map(saidLine).join('');
   }
+  restoreJournalPosition(el, position);
+}
+
+function restoreJournalPosition(el: HTMLElement, position: ReturnType<typeof journalPosition>) {
   if (position.atEnd) el.scrollTop = el.scrollHeight;
   else {
     const row = [...el.children].find((row) => row.getAttribute('data-n') === position.n);
@@ -603,6 +629,7 @@ function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof jour
       el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - position.offset;
     else el.scrollTop = 0; // The entry was removed: resume at the oldest surviving entry.
   }
+  journalPositions.set(el, { position: journalPosition(el), top: el.scrollTop });
 }
 
 // ---------- the sheet: whoever is in front of you ----------
