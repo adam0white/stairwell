@@ -317,6 +317,7 @@ function render(full: boolean) {
 // ---------- the day ----------
 
 function dayView(s: GameState, full: boolean) {
+  const position = journalPosition(app().querySelector<HTMLElement>('.journal'));
   let root = app().querySelector('.day') as HTMLElement | null;
   if (!root || full) {
     app().innerHTML = `<div class="day">
@@ -351,7 +352,6 @@ function dayView(s: GameState, full: boolean) {
   for (const b of root.querySelectorAll<HTMLElement>('[data-sp]'))
     b.classList.toggle('on', Number(b.dataset.sp) === ui.speed);
   const log = root.querySelector('.journal') as HTMLElement;
-  const atEnd = log.scrollHeight - log.clientHeight - log.scrollTop <= 2;
   (root.querySelector('.scene') as HTMLElement).innerHTML = sceneSvg(s);
   const boardKey = JSON.stringify([
     openTasks(s).map((t) => [t.id, t.carried, s.minute > t.by]),
@@ -363,7 +363,7 @@ function dayView(s: GameState, full: boolean) {
     board(s, root.querySelector('.board') as HTMLElement);
   }
   sheet(s, root.querySelector('.sheet') as HTMLElement);
-  journal(s, log, atEnd);
+  journal(s, log, position);
 }
 
 function goTo(s: GameState, to: Place) {
@@ -556,22 +556,46 @@ function board(s: GameState, el: HTMLElement) {
 }
 
 function saidLine(x: Said): string {
+  const id = `data-n="${x.n ?? ''}"`;
   if (x.kind === 'margin')
-    return `<div class="margin hand">${esc(x.text)} <span class="soft">— R.</span></div>`;
+    return `<div ${id} class="margin hand">${esc(x.text)} <span class="soft">— R.</span></div>`;
   if (x.kind === 'voice')
-    return `<div><span class="soft small">${esc(nameOf(x.who))}:</span> <span class="hand">${esc(x.text)}</span></div>`;
-  if (x.kind === 'heard') return `<div class="heard">… ${esc(x.text)}</div>`;
-  return `<div class="${x.kind === 'event' ? 'event' : ''}">${esc(x.text)}</div>`;
+    return `<div ${id}><span class="soft small">${esc(nameOf(x.who))}:</span> <span class="hand">${esc(x.text)}</span></div>`;
+  if (x.kind === 'heard') return `<div ${id} class="heard">… ${esc(x.text)}</div>`;
+  return `<div ${id} class="${x.kind === 'event' ? 'event' : ''}">${esc(x.text)}</div>`;
 }
 
-function journal(s: GameState, el: HTMLElement, atEnd: boolean) {
+function journalPosition(el: HTMLElement | null) {
+  const atEnd = !el || el.scrollHeight - el.clientHeight - el.scrollTop <= 2;
+  const bounds = el?.getBoundingClientRect();
+  const row =
+    !atEnd && bounds
+      ? [...el.children].find((row) => {
+          const rect = row.getBoundingClientRect();
+          return rect.bottom > bounds.top && rect.top < bounds.bottom;
+        })
+      : undefined;
+  return {
+    atEnd,
+    n: row?.getAttribute('data-n'),
+    offset: row && bounds ? row.getBoundingClientRect().top - bounds.top : 0,
+  };
+}
+
+function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof journalPosition>) {
   const lines = s.said.filter((x) => dayOf(x.at) === dayOf(s.minute) || x.kind === 'margin').slice(-40);
-  const key = lines.map((x) => x.at + x.text).join('|');
+  const key = lines.map((x) => `${x.n}:${x.at}:${x.text}`).join('|');
   if (el.dataset.k !== key) {
     el.dataset.k = key;
     el.innerHTML = lines.map(saidLine).join('');
   }
-  if (atEnd) el.scrollTop = el.scrollHeight;
+  if (position.atEnd) el.scrollTop = el.scrollHeight;
+  else {
+    const row = [...el.children].find((row) => row.getAttribute('data-n') === position.n);
+    if (row)
+      el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - position.offset;
+    else el.scrollTop = 0; // The entry was removed: resume at the oldest surviving entry.
+  }
 }
 
 // ---------- the sheet: whoever is in front of you ----------

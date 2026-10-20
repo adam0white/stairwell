@@ -118,7 +118,100 @@ async function importNotebook(page: Page, minute = 440) {
       }),
     ),
   });
+  await page.locator('.journal').waitFor();
+  await page.evaluate(() => document.fonts.ready);
 }
+
+// Use the real simulation to append entries, then exercise incremental or full rendering.
+async function arrive(page: Page, count: number, full = false) {
+  await page.evaluate(`import('/src/sim/game.ts').then(({act}) => {
+    const s = window.__st.s;
+    for (let i = 0; i < ${count - (full ? 1 : 0)}; i++) act(s, { kind: 'go', to: s.k.at });
+    ${full ? "window.__st.send({ kind: 'go', to: s.k.at });" : ''}
+  })`);
+  if (!full) await page.locator('[data-sp="0"]').click();
+}
+
+it.each([
+  [360, 780, false],
+  [1440, 900, false],
+  [360, 780, true],
+  [1440, 900, true],
+])(
+  'anchors the entry being read when a full log rolls over at %ix%i (full render: %s)',
+  async (width, height, full) => {
+    const page = await browser.newPage({ viewport: { width, height } });
+    try {
+      await importNotebook(page, 1254);
+      await page.evaluate(() => document.fonts.ready);
+      const journal = page.locator('.journal');
+      expect(await journal.locator(':scope > div').count()).toBe(40);
+      const before = await journal.evaluate((el) => {
+        const row = el.children[10] as HTMLElement;
+        el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top + 7;
+        return {
+          n: row.getAttribute('data-n'),
+          text: row.textContent,
+          offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top,
+        };
+      });
+      let removed = 0;
+      for (const count of [1, 3]) {
+        await arrive(page, count, full);
+        removed += count;
+        const after = await journal.evaluate((el, index) => {
+          const row = el.children[index];
+          if (!row) throw new Error('The entry being read should still be in the log');
+          return {
+            n: row.getAttribute('data-n'),
+            text: row.textContent,
+            offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top,
+          };
+        }, 10 - removed);
+        expect(before.n).not.toBeNull();
+        expect(after.n).toBe(before.n);
+        expect(after.text).toBe(before.text);
+        // scrollTop rounds to whole CSS pixels while text bounds may be fractional.
+        expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(1);
+      }
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+it('falls back to the oldest surviving entry when the entry being read is removed', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 780 } });
+  try {
+    await importNotebook(page, 1254);
+    const journal = page.locator('.journal');
+    const oldestSurvivor = await journal.evaluate((el) => {
+      el.scrollTop = 7;
+      return el.children[3]?.textContent;
+    });
+    await arrive(page, 3);
+    expect(await journal.locator(':scope > div').first().textContent()).toBe(oldestSurvivor);
+    expect(await journal.evaluate((el) => el.scrollTop)).toBe(0);
+  } finally {
+    await page.close();
+  }
+});
+
+it('follows new entries at the newest end of a full log', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 780 } });
+  try {
+    await importNotebook(page, 1254);
+    const journal = page.locator('.journal');
+    const newest = await journal.locator(':scope > div').last().textContent();
+    await arrive(page, 3);
+    expect(await journal.locator(':scope > div').last().textContent()).not.toBe(newest);
+    expect(
+      await journal.evaluate((el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop)),
+    ).toBeLessThanOrEqual(1);
+  } finally {
+    await page.close();
+  }
+});
 
 it('explains exhausted news beside Anything new and resets it on a new day', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
