@@ -37,6 +37,7 @@ import {
   wordHint,
 } from '../sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
+import { labScreen, mountLab } from './lab.ts';
 
 const SAVE_KEY = 'stairwell:notebook';
 const SPEEDS = [3, 6, 12];
@@ -119,10 +120,10 @@ function mornings(saved: Saved): { day: number; inputs: Input[] }[] {
   return out;
 }
 
-function exportRun() {
+function runOf() {
   const s = ui.s;
   if (!s) return;
-  const data = {
+  return {
     game: GAME_VERSION,
     seed: s.seed,
     inputs: s.inputs,
@@ -139,6 +140,12 @@ function exportRun() {
       said: s.said.slice(-120),
     },
   };
+}
+
+function exportRun() {
+  const s = ui.s;
+  if (!s) return;
+  const data = runOf();
   const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -184,6 +191,7 @@ function begin(s: GameState) {
 }
 
 export function start() {
+  mountLab(runOf);
   titlePage();
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) save();
@@ -225,6 +233,7 @@ function loop(t: number) {
 const footer = `<div class="footer"><a href="https://human.adamwhite.work/games/">◇ all notebooks</a></div>`;
 
 function titlePage() {
+  labScreen('title');
   ui.s = null;
   const saved = loadSaved();
   const ms = saved ? mornings(saved) : [];
@@ -271,6 +280,7 @@ function titlePage() {
 }
 
 function render(full: boolean) {
+  labScreen('play');
   const s = ui.s;
   if (!s) return;
   if (s.phase === 'night') return nightPage(s);
@@ -863,6 +873,7 @@ function nightMargin(s: GameState, d: number): string {
 }
 
 function sundayPage(s: GameState) {
+  labScreen('ending');
   const m = s.meeting;
   const lines = s.said.filter((x) => dayOf(x.at) === 7);
   const total = s.reports.reduce((a, x) => a + x.tips, 0);
