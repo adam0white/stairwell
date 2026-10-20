@@ -1,0 +1,816 @@
+{
+  "capturedFrom": "c5124e52bdc99d0709d41c4895b010d152c48b99",
+  "humanFramework": "2.8.0",
+  "provenance": "Public synthetic run; independently generated from seed 20261020. Matches the owner playtest action counts, not the private owner inputs or seed.",
+  "notebook": {
+    "game": "stairwell@3",
+    "seed": 20261020,
+    "inputs": [
+      {
+        "kind": "go",
+        "to": "door:nermin",
+        "at": 420
+      },
+      {
+        "kind": "tell",
+        "who": "nermin",
+        "prop": "sevim:kind",
+        "value": true,
+        "sure": true,
+        "at": 421
+      },
+      {
+        "kind": "invent",
+        "who": "nermin",
+        "about": "sevim",
+        "trait": "generous",
+        "at": 421
+      },
+      {
+        "kind": "news",
+        "who": "nermin",
+        "at": 421
+      },
+      {
+        "kind": "prank",
+        "what": "swap",
+        "at": 421
+      },
+      {
+        "kind": "sit",
+        "who": "nermin",
+        "at": 421
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 435
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "huseyin:kind",
+        "value": true,
+        "sure": false,
+        "at": 437
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "huseyin",
+        "trait": "hardworking",
+        "at": 437
+      },
+      {
+        "kind": "news",
+        "who": "sevim",
+        "at": 437
+      },
+      {
+        "kind": "prank",
+        "what": "gate",
+        "at": 437
+      },
+      {
+        "kind": "sit",
+        "who": "sevim",
+        "at": 437
+      },
+      {
+        "kind": "go",
+        "to": "door:burak",
+        "at": 450
+      },
+      {
+        "kind": "tell",
+        "who": "burak",
+        "prop": "elif:kind",
+        "value": true,
+        "sure": true,
+        "at": 451
+      },
+      {
+        "kind": "invent",
+        "who": "burak",
+        "about": "elif",
+        "trait": "kind",
+        "at": 451
+      },
+      {
+        "kind": "news",
+        "who": "burak",
+        "at": 451
+      },
+      {
+        "kind": "prank",
+        "what": "swap",
+        "at": 451
+      },
+      {
+        "kind": "sit",
+        "who": "burak",
+        "at": 451
+      },
+      {
+        "kind": "go",
+        "to": "door:huseyin",
+        "at": 465
+      },
+      {
+        "kind": "tell",
+        "who": "huseyin",
+        "prop": "nermin:kind",
+        "value": true,
+        "sure": false,
+        "at": 467
+      },
+      {
+        "kind": "invent",
+        "who": "huseyin",
+        "about": "nermin",
+        "trait": "generous",
+        "at": 467
+      },
+      {
+        "kind": "news",
+        "who": "huseyin",
+        "at": 467
+      },
+      {
+        "kind": "prank",
+        "what": "gate",
+        "at": 467
+      },
+      {
+        "kind": "sit",
+        "who": "huseyin",
+        "at": 467
+      },
+      {
+        "kind": "go",
+        "to": "door:elif",
+        "at": 480
+      },
+      {
+        "kind": "tell",
+        "who": "elif",
+        "prop": "huseyin:kind",
+        "value": true,
+        "sure": true,
+        "at": 482
+      },
+      {
+        "kind": "invent",
+        "who": "elif",
+        "about": "huseyin",
+        "trait": "hardworking",
+        "at": 482
+      },
+      {
+        "kind": "news",
+        "who": "elif",
+        "at": 482
+      },
+      {
+        "kind": "prank",
+        "what": "swap",
+        "at": 482
+      },
+      {
+        "kind": "sit",
+        "who": "elif",
+        "at": 482
+      },
+      {
+        "kind": "go",
+        "to": "door:tarik",
+        "at": 495
+      },
+      {
+        "kind": "tell",
+        "who": "tarik",
+        "prop": "nermin:kind",
+        "value": true,
+        "sure": false,
+        "at": 497
+      },
+      {
+        "kind": "invent",
+        "who": "tarik",
+        "about": "nermin",
+        "trait": "kind",
+        "at": 497
+      },
+      {
+        "kind": "news",
+        "who": "tarik",
+        "at": 497
+      },
+      {
+        "kind": "sit",
+        "who": "tarik",
+        "at": 497
+      },
+      {
+        "kind": "go",
+        "to": "door:nermin",
+        "at": 510
+      },
+      {
+        "kind": "tell",
+        "who": "nermin",
+        "prop": "burak:kind",
+        "value": true,
+        "sure": true,
+        "at": 513
+      },
+      {
+        "kind": "invent",
+        "who": "nermin",
+        "about": "burak",
+        "trait": "generous",
+        "at": 513
+      },
+      {
+        "kind": "news",
+        "who": "nermin",
+        "at": 513
+      },
+      {
+        "kind": "word",
+        "who": "nermin",
+        "at": 513
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 525
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "derya:kind",
+        "value": true,
+        "sure": false,
+        "at": 527
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "derya",
+        "trait": "hardworking",
+        "at": 527
+      },
+      {
+        "kind": "go",
+        "to": "door:huseyin",
+        "at": 540
+      },
+      {
+        "kind": "tell",
+        "who": "huseyin",
+        "prop": "nermin:kind",
+        "value": true,
+        "sure": true,
+        "at": 542
+      },
+      {
+        "kind": "invent",
+        "who": "huseyin",
+        "about": "nermin",
+        "trait": "kind",
+        "at": 542
+      },
+      {
+        "kind": "go",
+        "to": "door:elif",
+        "at": 555
+      },
+      {
+        "kind": "tell",
+        "who": "elif",
+        "prop": "huseyin:kind",
+        "value": true,
+        "sure": false,
+        "at": 557
+      },
+      {
+        "kind": "invent",
+        "who": "elif",
+        "about": "huseyin",
+        "trait": "generous",
+        "at": 557
+      },
+      {
+        "kind": "go",
+        "to": "door:tarik",
+        "at": 570
+      },
+      {
+        "kind": "tell",
+        "who": "tarik",
+        "prop": "nermin:kind",
+        "value": true,
+        "sure": true,
+        "at": 572
+      },
+      {
+        "kind": "invent",
+        "who": "tarik",
+        "about": "nermin",
+        "trait": "hardworking",
+        "at": 572
+      },
+      {
+        "kind": "go",
+        "to": "door:nermin",
+        "at": 585
+      },
+      {
+        "kind": "tell",
+        "who": "nermin",
+        "prop": "burak:kind",
+        "value": true,
+        "sure": false,
+        "at": 603
+      },
+      {
+        "kind": "invent",
+        "who": "nermin",
+        "about": "burak",
+        "trait": "kind",
+        "at": 603
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 603
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "derya:kind",
+        "value": true,
+        "sure": true,
+        "at": 605
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "derya",
+        "trait": "generous",
+        "at": 605
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 615
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "elif:kind",
+        "value": true,
+        "sure": false,
+        "at": 615
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "elif",
+        "trait": "hardworking",
+        "at": 615
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 630
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "tarik:kind",
+        "value": true,
+        "sure": true,
+        "at": 630
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "tarik",
+        "trait": "kind",
+        "at": 630
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 645
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "burak:kind",
+        "value": true,
+        "sure": false,
+        "at": 645
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "burak",
+        "trait": "generous",
+        "at": 645
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 660
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "huseyin:kind",
+        "value": true,
+        "sure": true,
+        "at": 660
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "huseyin",
+        "trait": "hardworking",
+        "at": 660
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 675
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "derya:kind",
+        "value": true,
+        "sure": false,
+        "at": 675
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "derya",
+        "trait": "kind",
+        "at": 675
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 690
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "elif:kind",
+        "value": true,
+        "sure": true,
+        "at": 690
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "elif",
+        "trait": "generous",
+        "at": 690
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 705
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "tarik:kind",
+        "value": true,
+        "sure": false,
+        "at": 705
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "tarik",
+        "trait": "hardworking",
+        "at": 705
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 720
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "burak:kind",
+        "value": true,
+        "sure": true,
+        "at": 720
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "burak",
+        "trait": "kind",
+        "at": 720
+      },
+      {
+        "kind": "go",
+        "to": "door:sevim",
+        "at": 735
+      },
+      {
+        "kind": "tell",
+        "who": "sevim",
+        "prop": "huseyin:kind",
+        "value": true,
+        "sure": false,
+        "at": 735
+      },
+      {
+        "kind": "invent",
+        "who": "sevim",
+        "about": "huseyin",
+        "trait": "generous",
+        "at": 735
+      },
+      {
+        "kind": "go",
+        "to": "door:huseyin",
+        "at": 750
+      },
+      {
+        "kind": "tell",
+        "who": "huseyin",
+        "prop": "tarik:kind",
+        "value": true,
+        "sure": true,
+        "at": 752
+      },
+      {
+        "kind": "invent",
+        "who": "huseyin",
+        "about": "tarik",
+        "trait": "hardworking",
+        "at": 752
+      },
+      {
+        "kind": "go",
+        "to": "door:huseyin",
+        "at": 765
+      },
+      {
+        "kind": "tell",
+        "who": "huseyin",
+        "prop": "nermin:kind",
+        "value": true,
+        "sure": false,
+        "at": 765
+      },
+      {
+        "kind": "invent",
+        "who": "huseyin",
+        "about": "nermin",
+        "trait": "kind",
+        "at": 765
+      },
+      {
+        "kind": "go",
+        "to": "door:elif",
+        "at": 780
+      },
+      {
+        "kind": "tell",
+        "who": "elif",
+        "prop": "huseyin:kind",
+        "value": true,
+        "sure": true,
+        "at": 782
+      },
+      {
+        "kind": "invent",
+        "who": "elif",
+        "about": "huseyin",
+        "trait": "generous",
+        "at": 782
+      },
+      {
+        "kind": "go",
+        "to": "door:tarik",
+        "at": 795
+      },
+      {
+        "kind": "tell",
+        "who": "tarik",
+        "prop": "nermin:kind",
+        "value": true,
+        "sure": false,
+        "at": 815
+      },
+      {
+        "kind": "invent",
+        "who": "tarik",
+        "about": "nermin",
+        "trait": "hardworking",
+        "at": 815
+      },
+      {
+        "kind": "go",
+        "to": "door:nermin",
+        "at": 815
+      },
+      {
+        "kind": "tell",
+        "who": "nermin",
+        "prop": "burak:kind",
+        "value": true,
+        "sure": true,
+        "at": 818
+      },
+      {
+        "kind": "invent",
+        "who": "nermin",
+        "about": "burak",
+        "trait": "kind",
+        "at": 818
+      },
+      {
+        "kind": "go",
+        "to": "door:nermin",
+        "at": 825
+      },
+      {
+        "kind": "tell",
+        "who": "nermin",
+        "prop": "huseyin:kind",
+        "value": true,
+        "sure": false,
+        "at": 825
+      },
+      {
+        "kind": "invent",
+        "who": "nermin",
+        "about": "huseyin",
+        "trait": "generous",
+        "at": 825
+      },
+      {
+        "kind": "go",
+        "to": "door:huseyin",
+        "at": 840
+      },
+      {
+        "kind": "tell",
+        "who": "huseyin",
+        "prop": "nermin:kind",
+        "value": true,
+        "sure": true,
+        "at": 843
+      },
+      {
+        "kind": "invent",
+        "who": "huseyin",
+        "about": "nermin",
+        "trait": "hardworking",
+        "at": 843
+      },
+      {
+        "kind": "go",
+        "to": "step",
+        "at": 855
+      },
+      {
+        "kind": "go",
+        "to": "bakery",
+        "at": 870
+      },
+      {
+        "kind": "go",
+        "to": "shop",
+        "at": 885
+      },
+      {
+        "kind": "go",
+        "to": "roof",
+        "at": 900
+      },
+      {
+        "kind": "go",
+        "to": "step",
+        "at": 915
+      },
+      {
+        "kind": "go",
+        "to": "bakery",
+        "at": 930
+      },
+      {
+        "kind": "go",
+        "to": "shop",
+        "at": 945
+      },
+      {
+        "kind": "go",
+        "to": "roof",
+        "at": 960
+      },
+      {
+        "kind": "go",
+        "to": "step",
+        "at": 975
+      },
+      {
+        "kind": "go",
+        "to": "bakery",
+        "at": 990
+      },
+      {
+        "kind": "go",
+        "to": "shop",
+        "at": 1005
+      },
+      {
+        "kind": "go",
+        "to": "roof",
+        "at": 1020
+      },
+      {
+        "kind": "go",
+        "to": "step",
+        "at": 1035
+      },
+      {
+        "kind": "go",
+        "to": "bakery",
+        "at": 1050
+      },
+      {
+        "kind": "go",
+        "to": "shop",
+        "at": 1065
+      },
+      {
+        "kind": "go",
+        "to": "roof",
+        "at": 1080
+      },
+      {
+        "kind": "go",
+        "to": "step",
+        "at": 1095
+      },
+      {
+        "kind": "go",
+        "to": "bakery",
+        "at": 1110
+      },
+      {
+        "kind": "go",
+        "to": "shop",
+        "at": 1125
+      },
+      {
+        "kind": "go",
+        "to": "roof",
+        "at": 1140
+      },
+      {
+        "kind": "go",
+        "to": "step",
+        "at": 1155
+      },
+      {
+        "kind": "go",
+        "to": "bakery",
+        "at": 1170
+      },
+      {
+        "kind": "go",
+        "to": "shop",
+        "at": 1185
+      },
+      {
+        "kind": "go",
+        "to": "roof",
+        "at": 1200
+      }
+    ],
+    "minute": 1260,
+    "exportedAt": "2026-10-20T12:00:00.000Z"
+  },
+  "savedStateSha256": "78a38f02dcfb3390d564529413f3692ad4b919013cee8cc268963a939825a143",
+  "continuation": {
+    "input": {
+      "kind": "next"
+    },
+    "minute": 1920,
+    "stateSha256": "9df8daba5cb5f494784e2791aa03436b946eb9a07801943e7fbdae730dea00d7"
+  }
+}

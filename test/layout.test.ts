@@ -788,3 +788,227 @@ it.each([
     await page.close();
   }
 });
+
+it.each([
+  [360, 690],
+  [1280, 800],
+  [1920, 1080],
+])('enlarges the building with readable flat targets at %ix%i', async (width, height) => {
+  const page = await browser.newPage({ viewport: { width, height }, hasTouch: true });
+  try {
+    await importNotebook(page, 1254);
+    const journal = page.locator('.journal');
+    expect((await journal.boundingBox())?.height).toBeGreaterThanOrEqual(width < 900 ? 110 : 220);
+    if (width < 900) {
+      const before = await journal.evaluate((el) => {
+        el.scrollTop = 20;
+        return el.scrollTop;
+      });
+      await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
+      await visibleInViewport(page, '.top button, .board, .scene');
+      expect(await page.locator('.sheet').isVisible()).toBe(false);
+      for (const door of await page.locator('.scene .door .hit').all()) {
+        const box = await door.boundingBox();
+        expect(box?.width).toBeGreaterThanOrEqual(44);
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+      }
+      await page.getByRole('button', { name: 'Back to journal', exact: true }).click();
+      expect(await journal.evaluate((el) => el.scrollTop)).toBe(before);
+      await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
+      await page.locator('.scene [data-go="door:derya"]').click();
+      expect(await page.getByRole('button', { name: 'Enlarge building', exact: true }).isVisible()).toBe(
+        true,
+      );
+      expect(await page.locator('.sheet').isVisible()).toBe(true);
+    } else {
+      const scene = await page.locator('.scene').boundingBox();
+      const log = await journal.boundingBox();
+      expect(scene?.width).toBeGreaterThan(width * 0.5);
+      expect(scene?.height).toBeGreaterThan(height * 0.65);
+      expect(log?.x).toBeGreaterThanOrEqual((scene?.x ?? 0) + (scene?.width ?? 0));
+      for (const door of await page.locator('.scene .door .hit').all()) {
+        const box = await door.boundingBox();
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+      }
+    }
+    expect(await page.locator('.lk-stage').count()).toBe(1);
+    expect(await page.locator('.lk-strip .board').count()).toBe(1);
+    expect(await page.locator('.lk-sheet').count()).toBe(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  } finally {
+    await page.close();
+  }
+});
+
+it('preserves an expanded answer while time moves and exits phone zoom on desktop', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page);
+    await page.evaluate(() => {
+      const s = (window as unknown as { __st: { s: GameState } }).__st.s;
+      s.said.push({
+        at: s.minute,
+        who: 'nermin',
+        kind: 'voice',
+        text: 'A long answer. '.repeat(30),
+        n: s.lineNo++,
+      });
+    });
+    await page.locator('[data-sp="0"]').click();
+    await page.getByText('Read Nermin’s full answer', { exact: true }).click();
+    await page.clock.runFor(4000);
+    expect(await page.locator('.door-context details').getAttribute('open')).not.toBeNull();
+    await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.clock.runFor(100);
+    expect(await page.locator('.day').getAttribute('data-building')).toBe('floor');
+    expect(await page.locator('.journal').isVisible()).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps the selected flat at full phone width and restores reading through zoom updates', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page, 1254);
+    const door = page.locator('.scene [data-go="door:nermin"] .hit');
+    const box = await door.boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+    const label = page.locator('.scene [data-go="door:nermin"] .lbl.hand');
+    // SVG text scales with its viewBox; assert the rendered text, not just CSS font-size.
+    expect((await label.boundingBox())?.height).toBeGreaterThanOrEqual(17);
+    const journal = page.locator('.journal');
+    const before = await journal.evaluate((el) => {
+      const row = el.children[10] as HTMLElement;
+      el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top + 7;
+      return {
+        n: row.getAttribute('data-n'),
+        offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top,
+      };
+    });
+    await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
+    await arrive(page, 3);
+    await page.evaluate(() => document.fonts.dispatchEvent(new Event('loadingdone')));
+    await page.keyboard.press('Escape');
+    const after = await journal.evaluate((el, n) => {
+      const row = el.querySelector(`[data-n="${n}"]`);
+      return row ? row.getBoundingClientRect().top - el.getBoundingClientRect().top : null;
+    }, before.n);
+    expect(Math.abs((after ?? 10000) - before.offset)).toBeLessThanOrEqual(1);
+    expect(
+      await page
+        .getByRole('button', { name: 'Enlarge building', exact: true })
+        .evaluate((el) => el === document.activeElement),
+    ).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+it.each(['Residents', 'All orders', 'notebook'])(
+  'opens %s from the enlarged phone building',
+  async (kind) => {
+    const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+    try {
+      await importNotebook(page);
+      await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
+      if (kind === 'notebook') await openResidentsNotebook(page);
+      else
+        await page
+          .getByRole('button', {
+            name: kind === 'All orders' ? /All orders/ : kind,
+            exact: kind !== 'All orders',
+          })
+          .click();
+      expect(await page.locator('.sheet').isVisible()).toBe(true);
+      expect(await page.locator('.day').getAttribute('data-building')).toBe('floor');
+      expect(
+        await page.locator('.sheet [data-a=close]').evaluate((el) => el === document.activeElement),
+      ).toBe(true);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+it.each([150, 225, 560])('keeps %i-character speech clear of the response controls', async (length) => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page);
+    await page.evaluate((length) => {
+      const s = (window as unknown as { __st: { s: GameState } }).__st.s;
+      s.said.push({
+        at: s.minute,
+        who: 'nermin',
+        kind: 'voice',
+        text: 'A long answer. '.repeat(50).slice(0, length),
+        n: s.lineNo++,
+      });
+    }, length);
+    await page.locator('[data-sp="0"]').click();
+    if (length > 240) {
+      await page.getByText('Read Nermin’s full answer', { exact: true }).click();
+      await page.locator('.door-context').evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+      expect(
+        await page
+          .locator('.door-context')
+          .evaluate((el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1),
+      ).toBe(true);
+    }
+    await visibleInViewport(page, '.verbs button, .who .x');
+    expect(
+      await page.locator('.door-context').evaluate((el) => {
+        const actions = el.nextElementSibling?.getBoundingClientRect();
+        return !!actions && el.getBoundingClientRect().bottom <= actions.top;
+      }),
+    ).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps Tell and invent Back controls outside their scrolling choices', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page);
+    await page.locator('[data-a=news]').click();
+    await page.locator('[data-a=tell]').click();
+    await visibleInViewport(page, '.sheet [data-a=back], .sheet [data-a=invent]');
+    expect(await page.locator('.sheet > .lk-sheet-body').count()).toBe(1);
+    await page.locator('.sheet [data-a=invent]').click();
+    await visibleInViewport(page, '.sheet [data-a=back]');
+    expect(
+      await page.locator('.sheet > .lk-commit [data-a=back], .sheet > .lk-commit[data-a=back]').count(),
+    ).toBe(1);
+    await page.locator('[data-about=sevim]').click();
+    await visibleInViewport(page, '.sheet [data-a=back]');
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps enlarged building destinations separate and at least 44px', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page);
+    await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
+    const boxes = await page
+      .locator('.scene .hit')
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+    for (const [i, box] of boxes.entries()) {
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      for (const other of boxes.slice(i + 1)) {
+        const overlap =
+          Math.min(box.right, other.right) - Math.max(box.left, other.left) > 0.5 &&
+          Math.min(box.bottom, other.bottom) - Math.max(box.top, other.top) > 0.5;
+        expect(overlap).toBe(false);
+      }
+    }
+  } finally {
+    await page.close();
+  }
+});

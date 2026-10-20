@@ -165,3 +165,24 @@ unavailable if the listener leaves.
 Acceptance for this round: the coordinator reviews the three fixes, browser
 renders at 360×690 touch and 1280×800, tests and old-export continuation evidence,
 and a clean live release. The owner still accepts game feel separately.
+
+## Building and journal layout (2026-10-20)
+
+The owner's two runs ask for a larger building and more journal room. The day now
+uses lab-kit 0.2.0's phone stage CSS and viewport observer. The clock, speed and
+current order stay in a top strip. A desktop gives the building 58% of the width;
+the journal and one action sheet sit beside it. A phone shows the current floor
+at full width. “Enlarge building” shows all floors; “Back to journal” or Escape
+returns to the same journal entry. Choosing a destination also returns to the
+journal and action sheet. Opening orders, residents or the notebook exits the
+enlarged view. Inspection slows playback rather than stopping the simulation.
+
+Every destination in the enlarged 360×690 building has a separate target of at
+least 44×44 CSS px. The selected floor's names remain readable in the compact
+view. Longer answers have a labelled full reading; secondary choices scroll
+within the sheet while Back stays visible. No simulation, save format, input
+semantics or HF version changes accompany this layout. Browser regressions cover
+360×690, 1280×800 and 1920×1080, including hidden-journal rollover and font reflow.
+A public synthetic fixture follows the owner's documented 130-input mix and
+freezes the complete replay state and continuation. Owner acceptance of the new
+layout's feel remains separate from these builder checks.

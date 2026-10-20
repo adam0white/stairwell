@@ -3,6 +3,8 @@
  * file only reads it and queues inputs. The notebook (seed + inputs) is the save, kept in localStorage after every
  * input and at every page turn.
  */
+
+import { phoneStage } from '@adam0white/lab-kit';
 import {
   act,
   canReplay,
@@ -40,6 +42,9 @@ import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
 import { gameMenu, labScreen } from './lab.ts';
 import { playback } from './playback.ts';
 import { isSaved, type Saved } from './save.ts';
+
+let stage: ReturnType<typeof phoneStage> | null = null;
+let buildingExpanded = false;
 
 const SAVE_KEY = 'stairwell:notebook';
 const SPEEDS = [3, 6, 12];
@@ -176,6 +181,7 @@ function send(inp: NewInput) {
 
 function begin(s: GameState) {
   ui.s = s;
+  buildingExpanded = false;
   ui.sheet = 'none';
   ui.sheetFor = null;
   ui.pendingPerson = null;
@@ -202,6 +208,10 @@ export function start() {
     if (document.hidden) save();
   });
   window.addEventListener('pagehide', save);
+  window.addEventListener('resize', () => {
+    if (matchMedia('(min-width: 900px)').matches) buildingExpanded = false;
+    if (ui.s?.phase === 'day') render(false);
+  });
   requestAnimationFrame(loop);
   if ('serviceWorker' in navigator && !import.meta.env.DEV)
     navigator.serviceWorker.register('/sw.js').catch(() => {});
@@ -237,7 +247,7 @@ function loop(t: number) {
 
 function clockPlayback(s: GameState) {
   const talking = faceToFace(s).some((f) => ui.dismissed !== `${s.k.at}:${f}`);
-  const inspecting = ['notebook', 'orders', 'residents'].includes(ui.sheet);
+  const inspecting = buildingExpanded || ['notebook', 'orders', 'residents'].includes(ui.sheet);
   return playback(s, SPEEDS[ui.speed] ?? 3, talking, inspecting);
 }
 
@@ -266,6 +276,7 @@ function mountMenu(target: Element | null, s: GameState | null) {
     readNotebook:
       s?.phase === 'day' && ui.s
         ? () => {
+            buildingExpanded = false;
             ui.sheet = 'notebook';
             ui.sheetKey = '';
             render(false);
@@ -281,6 +292,8 @@ function mountMenu(target: Element | null, s: GameState | null) {
 function titlePage() {
   save();
   labScreen('title');
+  stage?.destroy();
+  stage = null;
   ui.s = null;
   const saved = loadSaved();
   const savedState = saved ? replay(saved.seed, saved.inputs, saved.minute) : null;
@@ -316,6 +329,10 @@ function render(full: boolean) {
   labScreen('play');
   const s = ui.s;
   if (!s) return;
+  if (s.phase !== 'day') {
+    stage?.destroy();
+    stage = null;
+  }
   if (s.phase === 'night') return nightPage(s);
   if (s.phase === 'sunday' || s.phase === 'end') return sundayPage(s);
   dayView(s, full);
@@ -324,21 +341,40 @@ function render(full: boolean) {
 // ---------- the day ----------
 
 function dayView(s: GameState, full: boolean) {
-  const position = journalPosition(app().querySelector<HTMLElement>('.journal'));
+  const existingLog = app().querySelector<HTMLElement>('.journal');
+  const position =
+    existingLog && existingLog.clientHeight === 0
+      ? (journalPositions.get(existingLog)?.position ?? journalPosition(existingLog))
+      : journalPosition(existingLog);
+  if (existingLog && existingLog.clientHeight > 0)
+    journalPositions.set(existingLog, { position, top: existingLog.scrollTop });
   let root = app().querySelector('.day') as HTMLElement | null;
   if (!root || full) {
-    app().innerHTML = `<div class="day">
-      <div class="top">
+    app().innerHTML = `<div class="day lk-stage" data-sheet="fit">
+      <header class="lk-strip" aria-label="Day and current order"><div class="top">
         <span class="clock"></span><span class="grow"></span>
         <span class="speed">${SPEEDS.map((_, i) => `<button data-sp="${i}">${'▸'.repeat(i + 1)}</button>`).join('')}</span>
-        </div><div class="clock-rate"></div>
-      <div class="navigation"><button data-a="residents">Residents</button><button data-a="orders">All orders</button></div>
-      <div class="scene"></div>
-      <div class="board"></div>
-      <div class="journal"></div>
-      <div class="sheet"></div>
+        </div><div class="clock-rate"></div><div class="board"></div></header>
+      <div class="navigation"><button data-a="residents">Residents</button><button data-a="orders">All orders</button><button data-a="building" aria-expanded="false">Enlarge building</button></div>
+      <section class="scene lk-scene" aria-label="Building view"><div class="view-controls"><span class="view-caption soft"></span></div><div class="scene-drawing"></div></section>
+      <section class="journal" aria-label="Journal"></section>
+      <section class="sheet lk-sheet" aria-label="Neighbour or orders"></section>
     </div>`;
+    stage?.destroy();
     root = app().querySelector('.day') as HTMLElement;
+    stage = phoneStage(root, { observeOnly: true });
+    root.querySelector('[data-a=building]')?.addEventListener('click', () => {
+      buildingExpanded = !buildingExpanded;
+      render(false);
+      app().querySelector<HTMLElement>('[data-a=building]')?.focus();
+    });
+    root.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && buildingExpanded) {
+        buildingExpanded = false;
+        render(false);
+        app().querySelector<HTMLElement>('[data-a=building]')?.focus();
+      }
+    });
     for (const b of root.querySelectorAll<HTMLElement>('[data-sp]'))
       b.addEventListener('click', () => {
         ui.speed = Number(b.dataset.sp);
@@ -347,6 +383,7 @@ function dayView(s: GameState, full: boolean) {
     mountMenu(root.querySelector('.top'), s);
     for (const kind of ['orders', 'residents'] as const)
       root.querySelector(`[data-a=${kind}]`)?.addEventListener('click', () => {
+        buildingExpanded = false;
         ui.sheet = kind;
         ui.sheetKey = '';
         render(false);
@@ -371,7 +408,14 @@ function dayView(s: GameState, full: boolean) {
     `${rate.rate} min/s${rate.reason ? ` · ${rate.reason}` : ''}`;
   (root.querySelector('[data-a=orders]') as HTMLElement).textContent = `All orders (${openTasks(s).length})`;
   const log = root.querySelector('.journal') as HTMLElement;
-  (root.querySelector('.scene') as HTMLElement).innerHTML = sceneSvg(s);
+  root.dataset.building = buildingExpanded ? 'full' : 'floor';
+  const zoom = root.querySelector('[data-a=building]') as HTMLButtonElement;
+  zoom.textContent = buildingExpanded ? 'Back to journal' : 'Enlarge building';
+  zoom.setAttribute('aria-expanded', String(buildingExpanded));
+  (root.querySelector('.view-caption') as HTMLElement).textContent = buildingExpanded
+    ? 'Lale Apartmanı · all floors'
+    : `${placeName(s.k.at)}${s.k.walk ? ` → ${placeName(s.k.walk.to)}` : ''}`;
+  (root.querySelector('.scene-drawing') as HTMLElement).innerHTML = sceneSvg(s);
   const boardKey = JSON.stringify([
     openTasks(s).map((t) => [t.id, t.carried, s.minute > t.by]),
     s.k.at,
@@ -381,12 +425,31 @@ function dayView(s: GameState, full: boolean) {
     ui.lastKey = boardKey;
     board(s, root.querySelector('.board') as HTMLElement);
   }
-  sheet(s, root.querySelector('.sheet') as HTMLElement);
+  const panel = root.querySelector('.sheet') as HTMLElement;
+  sheet(s, panel);
+  arrangeSheet(panel);
   journal(s, log, position);
+}
+
+/** Keep secondary choices scrollable while their Back control stays in the commit row. */
+function arrangeSheet(panel: HTMLElement) {
+  const submenu = ui.sheet === 'tell' || ui.sheet === 'invent';
+  panel.classList.toggle('submenu', submenu);
+  if (!submenu || panel.querySelector(':scope > .lk-sheet-body')) return;
+  const head = panel.querySelector(':scope > .who');
+  const commit = panel.lastElementChild;
+  if (!head || !commit || head === commit) return;
+  head.classList.add('lk-sheet-head');
+  commit.classList.add('lk-commit');
+  const body = document.createElement('div');
+  body.className = 'lk-sheet-body';
+  while (head.nextSibling && head.nextSibling !== commit) body.append(head.nextSibling);
+  panel.insertBefore(body, commit);
 }
 
 function goTo(s: GameState, to: Place, person: Rid | null = null) {
   if (s.k.walk || s.k.busyTask !== null) return;
+  buildingExpanded = false;
   ui.pendingPerson = person;
   ui.sheetFor = null;
   if (to === s.k.at) {
@@ -403,8 +466,8 @@ function goTo(s: GameState, to: Place, person: Rid | null = null) {
 
 // The building, drawn: floors from the top, flats on each landing, the stair zigzag on the left.
 const W = 360;
-const FLOOR_H = 46;
-const TOP_Y = 26;
+const FLOOR_H = 56;
+const TOP_Y = 50;
 const floorY = (f: number) => TOP_Y + (TOP_FLOOR + 1 - f) * FLOOR_H;
 
 function wob(x1: number, y1: number, x2: number, y2: number, k: number): string {
@@ -447,36 +510,36 @@ const guestsOf = (s: GameState, host: Rid): Rid[] =>
   RIDS.filter((id) => rOf(s, id).where === `visit:${host}`);
 
 function sceneSvg(s: GameState): string {
+  const cropped = !buildingExpanded && matchMedia('(max-width: 899px)').matches;
+  const focusFloor = floorOf(s.k.walk?.to ?? s.k.at);
   const parts: string[] = [];
   const H = floorY(-1) + 30;
   // Roof line and floors.
   parts.push(`<path class="ink" d="${wob(30, TOP_Y + 4, 300, TOP_Y + 4, 1)}"/>`);
-  parts.push(
-    `<rect class="hit" data-go="roof" x="40" y="${TOP_Y - 14}" width="250" height="${FLOOR_H - 8}"/>`,
-  );
+  parts.push(`<rect class="hit" data-go="roof" x="40" y="0" width="250" height="48"/>`);
   parts.push(`<text class="lbl soft" x="200" y="${TOP_Y - 2}" text-anchor="middle">roof</text>`);
   for (let f = TOP_FLOOR; f >= 0; f--) {
     const y = floorY(f);
     parts.push(`<path class="ink" d="${wob(30, y, 300, y, f + 3)}"/>`);
     parts.push(`<path class="soft-ink" d="${wob(48, y, 96, y - FLOOR_H + 4, f + 9)}"/>`);
     parts.push(
-      `<rect class="hit" data-go="landing:${f}" x="30" y="${y - FLOOR_H + 6}" width="80" height="${FLOOR_H - 6}"/>`,
+      `<rect class="hit" data-go="landing:${f}" x="30" y="${y - FLOOR_H + 6}" width="64" height="${FLOOR_H - 6}"/>`,
     );
     parts.push(`<text class="lbl soft" x="34" y="${y - 4}">${f === 0 ? 'G' : f}</text>`);
   }
   // Ground: your room below, the step and the street.
   const g = floorY(0);
   parts.push(`<path class="ink" d="${wob(30, g + 28, 300, g + 28, 21)}"/>`);
-  parts.push(`<rect class="hit" data-go="room" x="30" y="${g + 2}" width="90" height="26"/>`);
+  parts.push(`<rect class="hit" data-go="room" x="30" y="${g + 2}" width="90" height="46"/>`);
   parts.push(`<text class="lbl" x="44" y="${g + 20}">your room</text>`);
-  parts.push(`<rect class="hit" data-go="step" x="122" y="${g + 2}" width="70" height="26"/>`);
+  parts.push(`<rect class="hit" data-go="step" x="122" y="${g + 2}" width="70" height="46"/>`);
   parts.push(`<text class="lbl" x="128" y="${g + 20}">the step</text>`);
   parts.push(
     `<path class="ink" d="${wob(300, TOP_Y + 4, 300, g + 28, 30)}"/><path class="ink" d="${wob(30, TOP_Y + 4, 30, g + 28, 31)}"/>`,
   );
-  parts.push(`<rect class="hit" data-go="shop" x="304" y="${g - 36}" width="56" height="30"/>`);
+  parts.push(`<rect class="hit" data-go="shop" x="304" y="${g - 50}" width="56" height="46"/>`);
   parts.push(`<text class="lbl" x="306" y="${g - 18}">shop</text>`);
-  parts.push(`<rect class="hit" data-go="bakery" x="304" y="${g - 4}" width="56" height="30"/>`);
+  parts.push(`<rect class="hit" data-go="bakery" x="304" y="${g + 2}" width="56" height="46"/>`);
   parts.push(`<text class="lbl" x="306" y="${g + 14}">bakery</text>`);
   // Doors and residents.
   const carriedFor = new Set(
@@ -492,12 +555,14 @@ function sceneSvg(s: GameState): string {
   for (const id of RIDS) {
     const r = rOf(s, id);
     const info = RESIDENTS[id];
+    if (cropped && info.floor !== focusFloor) continue;
     const x = doorX(id);
+    const hitWidth = x === 132 ? 86 : 296 - (x - 34);
     const y = floorY(info.floor);
     const pl = `door:${id}` as Place;
     const want = carriedFor.has(pl) || wantedAt.has(pl);
     parts.push(`<g class="door${want ? ' want' : ''}" data-go="${pl}">
-      <rect class="hit" x="${x - 34}" y="${y - FLOOR_H + 6}" width="78" height="${FLOOR_H - 6}"/>
+      <rect class="hit" x="${x - 34}" y="${y - FLOOR_H + 6}" width="${hitWidth}" height="${FLOOR_H - 6}"/>
       <path class="ink" d="${wob(x, y, x, y - 30, info.flat)} ${wob(x, y - 30, x + 16, y - 30, info.flat + 1)} ${wob(x + 16, y - 30, x + 16, y, info.flat + 2)}"/>
       <text class="lbl hand" x="${x + 20}" y="${y - 18}">${info.flat} ${info.name}</text>
       ${
@@ -535,7 +600,8 @@ function sceneSvg(s: GameState): string {
   parts.push(figure(kp.x, kp.y, 'me', s.k.walk ? 6 : 0));
   if (s.k.busyTask !== null)
     parts.push(`<text class="lbl hand me-t" x="${kp.x + 8}" y="${kp.y - 30}">working…</text>`);
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="The building">${parts.join('')}</svg>`;
+  const cropY = Math.max(0, Math.min(H - 88, floorY(focusFloor) - 64));
+  return `<svg viewBox="0 ${cropped ? cropY : 0} ${W} ${cropped ? 88 : H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${cropped ? 'Current floor' : 'The building'}">${parts.join('')}</svg>`;
 }
 
 function taskLine(s: GameState, t: Task, current: boolean): string {
@@ -606,6 +672,7 @@ function journalPosition(el: HTMLElement | null) {
 function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof journalPosition>) {
   if (!journalPositions.has(el)) {
     el.addEventListener('scroll', () => {
+      if (el.clientHeight === 0) return;
       const saved = journalPositions.get(el);
       // Ignore our own scroll events, which may arrive after a font has reflowed.
       if (saved && el.scrollTop !== saved.top)
@@ -622,6 +689,7 @@ function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof jour
 }
 
 function restoreJournalPosition(el: HTMLElement, position: ReturnType<typeof journalPosition>) {
+  if (el.clientHeight === 0) return;
   if (position.atEnd) el.scrollTop = el.scrollHeight;
   else {
     const row = [...el.children].find((row) => row.getAttribute('data-n') === position.n);
@@ -801,6 +869,7 @@ function sheet(s: GameState, el: HTMLElement) {
     fresh.innerHTML = html;
     const context = el.querySelector('.door-context') as HTMLElement;
     const next = fresh.querySelector('.door-context') as HTMLElement;
+    if (context.querySelector('details')?.open) next.querySelector('details')?.setAttribute('open', '');
     if (context.innerHTML !== next.innerHTML) {
       context.innerHTML = next.innerHTML;
       wireDoor(s, context, who);
@@ -909,12 +978,17 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
   const departure = departureLine(s, who);
   const asked = r.newsDay === dayOf(s.minute);
   const sat = r.sitDay === dayOf(s.minute);
+  const speech = lastLine?.text ?? '';
+  const longSpeech = speech.length > 240;
+  const spoken = longSpeech
+    ? `<details><summary>Read ${esc(info.name)}’s full answer</summary><div class="hand said">${esc(speech)}</div></details>`
+    : `<div class="hand said">${esc(speech)}</div>`;
   const title = `<div class="who"><b>${esc(info.call)}</b><button class="x" data-a="close" aria-label="Close conversation">✕</button></div>`;
   return `${title}<div class="door-context">${tabs}<div class="soft small">flat ${info.flat} · ${read.warmth}, ${read.word}</div>
-    ${present ? (lastLine ? `<div class="hand said">${esc(lastLine.text)}</div>` : `<div class="soft small">${esc(info.blurb)}</div>`) : `<div class="hand departure">${esc(departure)}</div>`}
+    ${present ? (lastLine ? spoken : `<div class="soft small">${esc(info.blurb)}</div>`) : `<div class="hand departure">${esc(departure)}</div>`}
     ${grudge ? `<div class="hand rope">“I hear you’ve been saying things about me.”</div>` : ''}
     ${present ? carriedOther.map((t) => `<button class="prank" data-mis="${t.id}">Leave ${esc(RESIDENTS[t.for].name)}’s parcel here</button>`).join('') : ''}</div>
-    <div class="verbs">
+    <div class="verbs lk-commit">
       <button data-a="news" ${asked || !present ? 'disabled' : ''}>Anything new?${asked ? '<span class="h">Already asked · ask tomorrow</span>' : ''}</button>
       <button data-a="tell" ${!present ? 'disabled' : ''}>Tell…</button>
       <button data-a="sit" ${sat || !present ? 'disabled' : ''}>Sit a minute${sat ? '<span class="h">Sat together today · return tomorrow</span>' : ''}</button>

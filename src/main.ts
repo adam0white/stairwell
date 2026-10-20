@@ -1,3 +1,4 @@
+import '@adam0white/lab-kit/stage.css';
 import './ui/style.css';
 import { _debug, start } from './ui/app.ts';
 

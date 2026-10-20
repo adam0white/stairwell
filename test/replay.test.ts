@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { canReplay, type GameState, replay, rOf, step } from '../src/sim/game.ts';
+import { act, canReplay, type GameState, replay, rOf, step } from '../src/sim/game.ts';
 import { isSaved } from '../src/ui/save.ts';
 
 // Captured from the unchanged simulation before the DL-15 playback changes.
@@ -32,5 +32,43 @@ describe('pre-playback-change notebook compatibility', () => {
     while (state.phase === 'day' && state.minute < fixture.continuation.minute) step(state);
     expect(state.minute).toBe(fixture.continuation.minute);
     expect(stateHash(state)).toBe(fixture.continuation.stateSha256);
+  });
+});
+
+// Independently generated public inputs with the action counts documented in
+// docs/playtests/owner-2026-10-20.md. No private owner seed or inputs are included.
+const ownerStyleFixture = JSON.parse(
+  readFileSync(new URL('./fixtures/stairwell-v3-owner-style.json', import.meta.url), 'utf8'),
+);
+
+function restoreOwnerStyle() {
+  const notebook: unknown = ownerStyleFixture.notebook;
+  if (!isSaved(notebook)) throw new Error('The frozen owner-style export must remain importable');
+  expect(canReplay(notebook.game)).toBe(true);
+  return replay(notebook.seed, notebook.inputs, notebook.minute);
+}
+
+describe('frozen owner-style export compatibility', () => {
+  it('imports and replays all 130 inputs to the complete first-day state', () => {
+    const state = restoreOwnerStyle();
+    expect(state.inputs).toHaveLength(130);
+    expect(
+      state.inputs.reduce<Record<string, number>>((counts, input) => {
+        counts[input.kind] = (counts[input.kind] ?? 0) + 1;
+        return counts;
+      }, {}),
+    ).toEqual({ go: 53, tell: 29, invent: 29, news: 7, sit: 6, prank: 5, word: 1 });
+    expect(state.minute).toBe(1260);
+    expect(state.phase).toBe('night');
+    expect(stateHash(state)).toBe(ownerStyleFixture.savedStateSha256);
+  });
+
+  it('continues the imported export into the next day with the complete frozen state', () => {
+    const state = restoreOwnerStyle();
+    act(state, ownerStyleFixture.continuation.input);
+    while (state.phase === 'day' && state.minute < ownerStyleFixture.continuation.minute) step(state);
+    expect(state.minute).toBe(1920);
+    expect(state.phase).toBe('day');
+    expect(stateHash(state)).toBe(ownerStyleFixture.continuation.stateSha256);
   });
 });
