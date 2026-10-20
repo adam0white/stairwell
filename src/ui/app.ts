@@ -37,7 +37,7 @@ import {
   wordHint,
 } from '../sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
-import { labScreen, mountLab } from './lab.ts';
+import { gameMenu, labScreen } from './lab.ts';
 
 const SAVE_KEY = 'stairwell:notebook';
 const SPEEDS = [3, 6, 12];
@@ -101,7 +101,10 @@ function loadSaved(): Saved | null {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const x = JSON.parse(raw) as Saved;
-    return canReplay(x.game) ? x : null;
+    if (!canReplay(x.game) || !Number.isFinite(x.seed) || !Array.isArray(x.inputs)) return null;
+    if (x.minute !== undefined && (!Number.isInteger(x.minute) || x.minute < 420)) return null;
+    replay(x.seed, x.inputs, x.minute);
+    return x;
   } catch {
     return null;
   }
@@ -120,8 +123,7 @@ function mornings(saved: Saved): { day: number; inputs: Input[] }[] {
   return out;
 }
 
-function runOf() {
-  const s = ui.s;
+function runOf(s = ui.s) {
   if (!s) return;
   return {
     game: GAME_VERSION,
@@ -140,18 +142,6 @@ function runOf() {
       said: s.said.slice(-120),
     },
   };
-}
-
-function exportRun() {
-  const s = ui.s;
-  if (!s) return;
-  const data = runOf();
-  const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `stairwell-${s.seed}-${DAY_NAMES[dayOf(s.minute) - 1]?.toLowerCase() ?? 'end'}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 function importRun(file: File) {
@@ -191,7 +181,6 @@ function begin(s: GameState) {
 }
 
 export function start() {
-  mountLab(runOf);
   titlePage();
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) save();
@@ -206,7 +195,12 @@ function loop(t: number) {
   const s = ui.s;
   const dt = ui.last ? Math.min(0.25, (t - ui.last) / 1000) : 0;
   ui.last = t;
-  if (s && s.phase === 'day' && !document.hidden) {
+  if (
+    s &&
+    s.phase === 'day' &&
+    !document.hidden &&
+    !document.querySelector('dialog[open], [role=dialog][aria-modal=true]')
+  ) {
     // Tactical slowdown, never a pause: the clock crawls while someone is in front of you or the notebook is open.
     const faces = s.k.walk ? [] : faceToFace(s);
     const talking = faces.some((f) => ui.dismissed !== `${s.k.at}:${f}`);
@@ -230,21 +224,47 @@ function loop(t: number) {
 
 // ---------- pages ----------
 
-const footer = `<div class="footer"><a href="https://human.adamwhite.work/games/">◇ all notebooks</a></div>`;
+const footer = `<div class="footer"><a href="https://human.adamwhite.work/games/">All games</a></div>`;
+
+function mountMenu(target: Element | null, s: GameState) {
+  if (!target) return;
+  const entry = gameMenu({
+    getRun: () => runOf(ui.s ?? s),
+    beforeOpen: () => {
+      ui.sheet = 'none';
+      ui.sheetKey = '';
+      if (ui.s?.phase === 'day') render(false);
+    },
+    readNotebook:
+      s.phase === 'day' && ui.s
+        ? () => {
+            ui.sheet = 'notebook';
+            ui.sheetKey = '';
+            render(false);
+            app().querySelector<HTMLElement>('.sheet [data-a=close]')?.focus();
+          }
+        : undefined,
+    title: ui.s ? titlePage : undefined,
+  });
+  if (target.classList.contains('title')) target.querySelector('.actions')?.after(entry);
+  else if (target.classList.contains('page')) target.prepend(entry);
+  else target.append(entry);
+}
 
 function titlePage() {
+  save();
   labScreen('title');
   ui.s = null;
   const saved = loadSaved();
+  const savedState = saved ? replay(saved.seed, saved.inputs, saved.minute) : null;
   const ms = saved ? mornings(saved) : [];
   app().innerHTML = `<div class="page title">
     <a class="mark" href="https://human.adamwhite.work">◇ human framework</a>
     <h1>The Stairwell</h1>
-    <p>Rıza Efendi kept the door of Lale Apartmanı for forty years. Now he has gone back to his village, and the job is yours: bread, bins, parcels, five flights of stairs.</p>
-    <p>He left you his notebook. Seven flats. They will tell you things.</p>
-    <p class="hand soft">On Sunday they vote on your tea money. — R.</p>
+    <p>Keep seven flats supplied through Saturday. On Sunday, the residents vote on your tea money.</p>
+    <p>Rıza left you his caretaker’s notebook. The job is yours.</p>
     <div class="actions">
-      ${saved ? `<button class="primary" data-a="continue">Continue the notebook</button>` : ''}
+      ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${DAY_NAMES[dayOf(savedState.minute) - 1]} · ${clockOf(savedState.minute)} · ${esc(savedState.k.walk ? `on the way to ${placeName(savedState.k.walk.to)}` : placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
       <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'A new notebook' : 'Begin on Monday'}</button>
       ${
         ms.length > 1
@@ -257,10 +277,16 @@ function titlePage() {
       }
       <label class="soft small">Replay a notebook file <input type="file" accept="application/json" data-a="import"></label>
     </div>
+    <details><summary>More about the job</summary>
+      <p>Rıza Efendi kept the door of Lale Apartmanı for forty years. Now he has gone back to his village, and the job is yours: bread, bins, parcels, five flights of stairs.</p>
+      <p>He left you his notebook. Seven flats. They will tell you things.</p>
+      <p class="hand soft">On Sunday they vote on your tea money. — R.</p>
+    </details>
     <p class="soft small">About four minutes a day, six days and a Sunday. Nothing happens while you are away.</p>
     ${footer}
   </div>`;
   const el = app();
+  if (savedState) mountMenu(el.querySelector('.page'), savedState);
   el.querySelector('[data-a="continue"]')?.addEventListener('click', () => {
     if (saved) begin(replay(saved.seed, saved.inputs, saved.minute));
   });
@@ -294,10 +320,10 @@ function dayView(s: GameState, full: boolean) {
   let root = app().querySelector('.day') as HTMLElement | null;
   if (!root || full) {
     app().innerHTML = `<div class="day">
-      <div class="top"><a class="mark" href="https://human.adamwhite.work">◇</a>
+      <div class="top">
         <span class="clock"></span><span class="grow"></span>
         <span class="speed">${SPEEDS.map((_, i) => `<button data-sp="${i}">${'▸'.repeat(i + 1)}</button>`).join('')}</span>
-        <button class="nb" data-a="notebook" aria-label="Notebook">✎</button></div>
+        </div>
       <div class="scene"></div>
       <div class="board"></div>
       <div class="journal"></div>
@@ -309,11 +335,7 @@ function dayView(s: GameState, full: boolean) {
         ui.speed = Number(b.dataset.sp);
         render(false);
       });
-    root.querySelector('[data-a="notebook"]')?.addEventListener('click', () => {
-      ui.sheet = ui.sheet === 'notebook' ? 'none' : 'notebook';
-      ui.sheetKey = '';
-      render(false);
-    });
+    mountMenu(root.querySelector('.top'), s);
     root.querySelector('.scene')?.addEventListener('click', (e) => {
       const t = (e.target as Element).closest('[data-go]') as HTMLElement | SVGElement | null;
       if (!t) return;
@@ -495,7 +517,7 @@ function sceneSvg(s: GameState): string {
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="The building">${parts.join('')}</svg>`;
 }
 
-function taskLine(s: GameState, t: Task): string {
+function taskLine(s: GameState, t: Task, current: boolean): string {
   const late = s.minute > t.by;
   const who = t.kind === 'bins' ? 'Bins' : RESIDENTS[t.for].name;
   const where = t.carried
@@ -505,9 +527,9 @@ function taskLine(s: GameState, t: Task): string {
       : `at ${placeName(t.place)}`;
   const what = t.kind === 'bins' ? 'down from the fourth floor' : t.label;
   const when = t.kind === 'bins' ? 'by 20:45' : `by ${clockOf(t.by)}`;
-  return `<button class="task${late ? ' late' : ''}${t.carried ? ' carried' : ''}" data-t="${t.id}">
+  return `<button class="task${current ? ' current' : ''}${late ? ' late' : ''}${t.carried ? ' carried' : ''}" data-t="${t.id}">
     <span class="t">${t.carried ? '◼ ' : ''}${esc(who)}</span> <span>${esc(what)}</span>
-    <span class="hand soft">${where}, ${when}</span></button>`;
+    <span class="hand soft">${where}, ${when}${late ? ' · late' : ''}</span></button>`;
 }
 
 function board(s: GameState, el: HTMLElement) {
@@ -519,7 +541,7 @@ function board(s: GameState, el: HTMLElement) {
   el.innerHTML = open.length
     ? `${open
         .slice(0, 6)
-        .map((t) => taskLine(s, t))
+        .map((t, i) => taskLine(s, t, i === 0))
         .join(
           '',
         )}${open.length > 6 ? `<div class="soft small">and ${open.length - 6} more</div>` : ''}${swap ? `<button class="prank" data-a="swap">Swap Nermin’s and Sevim’s papers</button>` : ''}`
@@ -571,9 +593,8 @@ function sheet(s: GameState, el: HTMLElement) {
       ui.sheet = 'none';
       ui.sheetKey = '';
       render(false);
+      app().querySelector<HTMLElement>('.game-menu')?.focus();
     });
-    el.querySelector('[data-a="export"]')?.addEventListener('click', exportRun);
-    el.querySelector('[data-a="title"]')?.addEventListener('click', titlePage);
     return;
   }
   if (s.k.walk) {
@@ -711,7 +732,7 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
   const asked = r.newsDay === dayOf(s.minute);
   return `${head}${grudge ? `<div class="hand rope">“I hear you’ve been saying things about me.”</div>` : ''}
     <div class="verbs">
-      <button data-a="news" ${asked ? 'disabled' : ''}>Anything new?</button>
+      <button data-a="news" ${asked ? 'disabled' : ''}>Anything new?${asked ? '<span class="h">Already asked today</span>' : ''}</button>
       <button data-a="tell">Tell…</button>
       <button data-a="sit" ${r.sitDay === dayOf(s.minute) ? 'disabled' : ''}>Sit a minute</button>
       <button data-a="word" ${r.word ? 'disabled' : ''}>A word for me on Sunday<span class="h">${r.word ? (r.word === 'yes' ? 'promised' : 'said no') : dayOf(s.minute) < 4 ? 'too early' : wordHint(s, who)}</span></button>
@@ -801,7 +822,7 @@ function notebookHtml(s: GameState): string {
     <h3>What the building keeps <span class="soft small">${found.length} of ${SECRET_PROPS.length}</span></h3>
     ${SECRET_PROPS.map((x) => (s.secrets[x.prop] !== undefined ? `<div>· ${esc(x.title)}</div>` : `<div class="soft">· …</div>`)).join('')}
     <h3>Stamps</h3><div>${s.stamps.length ? s.stamps.map((x) => esc(STAMPS[x.id] ?? x.id)).join(' · ') : '<span class="soft">none yet</span>'}</div>
-    <div class="row"><button data-a="export">Save a playtest file</button><button data-a="title">Title page</button></div></div>`;
+    </div>${footer}`;
 }
 
 const STAMPS: Record<string, string> = {
@@ -845,6 +866,7 @@ function nightPage(s: GameState) {
     <button data-a="title">Close the notebook</button></div>
     ${footer}
   </div>`;
+  mountMenu(app().querySelector('.page'), s);
   app()
     .querySelector('[data-a="next"]')
     ?.addEventListener('click', () => send({ kind: 'next' }));
@@ -899,13 +921,13 @@ function sundayPage(s: GameState) {
     <div class="margin hand">${m?.raise ? 'Not bad for a first week. They will want more next week.' : 'A first week is a first week. Next week they will know you better.'} <span class="soft">— R.</span></div>
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
     <p class="soft small">Week 2 is still being written. Your notebook is saved.</p>
-    <div class="actions"><button data-a="export">Save a playtest file</button><button class="primary" data-a="title">Close the notebook</button></div>
+    <div class="actions"><button class="primary" data-a="title">Close the notebook</button></div>
     ${footer}
   </div>`;
+  mountMenu(app().querySelector('.page'), s);
   app()
     .querySelector('[data-a="copy"]')
     ?.addEventListener('click', () => navigator.clipboard?.writeText(share).catch(() => {}));
-  app().querySelector('[data-a="export"]')?.addEventListener('click', exportRun);
   app().querySelector('[data-a="title"]')?.addEventListener('click', titlePage);
 }
 

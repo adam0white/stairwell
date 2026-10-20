@@ -1,30 +1,50 @@
 import { createLab } from '@adam0white/lab-client';
+import { notebookMenu } from '@adam0white/lab-kit';
 
 export const lab = createLab({ game: 'stairwell' });
 
-/** The regular event names are fixed. Only a player-approved export carries the run. */
-export function mountLab(getRun: () => unknown): void {
-  if (document.getElementById('lab-controls')) return;
-  const controls = document.createElement('details');
-  controls.id = 'lab-controls';
-  controls.style.cssText = 'margin:1rem auto;padding:0.6rem;max-width:45rem;font:inherit';
-  controls.innerHTML = `<summary>Playtest notebook</summary><button type="button">Send this run to the notebook</button><label><input type="checkbox"> Anonymous play events</label> <a href="https://human.adamwhite.work/lab/privacy/">Privacy</a>`;
-  controls.querySelector('button')?.addEventListener('click', () => lab.openSendDialog({ getRun }));
-  const toggle = controls.querySelector('input');
-  if (toggle) {
-    toggle.checked = lab.eventsOn;
-    const sync = () => {
-      toggle.checked = lab.eventsOn;
+interface MenuOptions {
+  getRun: () => unknown;
+  beforeOpen: () => void;
+  readNotebook?: () => void;
+  title?: () => void;
+}
+
+export function compactRun(run: unknown): unknown {
+  const { state: _state, ...replayable } = run as Record<string, unknown>;
+  return replayable;
+}
+
+/** Keep run controls in the kit menu; the residents' notebook is a separate inspection. */
+export function gameMenu(options: MenuOptions): HTMLButtonElement {
+  const entry = notebookMenu({
+    lab,
+    getRun: options.getRun,
+    filename: 'stairwell-playtest.json',
+    compact: compactRun,
+    compactNote: 'Seed, inputs and minute reproduce the full state. The state summary is left out.',
+  });
+  entry.className = 'game-menu';
+  entry.addEventListener('click', options.beforeOpen, { capture: true });
+  // The kit owns its native dialog. Add the game's inspection and title destinations after it opens.
+  entry.addEventListener('click', () => {
+    const dialog = document.querySelector<HTMLDialogElement>('dialog.lk-notebook[open]');
+    if (!dialog) return;
+    const add = (label: string, action: (() => void) | undefined) => {
+      if (!action) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.addEventListener('click', () => {
+        dialog.addEventListener('close', action, { once: true });
+        dialog.close();
+      });
+      dialog.querySelector('h2')?.after(button);
     };
-    window.addEventListener('storage', sync);
-    window.addEventListener('focus', sync);
-    document.addEventListener('change', sync);
-    toggle.addEventListener('change', () => {
-      lab.setEventsOff(!toggle.checked);
-      toggle.checked = lab.eventsOn;
-    });
-  }
-  document.body.append(controls);
+    add('Title page', options.title);
+    add('Read the residents’ notebook', options.readNotebook);
+  });
+  return entry;
 }
 
 export function labScreen(screen: 'title' | 'play' | 'ending'): void {
