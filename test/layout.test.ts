@@ -70,7 +70,7 @@ it.each([
     const journal = page.locator('.journal');
     expect((await journal.boundingBox())?.height).toBeGreaterThanOrEqual(minLogHeight);
     expect(await journal.locator(':scope > div').count()).toBeGreaterThan(4);
-    await visibleInViewport(page, '.top button, .scene, .board, .verbs button, .who .x');
+    await visibleInViewport(page, '.top button:visible, .scene, .board, .verbs button, .who .x');
     const scroll = await journal.evaluate((el) => {
       const atEnd = Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1;
       el.scrollTop = 0;
@@ -134,7 +134,7 @@ async function arrive(page: Page, count: number, full = false) {
     for (let i = 0; i < ${count - (full ? 1 : 0)}; i++) act(s, { kind: 'go', to: s.k.at });
     ${full ? "window.__st.send({ kind: 'go', to: s.k.at });" : ''}
   })`);
-  if (!full) await page.locator('[data-sp="0"]').click();
+  if (!full) await page.evaluate('window.__st.render()');
 }
 
 it.each([
@@ -228,7 +228,7 @@ it.each(['newest', 'older', 'pending scroll'])(
       await page.route('https://fonts.googleapis.com/**', (route) => route.abort());
       await importNotebook(page, 1254);
       await page.addStyleTag({ content: '.journal { font-family: "Journal test", monospace; }' });
-      await page.locator('[data-sp="0"]').click();
+      await page.evaluate('window.__st.render()');
       const journal = page.locator('.journal');
       await journal.evaluate((el) => {
         el.scrollTop = el.scrollHeight;
@@ -309,7 +309,7 @@ it('explains exhausted news beside Anything new and resets it on a new day', asy
     expect(await page.locator('[data-a=news]').textContent()).toContain('Already asked · ask tomorrow');
     await importNotebook(page, 1254);
     await page.locator('[data-a=news]').click();
-    await page.clock.runFor(10_000);
+    await page.evaluate('window.__st.step(6)');
     await page.locator('[data-a=next]').click();
     await page.locator('.scene [data-go="door:nermin"]').click();
     await page.clock.runFor(30_000);
@@ -333,11 +333,10 @@ it.each([
     expect(await page.locator('.task.current').textContent()).toContain('bakery');
     await visibleInViewport(page, '.task.current');
     const colors = await page.evaluate(() => ({
-      speed: getComputedStyle(document.querySelector('.speed .on') as Element).color,
       task: getComputedStyle(document.querySelector('.task.current') as Element).borderColor,
       ink: getComputedStyle(document.body).color,
     }));
-    expect(colors.speed).toBe(colors.ink);
+    expect(await page.locator('[data-sp]').count()).toBe(0);
     expect(colors.task).not.toBe(colors.ink);
     expect(await page.locator('.task.current').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   } finally {
@@ -443,7 +442,7 @@ it('saves the current minute before returning through Game menu to Title page', 
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await importNotebook(page);
-    await page.clock.runFor(4_000);
+    await page.evaluate('window.__st.advance(1)');
     expect(await page.locator('.clock').textContent()).toBe('Mon 07:21');
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     await page.getByRole('button', { name: 'Title page', exact: true }).click();
@@ -502,7 +501,7 @@ it('keeps every header control within 320px at doubled text size', async () => {
       for (const [el, size] of sizes) el.style.fontSize = `${size * 2}px`;
     });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
-    await visibleInViewport(page, '.top button');
+    await visibleInViewport(page, '.top button:visible');
   } finally {
     await page.close();
   }
@@ -517,7 +516,7 @@ it.each([
     await importNotebook(page);
     await page.locator('[data-a=news]').click();
     await visibleInViewport(page, '.verbs button, .who .x');
-    for (const control of await page.locator('.top button, .task, .verbs button, .who .x').all()) {
+    for (const control of await page.locator('.top button:visible, .task, .verbs button, .who .x').all()) {
       const box = await control.boundingBox();
       expect(box?.width).toBeGreaterThanOrEqual(44);
       expect(box?.height).toBeGreaterThanOrEqual(44);
@@ -642,7 +641,7 @@ it.each([
     await page.locator('[data-a=news]').click();
     const afterNews = await target(page, '[data-a=sit]');
     expect(afterNews.y).toBeCloseTo(before.y, 0);
-    await page.clock.runFor(11_000);
+    await page.evaluate('window.__st.advance(10)');
     expect(await page.locator('.who').textContent()).toContain('Derya');
     expect(await page.locator('.sheet').textContent()).toContain('back to sleep');
     expect(await sit.isDisabled()).toBe(true);
@@ -660,27 +659,106 @@ it.each([
   }
 });
 
-it('shows the effective clock rate and keeps inspection moving', async () => {
+it('holds a conversation until Close and resumes travel at 360×690', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
+  try {
+    await importNotebook(page);
+    const before = await page.locator('.clock').textContent();
+    await page.locator('[data-a=news]').click();
+    await page.clock.runFor(60_000);
+    expect(await page.locator('.clock').textContent()).toBe(before);
+    expect(await page.locator('.clock-rate').textContent()).toBe('Conversation · time waits');
+    await page.locator('.who [data-a=close]').click();
+    await page.locator('.scene [data-go="bakery"]').click();
+    await page.clock.runFor(2000);
+    expect(await page.locator('.clock').textContent()).not.toBe(before);
+  } finally {
+    await page.close();
+  }
+});
+
+it('starts travel immediately when the player leaves a fresh answer', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page);
+    await page.locator('[data-a=news]').click();
+    const before = await page.locator('.clock').textContent();
+    await page.locator('.who [data-a=close]').click();
+    await page.locator('.scene [data-go="bakery"]').click();
+    await page.clock.runFor(2000);
+    expect(await page.locator('.clock').textContent()).not.toBe(before);
+  } finally {
+    await page.close();
+  }
+});
+
+it('closing the second person on the step keeps routes open', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await load(page);
+    await page.evaluate(() => {
+      const debug = (window as unknown as { __st: { s: GameState; render: () => void } }).__st;
+      debug.s.k.at = 'step';
+      for (const r of debug.s.residents) r.where = r.id === 'nermin' || r.id === 'sevim' ? 'step' : 'home';
+      debug.render();
+    });
+    await page.locator('[data-face=sevim]').click();
+    await page.locator('.who [data-a=close]').click();
+    expect(await page.locator('[data-a=reopen]').textContent()).toContain('Sevim');
+    expect(await page.locator('.clock-rate').textContent()).toBe('Orders need you');
+    await page.clock.runFor(2000);
+    expect(await page.locator('[data-a=reopen]').isVisible()).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+it('offers one wait button only in an empty stretch and saves its first event', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
   try {
     await load(page);
-    await page.locator('[data-sp="2"]').click();
-    expect(await page.locator('.clock-rate').count()).toBe(1);
-    expect(await page.locator('.clock-rate').textContent()).toContain('0.3 min/s · First bread run');
-    await page.clock.runFor(30_000);
-    expect(await page.locator('.clock').textContent()).toBe('Mon 07:09');
+    await page.evaluate(() => {
+      const debug = (window as unknown as { __st: { s: GameState; render: () => void } }).__st;
+      const s = debug.s;
+      for (const task of s.tasks) if (task.from <= s.minute) task.done = s.minute;
+      debug.render();
+    });
+    const wait = page.getByRole('button', { name: 'Until something happens', exact: true });
+    expect(await wait.count()).toBe(1);
+    await target(page, '[data-a=wait]');
+    const before = await page.evaluate<number>('window.__st.s.minute');
+    await wait.click();
+    expect(await page.evaluate('window.__st.s.minute')).toBeGreaterThan(before);
+    const atEvent = await page.evaluate('window.__st.s.minute');
+    await page.clock.runFor(4000);
+    expect(await page.evaluate('window.__st.s.minute')).toBe(atEvent);
+    expect(await page.evaluate('JSON.parse(localStorage.getItem("stairwell:notebook")).minute')).toBe(
+      atEvent,
+    );
     await page.getByRole('button', { name: /All orders/ }).click();
-    await page.clock.runFor(10_000);
-    expect(await page.locator('.clock').textContent()).toBe('Mon 07:12');
+    expect(await wait.isVisible()).toBe(false);
+  } finally {
+    await page.close();
+  }
+});
+
+it('automatically protects orders and inspection at 360×690', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
+  try {
+    await load(page);
+    expect(await page.locator('[data-sp]').count()).toBe(0);
+    expect(await page.locator('.clock-rate').textContent()).toBe('Orders need you');
+    expect(await page.locator('[data-a=wait]').isVisible()).toBe(false);
+    await page.getByRole('button', { name: /All orders/ }).click();
+    const before = await page.locator('.clock').textContent();
+    await page.clock.runFor(30_000);
+    expect(await page.locator('.clock').textContent()).toBe(before);
+    expect(await page.locator('.clock-rate').textContent()).toBe('Reading · time waits');
     await page.locator('.sheet [data-a=close]').click();
-    await page.evaluate('window.__st.step(109)');
-    expect(await page.locator('.clock-rate').textContent()).toBe('12 min/s');
-    await page.getByRole('button', { name: 'Residents', exact: true }).click();
-    expect(await page.locator('.clock-rate').textContent()).toBe('0.6 min/s · Reading');
-    await page.clock.runFor(10_000);
-    expect(await page.locator('.clock').textContent()).toBe('Mon 09:07');
-    await page.locator('.sheet [data-a=close]').click();
-    expect(await page.locator('.clock-rate').textContent()).toBe('12 min/s');
+    expect(await page.locator('.clock-rate').textContent()).toBe('Orders need you');
+    await page.clock.runFor(2000);
+    expect(await page.locator('.clock').textContent()).not.toBe(before);
+    await visibleInViewport(page, '.clock-rate, .task.current');
   } finally {
     await page.close();
   }
@@ -751,7 +829,7 @@ it('keeps Tell choices and focus stable when Derya returns to sleep', async () =
     await choice.focus();
     const node = await choice.elementHandle();
     const before = await choice.boundingBox();
-    await page.clock.runFor(11_000);
+    await page.evaluate('window.__st.advance(10)');
     expect(await choice.count()).toBeGreaterThan(0);
     expect(await choice.evaluate((el, old) => el === old, node)).toBe(true);
     expect(await choice.isDisabled()).toBe(true);
@@ -779,7 +857,7 @@ it.each([
         s.said = s.said.filter((line) => line.who !== 'nermin');
         if (text) s.said.push({ at: s.minute, who: 'nermin', kind: 'voice', text, n: s.lineNo++ });
       }, text);
-      await page.locator('[data-sp="1"]').click();
+      await page.evaluate('window.__st.render()');
       const after = await target(page, '[data-a=sit]');
       expect(after.y).toBeCloseTo(before.y, 0);
       expect(await page.locator('[data-a=sit]').evaluate((el, old) => el === old, node)).toBe(true);
@@ -805,7 +883,7 @@ it.each([
         return el.scrollTop;
       });
       await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
-      await visibleInViewport(page, '.top button, .board, .scene');
+      await visibleInViewport(page, '.top button:visible, .board, .scene');
       expect(await page.locator('.sheet').isVisible()).toBe(false);
       for (const door of await page.locator('.scene .door .hit').all()) {
         const box = await door.boundingBox();
@@ -854,7 +932,7 @@ it('preserves an expanded answer while time moves and exits phone zoom on deskto
         n: s.lineNo++,
       });
     });
-    await page.locator('[data-sp="0"]').click();
+    await page.evaluate('window.__st.render()');
     await page.getByText('Read Nermin’s full answer', { exact: true }).click();
     await page.clock.runFor(4000);
     expect(await page.locator('.door-context details').getAttribute('open')).not.toBeNull();
@@ -946,7 +1024,7 @@ it.each([150, 225, 560])('keeps %i-character speech clear of the response contro
         n: s.lineNo++,
       });
     }, length);
-    await page.locator('[data-sp="0"]').click();
+    await page.evaluate('window.__st.render()');
     if (length > 240) {
       await page.getByText('Read Nermin’s full answer', { exact: true }).click();
       await page.locator('.door-context').evaluate((el) => {

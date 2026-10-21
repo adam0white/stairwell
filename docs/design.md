@@ -202,3 +202,23 @@ Acceptance for this upgrade: the existing full check passes, frozen notebook
 states and continuations match with only HF person engine stamps normalized,
 GitHub CI passes, and the live game loads from a clean commit with HF 2.10.0.
 Acceptance owner: the user. Game-feel acceptance remains separate.
+
+## Automatic pacing (2026-10-21)
+
+This direction supersedes the earlier speed-control and tactical-slowdown rules.
+The owner's [verbatim playtest](playtests/owner-2026-10-21.md) reports alternating
+stalls and missed conversations or late orders. Speed controls are removed.
+Conversations and inspection hold time until closed. Orders run at 0.6 game
+minutes per real second; travel, work and empty stretches run at 6. Automatic
+stepping stops at newly arriving speech, people and orders and gives them reading
+time before continuing. Background journal entries alone do not cause repeated
+reading holds. When no order, conversation, inspection, travel or work needs the
+player, one “Until something happens” button advances minute by minute to the
+first new line, person, order or night page. The simulation, save edition and
+input log remain unchanged.
+
+The user accepts game feel. Delivery requires independent review, the full
+check, frozen replay and continuation checks, private owner replay evidence at
+360×690 touch, green CI, and a clean live release. Screenshots and private replay
+artifacts stay outside the repository. A builder's passing checks do not close
+the owner's pacing acceptance.

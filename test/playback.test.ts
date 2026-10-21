@@ -1,69 +1,67 @@
 import { describe, expect, it } from 'vitest';
-import { act, newGame, openTasks } from '../src/sim/game.ts';
-import { playback } from '../src/ui/playback.ts';
+import { act, newGame, openTasks, step } from '../src/sim/game.ts';
+import { canWait, playback, untilSomethingHappens } from '../src/ui/playback.ts';
 
-describe('playback rate', () => {
-  it('slows the first bread run at the highest chosen speed, including travel', () => {
-    const state = newGame(11);
-    expect(playback(state, 12, false, false)).toEqual({ rate: 0.3, reason: 'First bread run' });
-    act(state, { kind: 'go', to: 'bakery' });
-    expect(state.k.walk).toBeTruthy();
-    expect(playback(state, 12, false, false)).toEqual({ rate: 0.3, reason: 'First bread run' });
+describe('automatic pacing', () => {
+  it('protects every day’s orders and keeps travel brisk', () => {
+    const s = newGame(11);
+    expect(playback(s, false, false).rate).toBe(0.6);
+    act(s, { kind: 'go', to: 'bakery' });
+    expect(playback(s, false, false).rate).toBe(6);
+    expect(canWait(s, false, false)).toBe(false);
+    s.minute += 1440;
+    s.k.walk = null;
+    for (const task of openTasks(s)) task.by = s.minute + 30;
+    expect(playback(s, false, false).rate).toBe(0.6);
   });
 
-  it('keeps the first run slow until the last pending bread task resolves', () => {
-    const state = newGame(11);
-    const bread = openTasks(state).filter((task) => task.kind === 'bread');
-    expect(bread.length).toBeGreaterThan(1);
-    for (const task of bread.slice(0, -1)) task.done = state.minute;
-    expect(playback(state, 12, true, true)).toEqual({ rate: 0.3, reason: 'First bread run' });
-    const last = bread.at(-1);
-    if (!last) throw new Error('Missing final bread task');
-    last.done = state.minute;
-    expect(playback(state, 12, false, false)).toEqual({ rate: 12, reason: '' });
+  it('holds conversations and reading, including while travelling', () => {
+    const s = newGame(11);
+    act(s, { kind: 'go', to: 'bakery' });
+    const before = JSON.stringify(s);
+    expect(playback(s, true, false).rate).toBe(0);
+    expect(playback(s, false, true).rate).toBe(0);
+    expect(JSON.stringify(s)).toBe(before);
+    expect(canWait(s, true, false)).toBe(false);
   });
 
-  it('restores the chosen speed after the final first-morning deadline', () => {
-    const state = newGame(11);
-    state.minute = Math.max(
-      ...openTasks(state)
-        .filter((task) => task.kind === 'bread')
-        .map((task) => task.by),
+  it('offers one bounded advance in an empty stretch and stops on the first event', () => {
+    const s = newGame(11);
+    for (const task of openTasks(s)) task.done = s.minute;
+    expect(canWait(s, false, false)).toBe(true);
+    const copy = structuredClone(s);
+    const line = s.lineNo;
+    const tasks = openTasks(s)
+      .map((t) => t.id)
+      .join(',');
+    const advanced = untilSomethingHappens(s);
+    expect(advanced).toBeGreaterThan(0);
+    expect(advanced).toBeLessThanOrEqual(840);
+    // A literal minute walk reaches the same first event and complete state.
+    let n = 0;
+    do {
+      step(copy);
+      n++;
+    } while (
+      copy.phase === 'day' &&
+      copy.lineNo === line &&
+      openTasks(copy)
+        .map((t) => t.id)
+        .join(',') === tasks &&
+      n < advanced
     );
-    expect(playback(state, 12, false, false)).toEqual({ rate: 0.3, reason: 'First bread run' });
-    state.minute = 541;
-    expect(openTasks(state).some((task) => task.kind === 'bread')).toBe(true);
-    expect(playback(state, 12, false, false)).toEqual({ rate: 12, reason: '' });
+    expect(n).toBe(advanced);
+    expect(s).toEqual(copy);
   });
 
-  it('uses the chosen rate on later days until a conversation starts', () => {
-    const state = newGame(11);
-    state.minute += 1440;
-    expect(playback(state, 12, false, false)).toEqual({ rate: 12, reason: '' });
-    expect(playback(state, 12, true, true)).toEqual({ rate: 0.6, reason: 'Conversation' });
-    expect(playback(state, 12, false, false)).toEqual({ rate: 12, reason: '' });
-  });
-
-  it('keeps inspection moving and restores the chosen rate when it closes', () => {
-    const state = newGame(11);
-    state.minute += 1440;
-    expect(playback(state, 12, false, true)).toEqual({ rate: 0.6, reason: 'Reading' });
-    expect(playback(state, 12, false, false)).toEqual({ rate: 12, reason: '' });
-  });
-
-  it('never accelerates a slower chosen rate', () => {
-    const state = newGame(11);
-    expect(playback(state, 0.1, false, false).rate).toBe(0.1);
-    state.minute += 1440;
-    expect(playback(state, 0.1, true, false).rate).toBe(0.1);
-    expect(playback(state, 0.1, false, true).rate).toBe(0.1);
-  });
-
-  it('does not mutate simulation state', () => {
-    const state = newGame(11);
-    const before = JSON.stringify(state);
-    playback(state, 12, true, true);
-    playback(state, 0.1, false, false);
-    expect(JSON.stringify(state)).toBe(before);
+  it('does not offer waiting over a current order or inspection', () => {
+    const s = newGame(11);
+    expect(canWait(s, false, false)).toBe(false);
+    s.minute = Math.max(...openTasks(s).map((task) => task.by)) + 1;
+    expect(playback(s, false, false).rate).toBe(0.6);
+    expect(canWait(s, false, false)).toBe(false);
+    for (const task of openTasks(s)) task.done = s.minute;
+    expect(canWait(s, false, true)).toBe(false);
+    expect(playback(s, false, false).rate).toBe(6);
   });
 });

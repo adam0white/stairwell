@@ -40,7 +40,7 @@ import {
 } from '../sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
 import { gameMenu, labScreen } from './lab.ts';
-import { playback } from './playback.ts';
+import { canWait, playback, untilSomethingHappens } from './playback.ts';
 import { isSaved, type Saved } from './save.ts';
 
 let stage: ReturnType<typeof phoneStage> | null = null;
@@ -49,7 +49,6 @@ let buildingExpanded = false;
 let weekTally = false;
 
 const SAVE_KEY = 'stairwell:notebook';
-const SPEEDS = [3, 6, 12];
 const journalPositions = new WeakMap<
   HTMLElement,
   { position: ReturnType<typeof journalPosition>; top: number }
@@ -57,7 +56,6 @@ const journalPositions = new WeakMap<
 
 interface Ui {
   s: GameState | null;
-  speed: number;
   sheet: 'none' | 'tell' | 'invent' | 'notebook' | 'place' | 'orders' | 'residents';
   inventAbout: Rid | null;
   sheetFor: Rid | null;
@@ -69,11 +67,11 @@ interface Ui {
   sheetKey: string;
   dismissed: string;
   grudgeSaid: Set<string>;
+  readUntil: number;
 }
 
 const ui: Ui = {
   s: null,
-  speed: 0,
   sheet: 'none',
   inventAbout: null,
   sheetFor: null,
@@ -85,6 +83,7 @@ const ui: Ui = {
   sheetKey: '',
   dismissed: '',
   grudgeSaid: new Set(),
+  readUntil: 0,
 };
 
 const app = () => document.getElementById('app') as HTMLElement;
@@ -174,9 +173,12 @@ function importRun(file: File) {
 function send(inp: NewInput) {
   const s = ui.s;
   if (!s) return;
-  // A new morning starts at the slow speed: the bread run is where a phone player loses the most minutes.
-  if (inp.kind === 'next') ui.speed = 0;
+  const lines = s.lineNo;
   act(s, inp);
+  ui.acc = 0;
+  if (inp.kind === 'go') ui.readUntil = 0;
+  else if (s.said.some((line) => (line.n ?? -1) >= lines && line.kind !== 'journal'))
+    ui.readUntil = performance.now() + 6000;
   save();
   render(false);
 }
@@ -188,7 +190,7 @@ function begin(s: GameState) {
   ui.sheetFor = null;
   ui.pendingPerson = null;
   ui.acc = 0;
-  ui.speed = 0;
+  ui.readUntil = 0;
   ui.dismissed = '';
   save();
   render(true);
@@ -220,6 +222,10 @@ export function start() {
 }
 
 function loop(t: number) {
+  // Keep reading position current even while the clock is held. Browser scroll
+  // events can remain queued until after a late font changes the line heights.
+  const log = app().querySelector<HTMLElement>('.journal');
+  if (log) rememberJournalScroll(log);
   const s = ui.s;
   const dt = ui.last ? Math.min(0.25, (t - ui.last) / 1000) : 0;
   ui.last = t;
@@ -230,12 +236,37 @@ function loop(t: number) {
     !document.querySelector('dialog[open], [role=dialog][aria-modal=true]')
   ) {
     const { rate } = clockPlayback(s);
-    ui.acc += dt * rate;
+    if (rate === 0 || t < ui.readUntil) ui.acc = 0;
+    else ui.acc += dt * rate;
     let n = 0;
     while (ui.acc >= 1 && n < 30 && s.phase === 'day') {
       ui.acc -= 1;
+      const lines = s.lineNo;
+      const tasks = openTasks(s)
+        .map((task) => task.id)
+        .join(',');
+      const faces = faceToFace(s).join(',');
       step(s);
       n++;
+      if (
+        s.said.some((line) => (line.n ?? -1) >= lines && line.kind !== 'journal') ||
+        openTasks(s)
+          .map((task) => task.id)
+          .join(',') !== tasks ||
+        faceToFace(s).join(',') !== faces
+      ) {
+        const words = s.said
+          .filter((line) => (line.n ?? -1) >= lines)
+          .map((line) => line.text)
+          .join(' ');
+        ui.readUntil = t + Math.min(12000, Math.max(4000, words.length * 45));
+        ui.acc = 0;
+        break;
+      }
+      if (clockPlayback(s).rate !== rate) {
+        ui.acc = 0;
+        break;
+      }
     }
     if (n > 0) render(false);
     if (n > 0 && s.minute % 10 === 0) save();
@@ -247,10 +278,18 @@ function loop(t: number) {
   requestAnimationFrame(loop);
 }
 
-function clockPlayback(s: GameState) {
-  const talking = faceToFace(s).some((f) => ui.dismissed !== `${s.k.at}:${f}`);
+function pacingContext(s: GameState) {
+  const faces = faceToFace(s);
+  const who = ui.sheetFor ?? faces[0];
+  const talking =
+    !s.k.walk && s.k.busyTask === null && !!who && faces.includes(who) && ui.dismissed !== `${s.k.at}:${who}`;
   const inspecting = buildingExpanded || ['notebook', 'orders', 'residents'].includes(ui.sheet);
-  return playback(s, SPEEDS[ui.speed] ?? 3, talking, inspecting);
+  return { talking, inspecting };
+}
+
+function clockPlayback(s: GameState) {
+  const { talking, inspecting } = pacingContext(s);
+  return playback(s, talking, inspecting);
 }
 
 // ---------- pages ----------
@@ -365,7 +404,7 @@ function dayView(s: GameState, full: boolean) {
     app().innerHTML = `<div class="day lk-stage" data-sheet="fit">
       <header class="lk-strip" aria-label="Day and current order"><div class="top">
         <span class="clock"></span><span class="grow"></span>
-        <span class="speed">${SPEEDS.map((_, i) => `<button data-sp="${i}">${'▸'.repeat(i + 1)}</button>`).join('')}</span>
+        <button data-a="wait" hidden>Until something happens</button>
         </div><div class="clock-rate"></div><div class="board"></div></header>
       <div class="navigation"><button data-a="residents">Residents</button><button data-a="orders">All orders</button><button data-a="building" aria-expanded="false">Enlarge building</button></div>
       <section class="scene lk-scene" aria-label="Building view"><div class="view-controls"><span class="view-caption soft"></span></div><div class="scene-drawing"></div></section>
@@ -387,11 +426,15 @@ function dayView(s: GameState, full: boolean) {
         app().querySelector<HTMLElement>('[data-a=building]')?.focus();
       }
     });
-    for (const b of root.querySelectorAll<HTMLElement>('[data-sp]'))
-      b.addEventListener('click', () => {
-        ui.speed = Number(b.dataset.sp);
-        render(false);
-      });
+    root.querySelector('[data-a=wait]')?.addEventListener('click', () => {
+      const { talking, inspecting } = pacingContext(s);
+      if (!canWait(s, talking, inspecting)) return;
+      untilSomethingHappens(s);
+      ui.acc = 0;
+      ui.readUntil = performance.now() + 8000;
+      save();
+      render(false);
+    });
     mountMenu(root.querySelector('.top'), s);
     for (const kind of ['orders', 'residents'] as const)
       root.querySelector(`[data-a=${kind}]`)?.addEventListener('click', () => {
@@ -413,11 +456,13 @@ function dayView(s: GameState, full: boolean) {
   const d = dayOf(s.minute);
   (root.querySelector('.clock') as HTMLElement).textContent =
     `${DAY_NAMES[d - 1]?.slice(0, 3)} ${clockOf(s.minute)}`;
-  for (const b of root.querySelectorAll<HTMLElement>('[data-sp]'))
-    b.classList.toggle('on', Number(b.dataset.sp) === ui.speed);
   const rate = clockPlayback(s);
-  (root.querySelector('.clock-rate') as HTMLElement).textContent =
-    `${rate.rate} min/s${rate.reason ? ` · ${rate.reason}` : ''}`;
+  (root.querySelector('.clock-rate') as HTMLElement).textContent = rate.reason;
+  (root.querySelector('[data-a=wait]') as HTMLButtonElement).hidden = !canWait(
+    s,
+    rate.reason.startsWith('Conversation'),
+    rate.reason.startsWith('Reading'),
+  );
   (root.querySelector('[data-a=orders]') as HTMLElement).textContent = `All orders (${openTasks(s).length})`;
   const log = root.querySelector('.journal') as HTMLElement;
   root.dataset.building = buildingExpanded ? 'full' : 'floor';
@@ -681,15 +726,16 @@ function journalPosition(el: HTMLElement | null) {
   };
 }
 
+function rememberJournalScroll(el: HTMLElement) {
+  if (el.clientHeight === 0) return;
+  const saved = journalPositions.get(el);
+  if (saved && el.scrollTop !== saved.top)
+    journalPositions.set(el, { position: journalPosition(el), top: el.scrollTop });
+}
+
 function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof journalPosition>) {
   if (!journalPositions.has(el)) {
-    el.addEventListener('scroll', () => {
-      if (el.clientHeight === 0) return;
-      const saved = journalPositions.get(el);
-      // Ignore our own scroll events, which may arrive after a font has reflowed.
-      if (saved && el.scrollTop !== saved.top)
-        journalPositions.set(el, { position: journalPosition(el), top: el.scrollTop });
-    });
+    el.addEventListener('scroll', () => rememberJournalScroll(el));
   }
   const lines = s.said.filter((x) => dayOf(x.at) === dayOf(s.minute) || x.kind === 'margin').slice(-40);
   const key = lines.map((x) => `${x.n}:${x.at}:${x.text}`).join('|');
@@ -1035,7 +1081,7 @@ function wireDoor(s: GameState, el: HTMLElement, who: Rid) {
   });
   on('[data-a="close"]', () => {
     ui.dismissed = `${s.k.at}:${who}`;
-    ui.sheetFor = null;
+    ui.sheetFor = who;
     ui.sheet = 'none';
     reset();
   });
@@ -1220,6 +1266,12 @@ export const _debug = {
     return ui.s;
   },
   send,
+  render: () => render(false),
+  advance: (n: number) => {
+    if (!ui.s) return;
+    for (let i = 0; i < n && ui.s.phase === 'day'; i++) step(ui.s);
+    render(false);
+  },
   step: (n: number) => {
     const s = ui.s;
     if (!s) return;
