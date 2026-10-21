@@ -45,6 +45,8 @@ import { isSaved, type Saved } from './save.ts';
 
 let stage: ReturnType<typeof phoneStage> | null = null;
 let buildingExpanded = false;
+// A reading preference for this page session only; never enters a notebook or run.
+let weekTally = false;
 
 const SAVE_KEY = 'stairwell:notebook';
 const SPEEDS = [3, 6, 12];
@@ -260,6 +262,16 @@ function mountMenu(target: Element | null, s: GameState | null) {
   const saved = s ? { game: GAME_VERSION, seed: s.seed, inputs: s.inputs, minute: s.minute } : null;
   const entry = gameMenu({
     hasRun: !!s,
+    tally: {
+      get enabled() {
+        return weekTally;
+      },
+      change: (enabled) => {
+        weekTally = enabled;
+        const tally = app().querySelector<HTMLElement>('[data-week-tally]');
+        if (tally) tally.hidden = !enabled;
+      },
+    },
     importRun,
     mornings: saved
       ? mornings(saved).map((m) => ({
@@ -1156,6 +1168,19 @@ function nightMargin(s: GameState, d: number): string {
   return 'Sleep. Bread at seven.';
 }
 
+/** Rıza's optional game reckoning uses only recorded work and the meeting's hands. */
+function weekTallyHtml(s: GameState): string {
+  const onTime = s.reports.reduce((n, day) => n + day.done, 0);
+  const late = s.reports.reduce((n, day) => n + day.late, 0);
+  const hands = s.meeting?.yes ?? 0;
+  const total = 2 * onTime + late + 5 * hands;
+  return `<section data-week-tally ${weekTally ? '' : 'hidden'} aria-label="Rıza’s week tally">
+    <h3>Rıza’s week tally: ${total}</h3>
+    <p>On-time jobs ${onTime} × 2 + late jobs ${late} × 1 + hands raised ${hands} × 5 = ${total}.</p>
+    <p class="hand soft">This game’s own reckoning, not a measure of people. “A little sum for the notebook.” — Rıza</p>
+  </section>`;
+}
+
 function sundayPage(s: GameState) {
   labScreen('ending');
   const m = s.meeting;
@@ -1177,6 +1202,7 @@ function sundayPage(s: GameState) {
     <p>Six days: <span class="money">₺${total}</span> in tips${m?.raise ? ', and the tea money goes up' : ''}. The tin: <span class="money">₺${s.k.money}</span>.</p>
     <p>${s.ring.answer === 'yes' ? 'Burak and Elif are engaged. ' : s.ring.answer === 'not yet' ? 'Elif asked Burak for time. ' : 'Burak still has the ring in his pocket. '}${s.catHome ? 'Pamuk sleeps on the step.' : ''}</p>
     <div class="margin hand">${m?.raise ? 'Not bad for a first week. They will want more next week.' : 'A first week is a first week. Next week they will know you better.'} <span class="soft">— R.</span></div>
+    ${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
     <p class="soft small">Week 2 is still being written. Your notebook is saved.</p>
     <div class="actions"><button class="primary" data-a="title">Close the notebook</button></div>

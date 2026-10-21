@@ -1039,3 +1039,55 @@ it('keeps submenu Back visibly framed and resident text clear of Close', async (
     await page.close();
   }
 });
+
+it.each(['honest', 'quiet'] as const)(
+  'keeps Rıza’s optional ending tally out of replay (%s)',
+  async (style) => {
+    const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+    try {
+      await page.clock.install();
+      await page.goto(url);
+      const s = playWeek(11, style);
+      const saved = { game: GAME_VERSION, seed: s.seed, inputs: s.inputs, minute: s.minute };
+      await page.evaluate(
+        (saved) => localStorage.setItem('stairwell:notebook', JSON.stringify(saved)),
+        saved,
+      );
+      await page.reload();
+      await page.locator('[data-a=continue]').click();
+      const tally = page.locator('[data-week-tally]');
+      expect(await tally.isVisible()).toBe(false);
+      const before = await page.evaluate('JSON.stringify(window.__st.s)');
+      await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+      const toggle = page.getByRole('checkbox', { name: 'Show Rıza’s week tally after Sunday’s vote' });
+      expect(await toggle.isChecked()).toBe(false);
+      await toggle.check();
+      const done = s.reports.reduce((n, d) => n + d.done, 0);
+      const late = s.reports.reduce((n, d) => n + d.late, 0);
+      const hands = s.meeting?.yes ?? 0;
+      expect(await tally.textContent()).toContain(
+        `On-time jobs ${done} × 2 + late jobs ${late} × 1 + hands raised ${hands} × 5 = ${done * 2 + late + hands * 5}`,
+      );
+      expect(await tally.getAttribute('hidden')).toBeNull();
+      await toggle.uncheck();
+      expect(await tally.getAttribute('hidden')).not.toBeNull();
+      await toggle.check();
+      expect(await page.evaluate('JSON.stringify(window.__st.s)')).toBe(before);
+      expect(await page.evaluate(() => localStorage.getItem('stairwell:notebook'))).toBe(
+        JSON.stringify(saved),
+      );
+      await page.reload();
+      await page.locator('[data-a=continue]').click();
+      expect(await tally.isVisible()).toBe(false);
+      await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+      await page.getByText('Turn back to a morning', { exact: true }).click();
+      await page.getByRole('button', { name: 'Tuesday morning', exact: true }).click();
+      await page.clock.runFor(100);
+      await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+      await toggle.check();
+      expect(await tally.count()).toBe(0);
+    } finally {
+      await page.close();
+    }
+  },
+);
