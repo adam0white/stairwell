@@ -401,8 +401,13 @@ it('keeps the mandatory opening short and preserves the original story on reques
     await page.goto(url);
     const opening = await page.locator('.title > p:not(.soft)').allTextContents();
     expect(opening.join(' ').trim().split(/\s+/).length).toBeLessThanOrEqual(28);
-    await page.getByText('More about the job', { exact: true }).click();
+    await page.getByRole('button', { name: 'More about the job', exact: true }).click();
     expect(await page.getByText(/Rıza Efendi kept the door/).isVisible()).toBe(true);
+    await page.keyboard.press('Escape');
+    expect(await page.locator('#job-info').isVisible()).toBe(false);
+    await page.getByRole('button', { name: 'More about the job', exact: true }).focus();
+    await page.keyboard.press('Space');
+    expect(await page.locator('#job-info').isVisible()).toBe(true);
   } finally {
     await page.close();
   }
@@ -470,7 +475,9 @@ it('keeps rewind and import inside a reachable Game menu for a completed noteboo
     await page.reload();
     await page.evaluate(() => document.fonts.ready);
     expect(await page.locator('.title input[type=file], .title [data-a=morning]').count()).toBe(0);
-    await page.getByText('More about the job', { exact: true }).click();
+    await page.getByRole('button', { name: 'More about the job', exact: true }).click();
+    if (await page.locator('#job-info').evaluate((el) => el.matches(':popover-open')))
+      await page.keyboard.press('Escape');
     await visibleInViewport(page, '.title .game-menu');
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
@@ -530,7 +537,7 @@ it.each([
     await visibleInViewport(page, '.verbs button, .who .x');
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     await page.getByRole('button', { name: 'Title page', exact: true }).click();
-    const box = await page.getByText('More about the job', { exact: true }).boundingBox();
+    const box = await page.getByRole('button', { name: 'More about the job', exact: true }).boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(44);
   } finally {
     await page.close();
@@ -1136,10 +1143,8 @@ it.each(['honest', 'quiet'] as const)(
       const tally = page.locator('[data-week-tally]');
       expect(await tally.isVisible()).toBe(false);
       const before = await page.evaluate('JSON.stringify(window.__st.s)');
-      await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-      const toggle = page.getByRole('checkbox', { name: 'Show Rıza’s week tally after Sunday’s vote' });
-      expect(await toggle.isChecked()).toBe(false);
-      await toggle.check();
+      const toggle = page.getByRole('button', { name: 'See tally', exact: true });
+      await toggle.click();
       const done = s.reports.reduce((n, d) => n + d.done, 0);
       const late = s.reports.reduce((n, d) => n + d.late, 0);
       const hands = s.meeting?.yes ?? 0;
@@ -1147,9 +1152,9 @@ it.each(['honest', 'quiet'] as const)(
         `On-time jobs ${done} × 2 + late jobs ${late} × 1 + hands raised ${hands} × 5 = ${done * 2 + late + hands * 5}`,
       );
       expect(await tally.getAttribute('hidden')).toBeNull();
-      await toggle.uncheck();
+      await toggle.click();
       expect(await tally.getAttribute('hidden')).not.toBeNull();
-      await toggle.check();
+      await toggle.click();
       expect(await page.evaluate('JSON.stringify(window.__st.s)')).toBe(before);
       expect(await page.evaluate(() => localStorage.getItem('stairwell:notebook'))).toBe(
         JSON.stringify(saved),
@@ -1162,7 +1167,10 @@ it.each(['honest', 'quiet'] as const)(
       await page.getByRole('button', { name: 'Tuesday morning', exact: true }).click();
       await page.clock.runFor(100);
       await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-      await toggle.check();
+      expect(
+        await page.getByRole('checkbox', { name: 'Show Rıza’s week tally after Sunday’s vote' }).count(),
+      ).toBe(0);
+      expect(await toggle.count()).toBe(0);
       expect(await tally.count()).toBe(0);
     } finally {
       await page.close();

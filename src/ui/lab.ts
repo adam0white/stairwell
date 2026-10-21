@@ -11,7 +11,6 @@ interface MenuOptions {
   mornings: { label: string; action: () => void }[];
   importRun: (file: File) => void;
   hasRun: boolean;
-  tally: { enabled: boolean; change: (enabled: boolean) => void };
 }
 
 export function compactRun(run: unknown): unknown {
@@ -45,13 +44,6 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
       });
       dialog.querySelector('h2')?.after(button);
     };
-    const tallyLabel = document.createElement('label');
-    const tally = document.createElement('input');
-    tally.type = 'checkbox';
-    tally.checked = options.tally.enabled;
-    tally.addEventListener('change', () => options.tally.change(tally.checked));
-    tallyLabel.append(tally, ' Show Rıza’s week tally after Sunday’s vote');
-    dialog.querySelector('h2')?.after(tallyLabel);
     const restore = document.createElement('div');
     if (options.mornings.length > 1) {
       const details = document.createElement('details');

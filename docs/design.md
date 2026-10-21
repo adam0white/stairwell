@@ -222,3 +222,6 @@ check, frozen replay and continuation checks, private owner replay evidence at
 360×690 touch, green CI, and a clean live release. Screenshots and private replay
 artifacts stay outside the repository. A builder's passing checks do not close
 the owner's pacing acceptance.
+
+## Owner information and tally update (2026-10-21)
+The title’s job background opens through a small information button and a native dismissible popover. Its prose is retained. The menu no longer has a tally preference. The Sunday ending always computes Rıza’s recorded-work tally, hidden until “See tally” is pressed. Automatic pacing, gameplay answer disclosures, simulation rules, saves and replay remain unchanged. Adam accepts feel.

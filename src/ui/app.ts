@@ -45,8 +45,6 @@ import { isSaved, type Saved } from './save.ts';
 
 let stage: ReturnType<typeof phoneStage> | null = null;
 let buildingExpanded = false;
-// A reading preference for this page session only; never enters a notebook or run.
-let weekTally = false;
 
 const SAVE_KEY = 'stairwell:notebook';
 const journalPositions = new WeakMap<
@@ -301,16 +299,6 @@ function mountMenu(target: Element | null, s: GameState | null) {
   const saved = s ? { game: GAME_VERSION, seed: s.seed, inputs: s.inputs, minute: s.minute } : null;
   const entry = gameMenu({
     hasRun: !!s,
-    tally: {
-      get enabled() {
-        return weekTally;
-      },
-      change: (enabled) => {
-        weekTally = enabled;
-        const tally = app().querySelector<HTMLElement>('[data-week-tally]');
-        if (tally) tally.hidden = !enabled;
-      },
-    },
     importRun,
     mornings: saved
       ? mornings(saved).map((m) => ({
@@ -357,11 +345,11 @@ function titlePage() {
       ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${DAY_NAMES[dayOf(savedState.minute) - 1]} · ${clockOf(savedState.minute)} · ${esc(savedState.k.walk ? `on the way to ${placeName(savedState.k.walk.to)}` : placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
       <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'A new notebook' : 'Begin on Monday'}</button>
     </div>
-    <details><summary>More about the job</summary>
+    <button class="info" aria-label="More about the job" popovertarget="job-info">i</button><div id="job-info" class="info-popover" popover="auto"><h2>More about the job</h2>
       <p>Rıza Efendi kept the door of Lale Apartmanı for forty years. Now he has gone back to his village, and the job is yours: bread, bins, parcels, five flights of stairs.</p>
       <p>He left you his notebook. Seven flats. They will tell you things.</p>
       <p class="hand soft">On Sunday they vote on your tea money. — R.</p>
-    </details>
+    </div>
     <p class="soft small">Six days and a Sunday. Nothing happens while you are away.</p>
     ${footer}
   </div>`;
@@ -1220,7 +1208,7 @@ function weekTallyHtml(s: GameState): string {
   const late = s.reports.reduce((n, day) => n + day.late, 0);
   const hands = s.meeting?.yes ?? 0;
   const total = 2 * onTime + late + 5 * hands;
-  return `<section data-week-tally ${weekTally ? '' : 'hidden'} aria-label="Rıza’s week tally">
+  return `<section data-week-tally id="week-tally" hidden aria-label="Rıza’s week tally">
     <h3>Rıza’s week tally: ${total}</h3>
     <p>On-time jobs ${onTime} × 2 + late jobs ${late} × 1 + hands raised ${hands} × 5 = ${total}.</p>
     <p class="hand soft">This game’s own reckoning, not a measure of people. “A little sum for the notebook.” — Rıza</p>
@@ -1248,13 +1236,21 @@ function sundayPage(s: GameState) {
     <p>Six days: <span class="money">₺${total}</span> in tips${m?.raise ? ', and the tea money goes up' : ''}. The tin: <span class="money">₺${s.k.money}</span>.</p>
     <p>${s.ring.answer === 'yes' ? 'Burak and Elif are engaged. ' : s.ring.answer === 'not yet' ? 'Elif asked Burak for time. ' : 'Burak still has the ring in his pocket. '}${s.catHome ? 'Pamuk sleeps on the step.' : ''}</p>
     <div class="margin hand">${m?.raise ? 'Not bad for a first week. They will want more next week.' : 'A first week is a first week. Next week they will know you better.'} <span class="soft">— R.</span></div>
-    ${weekTallyHtml(s)}
+    <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
     <p class="soft small">Week 2 is still being written. Your notebook is saved.</p>
     <div class="actions"><button class="primary" data-a="title">Close the notebook</button></div>
     ${footer}
   </div>`;
   mountMenu(app().querySelector('.page'), s);
+  app()
+    .querySelector('[data-a="see-tally"]')
+    ?.addEventListener('click', (event) => {
+      const tally = app().querySelector<HTMLElement>('[data-week-tally]');
+      if (!tally) return;
+      tally.hidden = !tally.hidden;
+      (event.currentTarget as HTMLElement).setAttribute('aria-expanded', String(!tally.hidden));
+    });
   app()
     .querySelector('[data-a="copy"]')
     ?.addEventListener('click', () => navigator.clipboard?.writeText(share).catch(() => {}));
