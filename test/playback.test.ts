@@ -65,3 +65,14 @@ describe('automatic pacing', () => {
     expect(playback(s, false, false).rate).toBe(6);
   });
 });
+
+it('keeps Automatic as default and applies the chosen travel speed without bypassing holds or orders', () => {
+  const s = newGame(11);
+  expect(playback(s, false, false, 12).rate).toBe(0.6);
+  act(s, { kind: 'go', to: 'bakery' });
+  expect(playback(s, false, false).rate).toBe(6);
+  expect(playback(s, false, false, 3).rate).toBe(3);
+  expect(playback(s, false, false, 12).rate).toBe(12);
+  expect(playback(s, true, false, 12).rate).toBe(0);
+  expect(playback(s, false, true, 12).rate).toBe(0);
+});

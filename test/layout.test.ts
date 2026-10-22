@@ -42,6 +42,7 @@ async function visibleInViewport(page: Page, selector: string) {
 }
 
 it.each([
+  [360, 690, 100],
   [360, 780, 150],
   [412, 891, 220],
   [1440, 900, 220],
@@ -67,6 +68,11 @@ it.each([
     });
     await page.clock.runFor(100);
     await page.locator('.verbs').waitFor();
+    expect(await page.locator('[data-speed]').inputValue()).toBe('auto');
+    expect((await page.locator('[data-speed]').boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    await page.locator('[data-speed]').selectOption('12');
+    expect(await page.locator('[data-speed]').inputValue()).toBe('12');
+    expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
     const journal = page.locator('.journal');
     expect((await journal.boundingBox())?.height).toBeGreaterThanOrEqual(minLogHeight);
     expect(await journal.locator(':scope > div').count()).toBeGreaterThan(4);

@@ -171,6 +171,12 @@ label input[type="file"] {
   font-size: 15px;
   min-height: 44px;
 }
+.speed select {
+  min-height: 44px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper-2);
+}
 .top .grow {
   flex: 1;
 }

@@ -46,6 +46,8 @@ import { isSaved, type Saved } from './save.ts';
 let stage: ReturnType<typeof phoneStage> | null = null;
 let buildingExpanded = false;
 
+const SPEEDS = [3, 6, 12];
+let selectedSpeed: number | null = null;
 const SAVE_KEY = 'stairwell:notebook';
 const journalPositions = new WeakMap<
   HTMLElement,
@@ -287,7 +289,7 @@ function pacingContext(s: GameState) {
 
 function clockPlayback(s: GameState) {
   const { talking, inspecting } = pacingContext(s);
-  return playback(s, talking, inspecting);
+  return playback(s, talking, inspecting, selectedSpeed);
 }
 
 // ---------- pages ----------
@@ -392,7 +394,7 @@ function dayView(s: GameState, full: boolean) {
     app().innerHTML = `<div class="day lk-stage" data-sheet="fit">
       <header class="lk-strip" aria-label="Day and current order"><div class="top">
         <span class="clock"></span><span class="grow"></span>
-        <button data-a="wait" hidden>Until something happens</button>
+        <span class="speed"><select aria-label="Clock speed" data-speed><option value="auto">Automatic</option><option value="3">Slow</option><option value="6">Steady</option><option value="12">Fast</option></select></span><button data-a="wait" hidden>Until something happens</button>
         </div><div class="clock-rate"></div><div class="board"></div></header>
       <div class="navigation"><button data-a="residents">Residents</button><button data-a="orders">All orders</button><button data-a="building" aria-expanded="false">Enlarge building</button></div>
       <section class="scene lk-scene" aria-label="Building view"><div class="view-controls"><span class="view-caption soft"></span></div><div class="scene-drawing"></div></section>
@@ -413,6 +415,14 @@ function dayView(s: GameState, full: boolean) {
         render(false);
         app().querySelector<HTMLElement>('[data-a=building]')?.focus();
       }
+    });
+    const speedSelect = root.querySelector<HTMLSelectElement>('[data-speed]')!;
+    speedSelect.value = selectedSpeed === null ? 'auto' : String(selectedSpeed);
+    speedSelect.addEventListener('change', () => {
+      const chosen = Number(speedSelect.value);
+      selectedSpeed = SPEEDS.includes(chosen) ? chosen : null;
+      ui.acc = 0;
+      render(false);
     });
     root.querySelector('[data-a=wait]')?.addEventListener('click', () => {
       const { talking, inspecting } = pacingContext(s);

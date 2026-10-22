@@ -207,7 +207,7 @@ Acceptance owner: the user. Game-feel acceptance remains separate.
 
 This direction supersedes the earlier speed-control and tactical-slowdown rules.
 The owner's [verbatim playtest](playtests/owner-2026-10-21.md) reports alternating
-stalls and missed conversations or late orders. Speed controls are removed.
+stalls and missed conversations or late orders. Automatic remains the default; restored clock controls are described below.
 Conversations and inspection hold time until closed. Orders run at 0.6 game
 minutes per real second; travel, work and empty stretches run at 6. Automatic
 stepping stops at newly arriving speech, people and orders and gives them reading
@@ -225,3 +225,5 @@ the owner's pacing acceptance.
 
 ## Owner information and tally update (2026-10-21)
 The title’s job background opens through a small information button and a native dismissible popover. Its prose is retained. The menu no longer has a tally preference. The Sunday ending always computes Rıza’s recorded-work tally, hidden until “See tally” is pressed. Automatic pacing, gameplay answer disclosures, simulation rules, saves and replay remain unchanged. Adam accepts feel.
+
+Clock controls offer Automatic (the default), Slow, Steady and Fast. Selected rates apply to travel and empty stretches. Orders, conversation, inspection and new speech retain their existing protection. Until something happens remains guarded. These are page-session preferences; saves and replay inputs are unchanged.
