@@ -405,7 +405,7 @@ it('keeps the mandatory opening short and preserves the original story on reques
   const page = await browser.newPage();
   try {
     await page.goto(url);
-    const opening = await page.locator('.title > p:not(.soft)').allTextContents();
+    const opening = await page.locator('.title > p:not(.soft):not(.lk-telemetry-notice)').allTextContents();
     expect(opening.join(' ').trim().split(/\s+/).length).toBeLessThanOrEqual(28);
     await page.getByRole('button', { name: 'More about the job', exact: true }).click();
     expect(await page.getByText(/Rıza Efendi kept the door/).isVisible()).toBe(true);

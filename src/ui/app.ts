@@ -4,7 +4,7 @@
  * input and at every page turn.
  */
 
-import { phoneStage } from '@adam0white/lab-kit';
+import { phoneStage, telemetryNotice } from '@adam0white/lab-kit';
 import {
   act,
   canReplay,
@@ -39,7 +39,7 @@ import {
   wordHint,
 } from '../sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
-import { gameMenu, labScreen } from './lab.ts';
+import { gameMenu, lab, labScreen } from './lab.ts';
 import { canWait, playback, untilSomethingHappens } from './playback.ts';
 import { isSaved, type Saved } from './save.ts';
 
@@ -86,6 +86,8 @@ const ui: Ui = {
   readUntil: 0,
 };
 
+const notice = telemetryNotice();
+if (notice) Object.assign(notice.style, { position: 'static', transform: 'none', margin: '0 auto' });
 const app = () => document.getElementById('app') as HTMLElement;
 const esc = (x: string) => x.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -95,10 +97,9 @@ function save() {
   const s = ui.s;
   if (!s) return;
   try {
-    localStorage.setItem(
-      SAVE_KEY,
-      JSON.stringify({ game: GAME_VERSION, seed: s.seed, inputs: s.inputs, minute: s.minute }),
-    );
+    const text = JSON.stringify({ game: GAME_VERSION, seed: s.seed, inputs: s.inputs, minute: s.minute });
+    localStorage.setItem(SAVE_KEY, text);
+    lab.captureSave(JSON.parse(text));
   } catch {}
 }
 
@@ -197,6 +198,19 @@ function begin(s: GameState) {
 }
 
 export function start() {
+  lab.trackRun(
+    () => {
+      try {
+        const saved = localStorage.getItem(SAVE_KEY);
+        if (saved) lab.captureSave(JSON.parse(saved));
+      } catch {}
+      return ui.s ? structuredClone({ ...runOf(), state: ui.s }) : null;
+    },
+    {
+      runKey: () => ui.s?.seed ?? 'title',
+      getLogs: () => ui.s?.said.slice(-40).map((line) => line.text) ?? [],
+    },
+  );
   titlePage();
   // Font swaps can reflow the log after render, without advancing the game clock.
   document.fonts.addEventListener('loadingdone', () => {
@@ -356,6 +370,10 @@ function titlePage() {
     ${footer}
   </div>`;
   const el = app();
+  if (notice && !notice.dataset.shown) {
+    el.querySelector('.page')?.prepend(notice);
+    notice.dataset.shown = '1';
+  }
   mountMenu(el.querySelector('.page'), savedState);
   el.querySelector('[data-a="continue"]')?.addEventListener('click', () => {
     if (saved) begin(replay(saved.seed, saved.inputs, saved.minute));
