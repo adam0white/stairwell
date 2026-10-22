@@ -41,98 +41,25 @@ async function visibleInViewport(page: Page, selector: string) {
   }
 }
 
-it.each([
-  [360, 690, 100],
-  [360, 780, 150],
-  [412, 891, 220],
-  [1440, 900, 220],
-])('gives the log room at %ix%i while keeping controls visible', async (width, height, minLogHeight) => {
-  const page = await browser.newPage({ viewport: { width, height } });
-  try {
-    await page.clock.install();
-    await page.goto(url);
-    await page.evaluate(() => document.fonts.ready);
-    // A public, deterministic notebook with a long day's history and a resident at the door.
-    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-    await page.locator('input[type=file]').setInputFiles({
-      name: 'layout.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from(
-        JSON.stringify({
-          game: GAME_VERSION,
-          seed: 7,
-          inputs: [{ kind: 'go', to: 'door:nermin', at: 420 }],
-          minute: 1254,
-        }),
-      ),
-    });
-    await page.clock.runFor(100);
-    await page.locator('.verbs').waitFor();
-    expect(await page.locator('[data-speed]').inputValue()).toBe('auto');
-    expect((await page.locator('[data-speed]').boundingBox())?.height).toBeGreaterThanOrEqual(44);
-    await page.locator('[data-speed]').selectOption('12');
-    expect(await page.locator('[data-speed]').inputValue()).toBe('12');
-    expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
-    const journal = page.locator('.journal');
-    expect((await journal.boundingBox())?.height).toBeGreaterThanOrEqual(minLogHeight);
-    expect(await journal.locator(':scope > div').count()).toBeGreaterThan(4);
-    await visibleInViewport(page, '.top button:visible, .scene, .board, .verbs button, .who .x');
-    const scroll = await journal.evaluate((el) => {
-      const atEnd = Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1;
-      el.scrollTop = 0;
-      const first = el.firstElementChild?.getBoundingClientRect();
-      return { atEnd, firstVisible: !!first && first.top >= el.getBoundingClientRect().top };
-    });
-    expect(scroll).toEqual({ atEnd: true, firstVisible: true });
-    // Reading earlier entries should not be interrupted by opening the notebook.
-    await openResidentsNotebook(page);
-    expect(await journal.evaluate((el) => el.scrollTop)).toBe(0);
-    await page.locator('.sheet [data-a=close]').click();
-    // A long notebook remains usable and keeps the newest log entry in view.
-    await journal.evaluate((el) => {
-      el.scrollTop = el.scrollHeight;
-    });
-    await openResidentsNotebook(page);
-    expect(
-      await journal.evaluate((el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1),
-    ).toBe(true);
-    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-    await visibleInViewport(page, '.lk-notebook button');
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    await page.getByRole('button', { name: 'Close', exact: true }).click();
-    await visibleInViewport(page, '.day');
-  } finally {
-    await page.close();
-  }
-});
-
-async function openResidentsNotebook(page: Page) {
-  await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-  await page.getByRole('button', { name: 'Read the residents’ notebook', exact: true }).click();
-  await page.locator('.sheet .nb').waitFor();
-}
-
-async function importNotebook(page: Page, minute = 440) {
+async function importNotebook(
+  page: Page,
+  minute = 440,
+  inputs: unknown[] = [{ kind: 'go', to: 'door:nermin', at: 420 }],
+  seed = 7,
+) {
+  page.setDefaultTimeout(5000);
   await page.clock.install();
   await page.goto(url);
-  await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-  await page.locator('input[type=file]').setInputFiles({
-    name: 'clarity.json',
-    mimeType: 'application/json',
-    buffer: Buffer.from(
-      JSON.stringify({
-        game: GAME_VERSION,
-        seed: 7,
-        inputs: [{ kind: 'go', to: 'door:nermin', at: 420 }],
-        minute,
-      }),
-    ),
+  await page.evaluate((save) => localStorage.setItem('stairwell:notebook', JSON.stringify(save)), {
+    game: GAME_VERSION,
+    seed,
+    inputs,
+    minute,
   });
-  await page.clock.runFor(100);
-  await page.locator('.journal').waitFor();
+  await page.reload();
+  await page.locator('[data-a=continue]').click();
   await page.evaluate(() => document.fonts.ready);
 }
-
 // Use the real simulation to append entries, then exercise incremental or full rendering.
 async function arrive(page: Page, count: number, full = false) {
   await page.evaluate(`import('/src/sim/game.ts').then(({act}) => {
@@ -154,6 +81,8 @@ it.each([
     const page = await browser.newPage({ viewport: { width, height } });
     try {
       await importNotebook(page, 1254);
+      if (await page.locator('.who [data-a=close]').isVisible())
+        await page.locator('.who [data-a=close]').click();
       await page.evaluate(() => document.fonts.ready);
       const journal = page.locator('.journal');
       expect(await journal.locator(':scope > div').count()).toBe(40);
@@ -195,6 +124,8 @@ it('falls back to the oldest surviving entry when the entry being read is remove
   const page = await browser.newPage({ viewport: { width: 360, height: 780 } });
   try {
     await importNotebook(page, 1254);
+    if (await page.locator('.who [data-a=close]').isVisible())
+      await page.locator('.who [data-a=close]').click();
     const journal = page.locator('.journal');
     const oldestSurvivor = await journal.evaluate((el) => {
       el.scrollTop = 7;
@@ -212,6 +143,8 @@ it('follows new entries at the newest end of a full log', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 780 } });
   try {
     await importNotebook(page, 1254);
+    if (await page.locator('.who [data-a=close]').isVisible())
+      await page.locator('.who [data-a=close]').click();
     const journal = page.locator('.journal');
     const newest = await journal.locator(':scope > div').last().textContent();
     await arrive(page, 3);
@@ -233,6 +166,8 @@ it.each(['newest', 'older', 'pending scroll'])(
     try {
       await page.route('https://fonts.googleapis.com/**', (route) => route.abort());
       await importNotebook(page, 1254);
+      if (await page.locator('.who [data-a=close]').isVisible())
+        await page.locator('.who [data-a=close]').click();
       await page.addStyleTag({ content: '.journal { font-family: "Journal test", monospace; }' });
       await page.evaluate('window.__st.render()');
       const journal = page.locator('.journal');
@@ -300,125 +235,6 @@ it.each(['newest', 'older', 'pending scroll'])(
   },
 );
 
-it('explains exhausted news beside Anything new and resets it on a new day', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-  try {
-    await importNotebook(page);
-    const news = page.locator('[data-a=news]');
-    expect(await news.isEnabled()).toBe(true);
-    await news.click();
-    expect(await news.isDisabled()).toBe(true);
-    expect(await news.textContent()).toContain('Already asked · ask tomorrow');
-    await visibleInViewport(page, '[data-a=news]');
-    await page.reload();
-    await page.locator('[data-a=continue]').click();
-    expect(await page.locator('[data-a=news]').textContent()).toContain('Already asked · ask tomorrow');
-    await importNotebook(page, 1254);
-    await page.locator('[data-a=news]').click();
-    await page.evaluate('window.__st.step(6)');
-    await page.locator('[data-a=next]').click();
-    await page.locator('.scene [data-go="door:nermin"]').click();
-    await page.clock.runFor(30_000);
-    expect(await page.locator('[data-a=news]').isEnabled()).toBe(true);
-    expect(await page.locator('[data-a=news]').textContent()).not.toContain('Already asked · ask tomorrow');
-  } finally {
-    await page.close();
-  }
-});
-
-it.each([
-  [360, 690],
-  [1280, 800],
-])('accents one full task instead of speed at %ix%i', async (width, height) => {
-  const page = await browser.newPage({ viewport: { width, height } });
-  try {
-    await page.clock.install();
-    await page.goto(url);
-    await page.locator('[data-a=new]').click();
-    expect(await page.locator('.task.current').count()).toBe(1);
-    expect(await page.locator('.task.current').textContent()).toContain('bakery');
-    await visibleInViewport(page, '.task.current');
-    const colors = await page.evaluate(() => ({
-      task: getComputedStyle(document.querySelector('.task.current') as Element).borderColor,
-      ink: getComputedStyle(document.body).color,
-    }));
-    expect(await page.locator('[data-sp]').count()).toBe(0);
-    expect(colors.task).not.toBe(colors.ink);
-    expect(await page.locator('.task.current').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-  } finally {
-    await page.close();
-  }
-});
-
-it('keeps download and send in one Game menu and resumes the saved day exactly', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-  try {
-    await importNotebook(page);
-    const before = await page.evaluate(() => localStorage.getItem('stairwell:notebook'));
-    await page.reload();
-    expect(await page.locator('[data-a=continue]').textContent()).toBe('Continue');
-    expect(await page.locator('[data-save-summary]').textContent()).toContain('Monday · 07:20 · flat 1');
-    await page.locator('[data-a=continue]').click();
-    expect(await page.evaluate(() => localStorage.getItem('stairwell:notebook'))).toBe(before);
-    expect(await page.getByRole('button', { name: 'Game menu', exact: true }).count()).toBe(1);
-    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-    const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
-    expect(await menu.getByRole('button', { name: 'Download this run', exact: true }).isVisible()).toBe(true);
-    expect(
-      await menu.getByRole('button', { name: 'Send this run to the notebook', exact: true }).isVisible(),
-    ).toBe(true);
-    const downloaded = page.waitForEvent('download');
-    await menu.getByRole('button', { name: 'Download this run', exact: true }).click();
-    const download = await downloaded;
-    const { readFile } = await import('node:fs/promises');
-    const run = JSON.parse(await readFile((await download.path()) as string, 'utf8'));
-    expect(run.seed).toBe(7);
-    expect(run.minute).toBe(440);
-    expect(run.inputs).toEqual(JSON.parse(before ?? '{}').inputs);
-    expect(run.state.day).toBe(1);
-    await menu.getByRole('button', { name: 'Send this run to the notebook', exact: true }).click();
-    const send = page.getByRole('dialog', { name: 'Send this run to the notebook', exact: true });
-    await send.waitFor();
-    expect(await page.getByRole('dialog').count()).toBe(1);
-    const compact = (await page.evaluate(
-      `import('/src/ui/lab.ts').then(({compactRun}) => compactRun(${JSON.stringify(run)}))`,
-    )) as typeof run;
-    expect(compact.state).toBeUndefined();
-    expect(fingerprint(replay(compact.seed, compact.inputs, compact.minute))).toBe(
-      fingerprint(replay(run.seed, run.inputs, run.minute)),
-    );
-    await page.clock.runFor(10_000);
-    expect(await page.locator('.clock').textContent()).toBe('Mon 07:20');
-    await page.keyboard.press('Escape');
-    expect(
-      await page
-        .getByRole('button', { name: 'Game menu', exact: true })
-        .evaluate((el) => el === document.activeElement),
-    ).toBe(true);
-    expect(await page.locator('#lab-controls').count()).toBe(0);
-  } finally {
-    await page.close();
-  }
-});
-
-it('keeps the mandatory opening short and preserves the original story on request', async () => {
-  const page = await browser.newPage();
-  try {
-    await page.goto(url);
-    const opening = await page.locator('.title > p:not(.soft):not(.lk-telemetry-notice)').allTextContents();
-    expect(opening.join(' ').trim().split(/\s+/).length).toBeLessThanOrEqual(28);
-    await page.getByRole('button', { name: 'More about the job', exact: true }).click();
-    expect(await page.getByText(/Rıza Efendi kept the door/).isVisible()).toBe(true);
-    await page.keyboard.press('Escape');
-    expect(await page.locator('#job-info').isVisible()).toBe(false);
-    await page.getByRole('button', { name: 'More about the job', exact: true }).focus();
-    await page.keyboard.press('Space');
-    expect(await page.locator('#job-info').isVisible()).toBe(true);
-  } finally {
-    await page.close();
-  }
-});
-
 it.each([
   { inputs: null },
   { inputs: [{ kind: 'bogus', at: 420 }] },
@@ -449,72 +265,25 @@ it.each([
   }
 });
 
-it('saves the current minute before returning through Game menu to Title page', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+it.each([
+  [360, 690],
+  [1280, 800],
+])('previews orders and destinations before walking at %ix%i', async (width, height) => {
+  const page = await browser.newPage({ viewport: { width, height }, hasTouch: true });
   try {
-    await importNotebook(page);
-    await page.evaluate('window.__st.advance(1)');
-    expect(await page.locator('.clock').textContent()).toBe('Mon 07:21');
-    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-    await page.getByRole('button', { name: 'Title page', exact: true }).click();
-    await page.locator('[data-save-summary]').waitFor();
-    expect(await page.locator('[data-save-summary]').textContent()).toContain('Monday · 07:21 · flat 1');
-    await page.locator('[data-a=continue]').click();
-    expect(await page.locator('.clock').textContent()).toBe('Mon 07:21');
-  } finally {
-    await page.close();
-  }
-});
-
-it('keeps rewind and import inside a reachable Game menu for a completed notebook', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-  try {
-    await page.clock.install();
-    await page.goto(url);
-    const s = playWeek(11, 'honest');
-    await page.evaluate((saved) => localStorage.setItem('stairwell:notebook', JSON.stringify(saved)), {
-      game: GAME_VERSION,
-      seed: s.seed,
-      inputs: s.inputs,
-      minute: s.minute,
-    });
-    await page.reload();
-    await page.evaluate(() => document.fonts.ready);
-    expect(await page.locator('.title input[type=file], .title [data-a=morning]').count()).toBe(0);
-    await page.getByRole('button', { name: 'More about the job', exact: true }).click();
-    if (await page.locator('#job-info').evaluate((el) => el.matches(':popover-open')))
-      await page.keyboard.press('Escape');
-    await visibleInViewport(page, '.title .game-menu');
-    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-    const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
-    await menu.getByText('Turn back to a morning', { exact: true }).click();
-    expect(await menu.getByRole('button', { name: 'Tuesday morning', exact: true }).isVisible()).toBe(true);
-    expect(await menu.locator('input[type=file]').count()).toBe(1);
-    await page.keyboard.press('Escape');
-    await visibleInViewport(page, '.title .game-menu');
-    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-    await menu.getByText('Turn back to a morning', { exact: true }).click();
-    await menu.getByRole('button', { name: 'Tuesday morning', exact: true }).click();
-    await page.clock.runFor(100);
-    await page.locator('.day').waitFor();
-    expect(await page.locator('.clock').textContent()).toBe('Tue 07:00');
-  } finally {
-    await page.close();
-  }
-});
-
-it('keeps every header control within 320px at doubled text size', async () => {
-  const page = await browser.newPage({ viewport: { width: 320, height: 690 } });
-  try {
-    await importNotebook(page);
-    await page.evaluate(() => {
-      const sizes = [...document.querySelectorAll('*')]
-        .filter((el): el is HTMLElement => el instanceof HTMLElement)
-        .map((el) => [el, Number.parseFloat(getComputedStyle(el).fontSize)] as const);
-      for (const [el, size] of sizes) el.style.fontSize = `${size * 2}px`;
-    });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
-    await visibleInViewport(page, '.top button:visible');
+    await importNotebook(page, 420, []);
+    const inputs = await page.evaluate('window.__st.s.inputs.length');
+    await page.getByRole('button', { name: /^Orders/ }).click();
+    await page.locator('.sheet .task').first().click();
+    expect(await page.evaluate('window.__st.s.inputs.length')).toBe(inputs);
+    expect(await page.locator('.action-bar').textContent()).toMatch(/min/);
+    expect(await page.locator('.action-bar').textContent()).toMatch(/there about|enough|legs|climb|stairs/);
+    await page.getByRole('button', { name: 'Go to the bakery', exact: true }).click();
+    expect(await page.evaluate('window.__st.s.inputs.at(-1)')).toMatchObject({ kind: 'go', to: 'bakery' });
+    expect(await page.evaluate('window.__st.s.inputs.length')).toBe(Number(inputs) + 1);
+    expect(await page.locator('.action-bar').textContent()).toContain('On the way to the bakery');
+    expect(await page.locator('.action-bar .primary').count()).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
   } finally {
     await page.close();
   }
@@ -523,48 +292,103 @@ it('keeps every header control within 320px at doubled text size', async () => {
 it.each([
   [360, 690],
   [1280, 800],
-])('fits conversation responses and 44px standalone targets at %ix%i', async (width, height) => {
+])('holds reading and conversation with reachable actions at %ix%i', async (width, height) => {
   const page = await browser.newPage({ viewport: { width, height } });
   try {
     await importNotebook(page);
-    await page.locator('[data-a=news]').click();
-    await visibleInViewport(page, '.verbs button, .who .x');
-    for (const control of await page.locator('.top button:visible, .task, .verbs button, .who .x').all()) {
-      const box = await control.boundingBox();
-      expect(box?.width).toBeGreaterThanOrEqual(44);
-      expect(box?.height).toBeGreaterThanOrEqual(44);
-    }
-    await page.locator('[data-a=sit]').click();
-    await page.clock.runFor(25000);
-    expect(await page.locator('[data-a=sit]').isDisabled()).toBe(true);
-    expect(await page.locator('[data-a=sit]').textContent()).toContain(
-      'Sat together today · return tomorrow',
-    );
-    await visibleInViewport(page, '.verbs button, .who .x');
-    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-    await page.getByRole('button', { name: 'Title page', exact: true }).click();
-    const box = await page.getByRole('button', { name: 'More about the job', exact: true }).boundingBox();
-    expect(box?.height).toBeGreaterThanOrEqual(44);
+    await visibleInViewport(page, '.verbs button');
+    expect(await page.locator('.verbs button').count()).toBe(4);
+    for (const b of await page.locator('.verbs button').all())
+      expect((await b.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    const before = await page.evaluate('window.__st.s.minute');
+    await page.clock.runFor(3100);
+    expect(await page.evaluate('window.__st.s.minute')).toBe(before);
+    expect(await page.locator('.clock-rate').textContent()).toContain('is talking · time waits');
+    await page.getByRole('button', { name: 'Residents', exact: true }).click();
+    await page.clock.runFor(3100);
+    expect(await page.evaluate('window.__st.s.minute')).toBe(before);
+    expect(await page.locator('.clock-rate').textContent()).toContain('Reading · time waits');
+    await page.locator('.resident-list button').first().click();
+    expect(await page.evaluate('window.__st.s.minute')).toBe(before);
+    expect(await page.locator('.action-bar').textContent()).toContain('min');
   } finally {
     await page.close();
   }
 });
 
-async function load(page: Page, inputs: unknown[] = [], minute = 420) {
-  page.setDefaultTimeout(5000);
-  page.setDefaultNavigationTimeout(30000);
-  await page.clock.install();
-  await page.goto(url);
-  await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-  await page.locator('input[type=file]').setInputFiles({
-    name: 'clarity.json',
-    mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify({ game: GAME_VERSION, seed: 7, inputs, minute })),
-  });
-  await page.locator('.day').waitFor();
-  await page.evaluate(() => document.fonts.ready);
-}
-async function target(page: Page, selector: string) {
+it('keeps Tell addressed to the departed person and pins Back and invent', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page, 560, [
+      { kind: 'go', to: 'door:derya', at: 420 },
+      { kind: 'knock', who: 'derya', at: 560 },
+    ]);
+    await page.locator('[data-a=tell]').click();
+    await visibleInViewport(page, '.action-bar [data-a=invent], .action-bar [data-a=back]');
+    await page.evaluate('window.__st.advance(10)');
+    expect(await page.locator('.sheet .who').textContent()).toContain('Derya');
+    expect(await page.locator('.availability').textContent()).toContain('back to sleep');
+    for (const b of await page.locator('[data-tell]').all()) expect(await b.isDisabled()).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([
+  [360, 690],
+  [1280, 800],
+])('keeps all building destinations visible and at least 44px at %ix%i', async (width, height) => {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await importNotebook(page, 420, []);
+    for (const hit of await page.locator('.scene .hit').all()) {
+      const box = await hit.boundingBox();
+      expect(box?.height).toBeGreaterThanOrEqual(44);
+      expect(box?.width).toBeGreaterThanOrEqual(44);
+    }
+    const boxes = await page
+      .locator('.scene .hit')
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+    for (const [i, a] of boxes.entries())
+      for (const b of boxes.slice(i + 1)) {
+        expect(
+          Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+            Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5,
+        ).toBe(false);
+      }
+    expect(await page.locator('.topbar .info').count()).toBe(1);
+    expect(await page.getByRole('button', { name: 'Game menu', exact: true }).count()).toBe(1);
+    await page.locator('.scene [data-go="door:tarik"]').click();
+    expect(await page.evaluate('window.__st.s.inputs.length')).toBe(0);
+    expect(await page.locator('.action-bar').textContent()).toContain('min');
+    expect(await page.locator('select').count()).toBe(0);
+  } finally {
+    await page.close();
+  }
+});
+
+it('keeps the optional tally outside replay state', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    const s = playWeek(11, 'honest');
+    await importNotebook(page, s.minute, s.inputs, s.seed);
+    const tally = page.locator('[data-week-tally]');
+    expect(await tally.isVisible()).toBe(false);
+    const before = await page.evaluate('JSON.stringify(window.__st.s)');
+    await page.getByRole('button', { name: 'See the tally', exact: true }).click();
+    expect(await tally.isVisible()).toBe(true);
+    expect(await page.evaluate('JSON.stringify(window.__st.s)')).toBe(before);
+    await visibleInViewport(page, '.action-bar button');
+    expect(await page.getByRole('button', { name: 'Send word', exact: true }).count()).toBe(1);
+    expect(await page.getByRole('button', { name: 'Download this run', exact: true }).count()).toBe(1);
+    expect(fingerprint(replay(s.seed, s.inputs, s.minute))).toBe(fingerprint(s));
+  } finally {
+    await page.close();
+  }
+});
+
+async function actionTarget(page: Page, selector: string) {
   const control = page.locator(selector);
   const box = await control.boundingBox();
   expect(box).not.toBeNull();
@@ -586,257 +410,13 @@ async function target(page: Page, selector: string) {
   return box;
 }
 
-it.each([
-  [360, 690],
-  [1280, 800],
-])('offers complete orders and readable resident targets at %ix%i', async (width, height) => {
-  const page = await browser.newPage({
-    viewport: { width, height },
-    hasTouch: true,
-    isMobile: width === 360,
-  });
-  try {
-    await load(page);
-    await page.getByRole('button', { name: /All orders/ }).click();
-    const tasks = page.locator('.sheet .task');
-    expect(await tasks.count()).toBe(7);
-    for (const task of await tasks.all()) {
-      expect(await task.textContent()).toMatch(/by \d\d:\d\d/);
-      expect(
-        await task.evaluate((el) => {
-          const css = getComputedStyle(el);
-          return (
-            css.whiteSpace !== 'nowrap' && css.textOverflow !== 'ellipsis' && el.scrollWidth <= el.clientWidth
-          );
-        }),
-      ).toBe(true);
-    }
-    await page.locator('.sheet [data-a=close]').click();
-    await page.getByRole('button', { name: 'Residents', exact: true }).click();
-    expect(await page.locator('.resident-list [data-go]').count()).toBe(7);
-    const derya = '.resident-list [data-go="door:derya"]';
-    const box = await target(page, derya);
-    expect(await page.locator(derya).textContent()).toContain('Derya');
-    expect(
-      await page.locator(derya).evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize)),
-    ).toBeGreaterThanOrEqual(17);
-    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
-    expect(await page.locator('.sheet').textContent()).toContain('On your way to flat 5');
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-  } finally {
-    await page.close();
-  }
-});
-
-it.each([
-  [360, 690],
-  [1280, 800],
-])('keeps Derya actions in place when she returns to sleep at %ix%i', async (width, height) => {
-  const page = await browser.newPage({
-    viewport: { width, height },
-    hasTouch: true,
-    isMobile: width === 360,
-  });
-  try {
-    await load(
-      page,
-      [
-        { kind: 'go', to: 'bakery', at: 420 },
-        { kind: 'go', to: 'door:nermin', at: 440 },
-        { kind: 'go', to: 'door:derya', at: 460 },
-        { kind: 'knock', who: 'derya', at: 560 },
-      ],
-      560,
-    );
-    const sit = page.locator('[data-a=sit]');
-    const before = await target(page, '[data-a=sit]');
-    const node = await sit.elementHandle();
-    await page.locator('[data-a=news]').click();
-    const afterNews = await target(page, '[data-a=sit]');
-    expect(afterNews.y).toBeCloseTo(before.y, 0);
-    await page.evaluate('window.__st.advance(10)');
-    expect(await page.locator('.who').textContent()).toContain('Derya');
-    expect(await page.locator('.sheet').textContent()).toContain('back to sleep');
-    expect(await sit.isDisabled()).toBe(true);
-    expect(await sit.evaluate((el, old) => el === old, node)).toBe(true);
-    const afterSleep = await target(page, '[data-a=sit]');
-    expect(afterSleep.y).toBeCloseTo(before.y, 0);
-    const inputs = await page.evaluate(() => localStorage.getItem('stairwell:notebook'));
-    await page.touchscreen.tap(before.x + before.width / 2, before.y + before.height / 2);
-    expect(await page.evaluate(() => localStorage.getItem('stairwell:notebook'))).toBe(inputs);
-    expect(await page.locator('.sheet [data-go]').count()).toBe(0);
-    await page.locator('.sheet [data-a=close]').click();
-    expect(await page.locator('.sheet [data-go="door:sevim"]').count()).toBe(1);
-  } finally {
-    await page.close();
-  }
-});
-
-it('holds a conversation until Close and resumes travel at 360×690', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
-  try {
-    await importNotebook(page);
-    const before = await page.locator('.clock').textContent();
-    await page.locator('[data-a=news]').click();
-    await page.clock.runFor(60_000);
-    expect(await page.locator('.clock').textContent()).toBe(before);
-    expect(await page.locator('.clock-rate').textContent()).toBe('Conversation · time waits');
-    await page.locator('.who [data-a=close]').click();
-    await page.locator('.scene [data-go="bakery"]').click();
-    await page.clock.runFor(2000);
-    expect(await page.locator('.clock').textContent()).not.toBe(before);
-  } finally {
-    await page.close();
-  }
-});
-
-it('starts travel immediately when the player leaves a fresh answer', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-  try {
-    await importNotebook(page);
-    await page.locator('[data-a=news]').click();
-    const before = await page.locator('.clock').textContent();
-    await page.locator('.who [data-a=close]').click();
-    await page.locator('.scene [data-go="bakery"]').click();
-    await page.clock.runFor(2000);
-    expect(await page.locator('.clock').textContent()).not.toBe(before);
-  } finally {
-    await page.close();
-  }
-});
-
-it('closing the second person on the step keeps routes open', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-  try {
-    await load(page);
-    await page.evaluate(() => {
-      const debug = (window as unknown as { __st: { s: GameState; render: () => void } }).__st;
-      debug.s.k.at = 'step';
-      for (const r of debug.s.residents) r.where = r.id === 'nermin' || r.id === 'sevim' ? 'step' : 'home';
-      debug.render();
-    });
-    await page.locator('[data-face=sevim]').click();
-    await page.locator('.who [data-a=close]').click();
-    expect(await page.locator('[data-a=reopen]').textContent()).toContain('Sevim');
-    expect(await page.locator('.clock-rate').textContent()).toBe('Orders need you');
-    await page.clock.runFor(2000);
-    expect(await page.locator('[data-a=reopen]').isVisible()).toBe(true);
-  } finally {
-    await page.close();
-  }
-});
-
-it('offers one wait button only in an empty stretch and saves its first event', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
-  try {
-    await load(page);
-    await page.evaluate(() => {
-      const debug = (window as unknown as { __st: { s: GameState; render: () => void } }).__st;
-      const s = debug.s;
-      for (const task of s.tasks) if (task.from <= s.minute) task.done = s.minute;
-      debug.render();
-    });
-    const wait = page.getByRole('button', { name: 'Until something happens', exact: true });
-    expect(await wait.count()).toBe(1);
-    await target(page, '[data-a=wait]');
-    const before = await page.evaluate<number>('window.__st.s.minute');
-    await wait.click();
-    expect(await page.evaluate('window.__st.s.minute')).toBeGreaterThan(before);
-    const atEvent = await page.evaluate('window.__st.s.minute');
-    await page.clock.runFor(4000);
-    expect(await page.evaluate('window.__st.s.minute')).toBe(atEvent);
-    expect(await page.evaluate('JSON.parse(localStorage.getItem("stairwell:notebook")).minute')).toBe(
-      atEvent,
-    );
-    await page.getByRole('button', { name: /All orders/ }).click();
-    expect(await wait.isVisible()).toBe(false);
-  } finally {
-    await page.close();
-  }
-});
-
-it('automatically protects orders and inspection at 360×690', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
-  try {
-    await load(page);
-    expect(await page.locator('[data-sp]').count()).toBe(0);
-    expect(await page.locator('.clock-rate').textContent()).toBe('Orders need you');
-    expect(await page.locator('[data-a=wait]').isVisible()).toBe(false);
-    await page.getByRole('button', { name: /All orders/ }).click();
-    const before = await page.locator('.clock').textContent();
-    await page.clock.runFor(30_000);
-    expect(await page.locator('.clock').textContent()).toBe(before);
-    expect(await page.locator('.clock-rate').textContent()).toBe('Reading · time waits');
-    await page.locator('.sheet [data-a=close]').click();
-    expect(await page.locator('.clock-rate').textContent()).toBe('Orders need you');
-    await page.clock.runFor(2000);
-    expect(await page.locator('.clock').textContent()).not.toBe(before);
-    await visibleInViewport(page, '.clock-rate, .task.current');
-  } finally {
-    await page.close();
-  }
-});
-
-it.each(['Residents', 'All orders'])('preserves focused %s controls while time moves', async (label) => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
-  try {
-    await load(page);
-    await page
-      .getByRole('button', {
-        name: label === 'Residents' ? label : /All orders/,
-        exact: label === 'Residents',
-      })
-      .click();
-    const row = page.locator('.directory-items button').first();
-    await row.focus();
-    const node = await row.elementHandle();
-    await page.clock.runFor(4000);
-    expect(await row.evaluate((el, old) => el === old && el === document.activeElement, node)).toBe(true);
-  } finally {
-    await page.close();
-  }
-});
-
-it('selects Derya by name when two residents share the step', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
-  try {
-    await load(page);
-    await page.evaluate(() => {
-      const s = (window as unknown as { __st: { s: GameState } }).__st.s;
-      s.k.at = 'step';
-      for (const id of ['nermin', 'derya']) {
-        const r = s.residents.find((r) => r.id === id);
-        if (!r) throw new Error('Missing resident');
-        r.where = 'step';
-        r.until = 700;
-      }
-    });
-    await page.getByRole('button', { name: 'Residents', exact: true }).click();
-    await page.locator('[data-resident=derya]').click();
-    expect(await page.locator('.who').textContent()).toContain('Derya');
-    expect(await page.locator('.sheet').getAttribute('class')).toContain('conversation');
-    await page.locator('[data-a=news]').click();
-    expect(await page.locator('.door-context').textContent()).toContain(
-      'Long night. Two admissions at four.',
-    );
-    const saved = JSON.parse((await page.evaluate(() => localStorage.getItem('stairwell:notebook'))) ?? '{}');
-    expect(saved.inputs.at(-1)).toMatchObject({ kind: 'news', who: 'derya' });
-  } finally {
-    await page.close();
-  }
-});
-
 it('keeps Tell choices and focus stable when Derya returns to sleep', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
   try {
-    await load(
-      page,
-      [
-        { kind: 'go', to: 'door:derya', at: 420 },
-        { kind: 'knock', who: 'derya', at: 560 },
-      ],
-      560,
-    );
+    await importNotebook(page, 560, [
+      { kind: 'go', to: 'door:derya', at: 420 },
+      { kind: 'knock', who: 'derya', at: 560 },
+    ]);
     await page.locator('[data-a=tell]').click();
     const choice = page.locator('[data-tell]').first();
     await choice.focus();
@@ -860,8 +440,8 @@ it.each([
 ])('anchors actions through changing speech at %ix%i', async (width, height) => {
   const page = await browser.newPage({ viewport: { width, height }, hasTouch: true });
   try {
-    await load(page, [{ kind: 'go', to: 'door:nermin', at: 420 }], 440);
-    const before = await target(page, '[data-a=sit]');
+    await importNotebook(page);
+    const before = await actionTarget(page, '[data-a=sit]');
     const node = await page.locator('[data-a=sit]').elementHandle();
     // Stress the presentation with incoming speech, then its expiry, without changing game rules.
     for (const text of ['A long answer. '.repeat(40), '']) {
@@ -871,7 +451,7 @@ it.each([
         if (text) s.said.push({ at: s.minute, who: 'nermin', kind: 'voice', text, n: s.lineNo++ });
       }, text);
       await page.evaluate('window.__st.render()');
-      const after = await target(page, '[data-a=sit]');
+      const after = await actionTarget(page, '[data-a=sit]');
       expect(after.y).toBeCloseTo(before.y, 0);
       expect(await page.locator('[data-a=sit]').evaluate((el, old) => el === old, node)).toBe(true);
     }
@@ -883,303 +463,123 @@ it.each([
 it.each([
   [360, 690],
   [1280, 800],
-  [1920, 1080],
-])('enlarges the building with readable flat targets at %ix%i', async (width, height) => {
-  const page = await browser.newPage({ viewport: { width, height }, hasTouch: true });
+])('holds the clock for information and menu, with shelf-only restart at %ix%i', async (width, height) => {
+  const page = await browser.newPage({ viewport: { width, height } });
   try {
-    await importNotebook(page, 1254);
-    const journal = page.locator('.journal');
-    expect((await journal.boundingBox())?.height).toBeGreaterThanOrEqual(width < 900 ? 110 : 220);
-    if (width < 900) {
-      const before = await journal.evaluate((el) => {
-        el.scrollTop = 20;
-        return el.scrollTop;
-      });
-      await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
-      await visibleInViewport(page, '.top button:visible, .board, .scene');
-      expect(await page.locator('.sheet').isVisible()).toBe(false);
-      for (const door of await page.locator('.scene .door .hit').all()) {
-        const box = await door.boundingBox();
-        expect(box?.width).toBeGreaterThanOrEqual(44);
-        expect(box?.height).toBeGreaterThanOrEqual(44);
-      }
-      await page.getByRole('button', { name: 'Back to journal', exact: true }).click();
-      expect(await journal.evaluate((el) => el.scrollTop)).toBe(before);
-      await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
-      await page.locator('.scene [data-go="door:derya"]').click();
-      expect(await page.getByRole('button', { name: 'Enlarge building', exact: true }).isVisible()).toBe(
-        true,
-      );
-      expect(await page.locator('.sheet').isVisible()).toBe(true);
-    } else {
-      const scene = await page.locator('.scene').boundingBox();
-      const log = await journal.boundingBox();
-      expect(scene?.width).toBeGreaterThan(width * 0.5);
-      expect(scene?.height).toBeGreaterThan(height * 0.65);
-      expect(log?.x).toBeGreaterThanOrEqual((scene?.x ?? 0) + (scene?.width ?? 0));
-      for (const door of await page.locator('.scene .door .hit').all()) {
-        const box = await door.boundingBox();
-        expect(box?.height).toBeGreaterThanOrEqual(44);
-      }
-    }
-    expect(await page.locator('.lk-stage').count()).toBe(1);
-    expect(await page.locator('.lk-strip .board').count()).toBe(1);
-    expect(await page.locator('.lk-sheet').count()).toBe(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-  } finally {
-    await page.close();
-  }
-});
-
-it('preserves an expanded answer while time moves and exits phone zoom on desktop', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-  try {
-    await importNotebook(page);
-    await page.evaluate(() => {
-      const s = (window as unknown as { __st: { s: GameState } }).__st.s;
-      s.said.push({
-        at: s.minute,
-        who: 'nermin',
-        kind: 'voice',
-        text: 'A long answer. '.repeat(30),
-        n: s.lineNo++,
-      });
-    });
-    await page.evaluate('window.__st.render()');
-    await page.getByText('Read Nermin’s full answer', { exact: true }).click();
-    await page.clock.runFor(4000);
-    expect(await page.locator('.door-context details').getAttribute('open')).not.toBeNull();
-    await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.clock.runFor(100);
-    expect(await page.locator('.day').getAttribute('data-building')).toBe('floor');
-    expect(await page.locator('.journal').isVisible()).toBe(true);
-  } finally {
-    await page.close();
-  }
-});
-
-it('keeps the selected flat at full phone width and restores reading through zoom updates', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-  try {
-    await importNotebook(page, 1254);
-    const door = page.locator('.scene [data-go="door:nermin"] .hit');
-    const box = await door.boundingBox();
-    expect(box?.height).toBeGreaterThanOrEqual(44);
-    const label = page.locator('.scene [data-go="door:nermin"] .lbl.hand');
-    // SVG text scales with its viewBox; assert the rendered text, not just CSS font-size.
-    expect((await label.boundingBox())?.height).toBeGreaterThanOrEqual(17);
-    const journal = page.locator('.journal');
-    const before = await journal.evaluate((el) => {
-      const row = el.children[10] as HTMLElement;
-      el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top + 7;
-      return {
-        n: row.getAttribute('data-n'),
-        offset: row.getBoundingClientRect().top - el.getBoundingClientRect().top,
-      };
-    });
-    await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
-    await arrive(page, 3);
-    await page.evaluate(() => document.fonts.dispatchEvent(new Event('loadingdone')));
+    await importNotebook(page, 420, []);
+    const before = await page.evaluate('window.__st.s.minute');
+    await page.getByRole('button', { name: 'Information', exact: true }).click();
+    const bar = await page.locator('.topbar').boundingBox();
+    expect((await page.locator('#game-info').boundingBox())?.y).toBeGreaterThanOrEqual(
+      (bar?.y ?? 0) + (bar?.height ?? 0),
+    );
+    await page.clock.runFor(3100);
+    expect(await page.evaluate('window.__st.s.minute')).toBe(before);
     await page.keyboard.press('Escape');
-    const after = await journal.evaluate((el, n) => {
-      const row = el.querySelector(`[data-n="${n}"]`);
-      return row ? row.getBoundingClientRect().top - el.getBoundingClientRect().top : null;
-    }, before.n);
-    expect(Math.abs((after ?? 10000) - before.offset)).toBeLessThanOrEqual(1);
+    expect(await page.locator('#game-info').isVisible()).toBe(false);
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    await page.clock.runFor(3100);
+    expect(await page.evaluate('window.__st.s.minute')).toBe(before);
+    const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
+    expect(await menu.locator('input[type=file]').count()).toBe(0);
+    expect(await menu.getByText('Download this run', { exact: true }).count()).toBe(0);
+    expect(await menu.getByRole('button').last().textContent()).toBe('Back to the stairs');
     expect(
-      await page
-        .getByRole('button', { name: 'Enlarge building', exact: true })
-        .evaluate((el) => el === document.activeElement),
-    ).toBe(true);
+      await menu.getByRole('button', { name: 'Automatic', exact: true }).getAttribute('aria-pressed'),
+    ).toBe('true');
+    await menu.getByRole('button', { name: 'Fast', exact: true }).click();
+    expect(await menu.getByRole('button', { name: 'Fast', exact: true }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    await menu.getByRole('button', { name: 'To the title page', exact: true }).click();
+    await page.locator('[data-a=new]').click();
+    expect(await page.getByText('The old notebook will be replaced.', { exact: false }).isVisible()).toBe(
+      true,
+    );
+    await page.locator('[data-a=no-new]').click();
+    await page.locator('[data-a=other]').click();
+    expect(await page.getByText('Load a playtest run', { exact: false }).isVisible()).toBe(true);
   } finally {
     await page.close();
   }
 });
 
-it.each(['Residents', 'All orders', 'notebook'])(
-  'opens %s from the enlarged phone building',
-  async (kind) => {
-    const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-    try {
-      await importNotebook(page);
-      await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
-      if (kind === 'notebook') await openResidentsNotebook(page);
-      else
-        await page
-          .getByRole('button', {
-            name: kind === 'All orders' ? /All orders/ : kind,
-            exact: kind !== 'All orders',
-          })
-          .click();
-      expect(await page.locator('.sheet').isVisible()).toBe(true);
-      expect(await page.locator('.day').getAttribute('data-building')).toBe('floor');
-      expect(
-        await page.locator('.sheet [data-a=close]').evaluate((el) => el === document.activeElement),
-      ).toBe(true);
-    } finally {
-      await page.close();
-    }
-  },
-);
+it('offers Skip only for an empty stretch and stops at its first event', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page, 420, []);
+    await page.evaluate(() => {
+      const debug = (window as unknown as { __st: { s: GameState; render: () => void } }).__st;
+      for (const task of debug.s.tasks) if (task.from <= debug.s.minute) task.done = debug.s.minute;
+      debug.render();
+    });
+    const skip = page.getByRole('button', { name: 'Skip to the next event', exact: true });
+    expect(await skip.textContent()).toBe('Skip ⏩');
+    const before = await page.evaluate('({minute:window.__st.s.minute,line:window.__st.s.lineNo})');
+    await skip.click();
+    const after = (await page.evaluate('({minute:window.__st.s.minute,line:window.__st.s.lineNo})')) as {
+      minute: number;
+      line: number;
+    };
+    expect(after.minute).toBeGreaterThan((before as { minute: number }).minute);
+    expect(await page.evaluate('JSON.parse(localStorage.getItem("stairwell:notebook")).minute')).toBe(
+      after.minute,
+    );
+    await page.getByRole('button', { name: /^Orders/ }).click();
+    expect(await skip.count()).toBe(0);
+  } finally {
+    await page.close();
+  }
+});
 
-it.each([150, 225, 560])('keeps %i-character speech clear of the response controls', async (length) => {
+it('shows lateness before an order is committed', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page, 420, []);
+    await page.evaluate(() => {
+      const d = (window as unknown as { __st: { s: GameState; render: () => void } }).__st;
+      for (const t of d.s.tasks) if (t.from <= d.s.minute && !t.done) t.by = d.s.minute + 1;
+      d.render();
+    });
+    await page.getByRole('button', { name: /^Orders/ }).click();
+    await page.locator('.sheet .task').first().click();
+    expect(await page.locator('.trip-line').textContent()).toContain('late by about');
+    expect(await page.evaluate('window.__st.s.inputs.length')).toBe(0);
+  } finally {
+    await page.close();
+  }
+});
+
+it('restores pinned verbs when returning from an order preview to a person', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
     await importNotebook(page);
-    await page.evaluate((length) => {
-      const s = (window as unknown as { __st: { s: GameState } }).__st.s;
-      s.said.push({
-        at: s.minute,
-        who: 'nermin',
-        kind: 'voice',
-        text: 'A long answer. '.repeat(50).slice(0, length),
-        n: s.lineNo++,
-      });
-    }, length);
-    await page.evaluate('window.__st.render()');
-    if (length > 240) {
-      await page.getByText('Read Nermin’s full answer', { exact: true }).click();
-      await page.locator('.door-context').evaluate((el) => {
-        el.scrollTop = el.scrollHeight;
-      });
-      expect(
-        await page
-          .locator('.door-context')
-          .evaluate((el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) <= 1),
-      ).toBe(true);
-    }
-    await visibleInViewport(page, '.verbs button, .who .x');
-    expect(
-      await page.locator('.door-context').evaluate((el) => {
-        const actions = el.nextElementSibling?.getBoundingClientRect();
-        return !!actions && el.getBoundingClientRect().bottom <= actions.top;
-      }),
-    ).toBe(true);
+    await page.getByRole('button', { name: /^Orders/ }).click();
+    await page.locator('.sheet .task').first().click();
+    await page.locator('[data-tab=none]').click();
+    expect(await page.locator('.action-bar .verbs button').count()).toBe(4);
+    await visibleInViewport(page, '.action-bar .verbs button');
   } finally {
     await page.close();
   }
 });
 
-it('keeps Tell and invent Back controls outside their scrolling choices', async () => {
+it('includes a carried deadline when selecting its flat directly', async () => {
   const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
   try {
-    await importNotebook(page);
-    await page.locator('[data-a=news]').click();
-    await page.locator('[data-a=tell]').click();
-    await visibleInViewport(page, '.sheet [data-a=back], .sheet [data-a=invent]');
-    expect(await page.locator('.sheet > .lk-sheet-body').count()).toBe(1);
-    await page.locator('.sheet [data-a=invent]').click();
-    await visibleInViewport(page, '.sheet [data-a=back]');
-    expect(
-      await page.locator('.sheet > .lk-commit [data-a=back], .sheet > .lk-commit[data-a=back]').count(),
-    ).toBe(1);
-    await page.locator('[data-about=sevim]').click();
-    await visibleInViewport(page, '.sheet [data-a=back]');
+    await importNotebook(page, 420, []);
+    await page.evaluate(() => {
+      const d = (window as unknown as { __st: { s: GameState; render: () => void } }).__st;
+      const t = d.s.tasks.find((t) => t.for === 'tarik' && t.from <= d.s.minute);
+      if (!t) throw Error('missing task');
+      t.carried = true;
+      t.by = d.s.minute + 1;
+      d.render();
+    });
+    await page.locator('.scene [data-go="door:tarik"]').click();
+    expect(await page.locator('.trip-line').textContent()).toContain('late by about');
+    expect(await page.evaluate('window.__st.s.inputs.length')).toBe(0);
   } finally {
     await page.close();
   }
 });
-
-it('keeps enlarged building destinations separate and at least 44px', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-  try {
-    await importNotebook(page);
-    await page.getByRole('button', { name: 'Enlarge building', exact: true }).click();
-    const boxes = await page
-      .locator('.scene .hit')
-      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
-    for (const [i, box] of boxes.entries()) {
-      expect(box.width).toBeGreaterThanOrEqual(44);
-      expect(box.height).toBeGreaterThanOrEqual(44);
-      for (const other of boxes.slice(i + 1)) {
-        const overlap =
-          Math.min(box.right, other.right) - Math.max(box.left, other.left) > 0.5 &&
-          Math.min(box.bottom, other.bottom) - Math.max(box.top, other.top) > 0.5;
-        expect(overlap).toBe(false);
-      }
-    }
-  } finally {
-    await page.close();
-  }
-});
-
-it('keeps submenu Back visibly framed and resident text clear of Close', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-  try {
-    await importNotebook(page);
-    await page.locator('[data-a=tell]').click();
-    await page.locator('[data-a=invent]').click();
-    const back = page.locator('.sheet [data-a=back]');
-    expect(
-      await back.evaluate((el) => Number.parseFloat(getComputedStyle(el).borderLeftWidth)),
-    ).toBeGreaterThanOrEqual(1);
-    expect(
-      await page.locator('.sheet .who').evaluate((el) => {
-        const close = el.querySelector('.x')?.getBoundingClientRect();
-        return (
-          !!close &&
-          [...el.querySelectorAll('b, span')].every((text) => {
-            const r = text.getBoundingClientRect();
-            return r.right <= close.left || r.top >= close.bottom;
-          })
-        );
-      }),
-    ).toBe(true);
-  } finally {
-    await page.close();
-  }
-});
-
-it.each(['honest', 'quiet'] as const)(
-  'keeps Rıza’s optional ending tally out of replay (%s)',
-  async (style) => {
-    const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
-    try {
-      await page.clock.install();
-      await page.goto(url);
-      const s = playWeek(11, style);
-      const saved = { game: GAME_VERSION, seed: s.seed, inputs: s.inputs, minute: s.minute };
-      await page.evaluate(
-        (saved) => localStorage.setItem('stairwell:notebook', JSON.stringify(saved)),
-        saved,
-      );
-      await page.reload();
-      await page.locator('[data-a=continue]').click();
-      const tally = page.locator('[data-week-tally]');
-      expect(await tally.isVisible()).toBe(false);
-      const before = await page.evaluate('JSON.stringify(window.__st.s)');
-      const toggle = page.getByRole('button', { name: 'See tally', exact: true });
-      await toggle.click();
-      const done = s.reports.reduce((n, d) => n + d.done, 0);
-      const late = s.reports.reduce((n, d) => n + d.late, 0);
-      const hands = s.meeting?.yes ?? 0;
-      expect(await tally.textContent()).toContain(
-        `On-time jobs ${done} × 2 + late jobs ${late} × 1 + hands raised ${hands} × 5 = ${done * 2 + late + hands * 5}`,
-      );
-      expect(await tally.getAttribute('hidden')).toBeNull();
-      await toggle.click();
-      expect(await tally.getAttribute('hidden')).not.toBeNull();
-      await toggle.click();
-      expect(await page.evaluate('JSON.stringify(window.__st.s)')).toBe(before);
-      expect(await page.evaluate(() => localStorage.getItem('stairwell:notebook'))).toBe(
-        JSON.stringify(saved),
-      );
-      await page.reload();
-      await page.locator('[data-a=continue]').click();
-      expect(await tally.isVisible()).toBe(false);
-      await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-      await page.getByText('Turn back to a morning', { exact: true }).click();
-      await page.getByRole('button', { name: 'Tuesday morning', exact: true }).click();
-      await page.clock.runFor(100);
-      await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-      expect(
-        await page.getByRole('checkbox', { name: 'Show Rıza’s week tally after Sunday’s vote' }).count(),
-      ).toBe(0);
-      expect(await toggle.count()).toBe(0);
-      expect(await tally.count()).toBe(0);
-    } finally {
-      await page.close();
-    }
-  },
-);

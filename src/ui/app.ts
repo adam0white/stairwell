@@ -4,7 +4,7 @@
  * input and at every page turn.
  */
 
-import { phoneStage, telemetryNotice } from '@adam0white/lab-kit';
+import { type phoneStage, telemetryNotice } from '@adam0white/lab-kit';
 import {
   act,
   canReplay,
@@ -39,15 +39,16 @@ import {
   wordHint,
 } from '../sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
-import { gameMenu, lab, labScreen } from './lab.ts';
+import { downloadRun, gameMenu, lab, labScreen, openFeedback } from './lab.ts';
 import { canWait, playback, untilSomethingHappens } from './playback.ts';
 import { isSaved, type Saved } from './save.ts';
 
 let stage: ReturnType<typeof phoneStage> | null = null;
 let buildingExpanded = false;
 
-const SPEEDS = [3, 6, 12];
 let selectedSpeed: number | null = null;
+let infoOpen = false;
+let selection: { to: Place; person: Rid | null; task: number | null } | null = null;
 const SAVE_KEY = 'stairwell:notebook';
 const journalPositions = new WeakMap<
   HTMLElement,
@@ -186,6 +187,7 @@ function send(inp: NewInput) {
 
 function begin(s: GameState) {
   ui.s = s;
+  selection = null;
   buildingExpanded = false;
   ui.sheet = 'none';
   ui.sheetFor = null;
@@ -238,6 +240,8 @@ export function start() {
 function loop(t: number) {
   // Keep reading position current even while the clock is held. Browser scroll
   // events can remain queued until after a late font changes the line heights.
+  const overlay = app().querySelector<HTMLElement>('.speech-overlay');
+  if (overlay && t >= ui.readUntil) overlay.textContent = '';
   const log = app().querySelector<HTMLElement>('.journal');
   if (log) rememberJournalScroll(log);
   const s = ui.s;
@@ -297,7 +301,7 @@ function pacingContext(s: GameState) {
   const who = ui.sheetFor ?? faces[0];
   const talking =
     !s.k.walk && s.k.busyTask === null && !!who && faces.includes(who) && ui.dismissed !== `${s.k.at}:${who}`;
-  const inspecting = buildingExpanded || ['notebook', 'orders', 'residents'].includes(ui.sheet);
+  const inspecting = infoOpen || ['notebook', 'orders', 'residents', 'tell', 'invent'].includes(ui.sheet);
   return { talking, inspecting };
 }
 
@@ -308,40 +312,73 @@ function clockPlayback(s: GameState) {
 
 // ---------- pages ----------
 
-const footer = `<div class="footer"><a href="https://human.adamwhite.work/games/">All games</a></div>`;
+const footer = `<div class="footer"><a href="https://human.adamwhite.work">People by the Human Framework</a></div>`;
 
+function topbar(words: string, title = false) {
+  return `<header class="topbar"><div class="topbar-words">${title ? '<a href="https://human.adamwhite.work/games/">All games</a>' : esc(words)}</div><button class="info" aria-label="Information" popovertarget="game-info">i</button><span class="menu-slot"></span></header><div id="game-info" class="info-popover" popover="auto"><button class="x" data-info-close aria-label="Close information">×</button><div class="info-content"></div></div>`;
+}
+function infoContent(s: GameState | null) {
+  const who = s && (ui.sheetFor ?? faceToFace(s)[0]);
+  const phase = s?.phase;
+  const [heading, text] = !s
+    ? [
+        'The job',
+        'Rıza kept this door for forty years. Bread by eight, then shopping, parcels, odd jobs, and the bins down by 20:45. Seven flats will tell you things. On Sunday they vote on your tea money. Nothing happens while you are away.',
+      ]
+    : phase === 'night'
+      ? [
+          'The night page',
+          'What the day earned, what went into the tin, and what was said on the stairs while you worked.',
+        ]
+      : phase !== 'day'
+        ? [
+            'The meeting',
+            'Each flat raises a hand or not. The tally is Rıza’s own reckoning, not a measure of people.',
+          ]
+        : who && ui.dismissed !== `${s.k.at}:${who}`
+          ? [
+              'Talking',
+              'Ask for news once a day. Tell… passes on what you heard, as you heard it or for certain. A made-up story can come back to you. Sit a minute once a day. From Thursday you can ask for a word on Sunday; a promise can still be broken.',
+            ]
+          : [
+              'Orders and the stairs',
+              'Tap an order, a name or a place on the building to see the trip. Go starts walking; a walk cannot be turned back. Arriving picks up or hands over on its own. A dot over a door means something is for them. Climbing tires you, and the trip says so. Time slows while orders wait and stops while you talk or read a list.',
+            ];
+  return `<h2>${heading}</h2><p>${text}</p>`;
+}
 function mountMenu(target: Element | null, s: GameState | null) {
   if (!target) return;
-  const saved = s ? { game: GAME_VERSION, seed: s.seed, inputs: s.inputs, minute: s.minute } : null;
-  const entry = gameMenu({
-    hasRun: !!s,
-    importRun,
-    mornings: saved
-      ? mornings(saved).map((m) => ({
-          label: `${DAY_NAMES[m.day - 1]} morning`,
-          action: () => begin(replay(saved.seed, m.inputs)),
-        }))
-      : [],
-    getRun: () => runOf(ui.s ?? s),
-    beforeOpen: () => {
-      ui.sheet = 'none';
-      ui.sheetKey = '';
+  target.append(
+    gameMenu({
+      hasRun: !!s,
+      getRun: () => runOf(ui.s ?? s),
+      speed: () => selectedSpeed,
+      setSpeed: (speed) => {
+        selectedSpeed = speed;
+        ui.acc = 0;
+      },
+      beforeOpen: save,
+      readNotebook:
+        s?.phase === 'day' && ui.s
+          ? () => {
+              ui.sheet = 'notebook';
+              ui.sheetKey = '';
+              render(false);
+            }
+          : undefined,
+      title: ui.s ? titlePage : undefined,
+    }),
+  );
+  const info = app().querySelector<HTMLElement>('#game-info');
+  if (info) {
+    info.querySelector('.info-content')!.innerHTML = infoContent(ui.s);
+    info.addEventListener('toggle', () => {
+      infoOpen = info.matches(':popover-open');
+      ui.acc = 0;
       if (ui.s?.phase === 'day') render(false);
-    },
-    readNotebook:
-      s?.phase === 'day' && ui.s
-        ? () => {
-            buildingExpanded = false;
-            ui.sheet = 'notebook';
-            ui.sheetKey = '';
-            render(false);
-            app().querySelector<HTMLElement>('.sheet [data-a=close]')?.focus();
-          }
-        : undefined,
-    title: ui.s ? titlePage : undefined,
-  });
-  if (target.classList.contains('page')) target.prepend(entry);
-  else target.append(entry);
+    });
+    info.querySelector('[data-info-close]')?.addEventListener('click', () => info.hidePopover());
+  }
 }
 
 function titlePage() {
@@ -350,38 +387,73 @@ function titlePage() {
   stage?.destroy();
   stage = null;
   ui.s = null;
+  infoOpen = false;
   const saved = loadSaved();
   const savedState = saved ? replay(saved.seed, saved.inputs, saved.minute) : null;
-  app().innerHTML = `<div class="page title">
-    <a class="mark" href="https://human.adamwhite.work">◇ human framework</a>
-    <h1>The Stairwell</h1>
-    <p>Keep seven flats supplied through Saturday. On Sunday, the residents vote on your tea money.</p>
-    <p>Rıza left you his caretaker’s notebook. The job is yours.</p>
-    <div class="actions">
-      ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${DAY_NAMES[dayOf(savedState.minute) - 1]} · ${clockOf(savedState.minute)} · ${esc(savedState.k.walk ? `on the way to ${placeName(savedState.k.walk.to)}` : placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
-      <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'A new notebook' : 'Begin on Monday'}</button>
-    </div>
-    <button class="info" aria-label="More about the job" popovertarget="job-info">i</button><div id="job-info" class="info-popover" popover="auto"><h2>More about the job</h2>
-      <p>Rıza Efendi kept the door of Lale Apartmanı for forty years. Now he has gone back to his village, and the job is yours: bread, bins, parcels, five flights of stairs.</p>
-      <p>He left you his notebook. Seven flats. They will tell you things.</p>
-      <p class="hand soft">On Sunday they vote on your tea money. — R.</p>
-    </div>
-    <p class="soft small">Six days and a Sunday. Nothing happens while you are away.</p>
-    ${footer}
-  </div>`;
-  const el = app();
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1><p>Keep seven flats supplied through Saturday. On Sunday, the residents vote on your tea money.</p><p>Rıza left you his caretaker’s notebook. The job is yours.</p><p class="soft small">Six days and a Sunday. Nothing happens while you are away.</p></div><button data-a="other">Other ways in ▸</button><div class="title-spacer"></div></main><div class="action-bar">
+    ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${DAY_NAMES[dayOf(savedState.minute) - 1]} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
+    <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'A new notebook' : 'Begin on Monday'}</button><div class="new-confirm" hidden>The old notebook will be replaced.<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
   if (notice && !notice.dataset.shown) {
-    el.querySelector('.page')?.prepend(notice);
+    app().querySelector('.title-spacer')?.append(notice);
     notice.dataset.shown = '1';
   }
-  mountMenu(el.querySelector('.page'), savedState);
-  el.querySelector('[data-a="continue"]')?.addEventListener('click', () => {
-    if (saved) begin(replay(saved.seed, saved.inputs, saved.minute));
-  });
-  el.querySelector('[data-a="new"]')?.addEventListener('click', () => {
-    if (saved && !confirm('Start a new notebook? The old one will be replaced.')) return;
-    begin(newGame((Date.now() % 1_000_000) + 1));
-  });
+  mountMenu(app().querySelector('.menu-slot'), savedState);
+  app()
+    .querySelector('[data-a=continue]')
+    ?.addEventListener('click', () => {
+      if (savedState) begin(savedState);
+    });
+  const fresh = () => begin(newGame((Date.now() % 1_000_000) + 1));
+  app()
+    .querySelector('[data-a=new]')
+    ?.addEventListener('click', () => {
+      if (saved) app().querySelector<HTMLElement>('.new-confirm')!.hidden = false;
+      else fresh();
+    });
+  app().querySelector('[data-a=yes-new]')?.addEventListener('click', fresh);
+  app()
+    .querySelector('[data-a=no-new]')
+    ?.addEventListener('click', () => {
+      app().querySelector<HTMLElement>('.new-confirm')!.hidden = true;
+    });
+  app()
+    .querySelector('[data-a=other]')
+    ?.addEventListener('click', () => {
+      const dialog = document.createElement('dialog');
+      dialog.className = 'other-ways';
+      const ms = saved ? mornings(saved) : [];
+      dialog.innerHTML = `<div class="who"><b>Other ways in</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body">${ms.length > 1 ? ms.map((m, i) => `<div><button data-morning="${i}">Turn back to ${DAY_NAMES[m.day - 1]} morning</button><div data-confirm="${i}" hidden>Everything after that morning is torn out.<div class="row"><button data-yes="${i}">Yes, turn back</button><button data-no="${i}">No</button></div></div></div>`).join('') : ''}<label class="file-button">Load a playtest run<input type="file" accept="application/json"></label></div>`;
+      document.body.append(dialog);
+      dialog.showModal();
+      dialog.querySelector('[data-a=close]')?.addEventListener('click', () => dialog.close());
+      dialog.addEventListener('close', () => dialog.remove());
+      dialog.querySelector<HTMLInputElement>('input')?.addEventListener('change', (e) => {
+        const f = (e.target as HTMLInputElement).files?.[0];
+        if (f) {
+          dialog.close();
+          importRun(f);
+        }
+      });
+      dialog.querySelectorAll<HTMLElement>('[data-morning]').forEach((b) => {
+        b.addEventListener('click', () => {
+          dialog.querySelector<HTMLElement>(`[data-confirm="${b.dataset.morning}"]`)!.hidden = false;
+        });
+      });
+      dialog.querySelectorAll<HTMLElement>('[data-no]').forEach((b) => {
+        b.addEventListener('click', () => {
+          dialog.querySelector<HTMLElement>(`[data-confirm="${b.dataset.no}"]`)!.hidden = true;
+        });
+      });
+      dialog.querySelectorAll<HTMLElement>('[data-yes]').forEach((b) => {
+        b.addEventListener('click', () => {
+          const m = ms[Number(b.dataset.yes)];
+          if (saved && m) {
+            dialog.close();
+            begin(replay(saved.seed, m.inputs));
+          }
+        });
+      });
+    });
 }
 
 function render(full: boolean) {
@@ -400,136 +472,204 @@ function render(full: boolean) {
 // ---------- the day ----------
 
 function dayView(s: GameState, full: boolean) {
-  const existingLog = app().querySelector<HTMLElement>('.journal');
+  const oldLog = app().querySelector<HTMLElement>('.journal');
   const position =
-    existingLog && existingLog.clientHeight === 0
-      ? (journalPositions.get(existingLog)?.position ?? journalPosition(existingLog))
-      : journalPosition(existingLog);
-  if (existingLog && existingLog.clientHeight > 0)
-    journalPositions.set(existingLog, { position, top: existingLog.scrollTop });
-  let root = app().querySelector('.day') as HTMLElement | null;
+    oldLog && oldLog.clientHeight === 0
+      ? (journalPositions.get(oldLog)?.position ?? journalPosition(oldLog))
+      : journalPosition(oldLog);
+  let root = app().querySelector<HTMLElement>('.day');
   if (!root || full) {
-    app().innerHTML = `<div class="day lk-stage" data-sheet="fit">
-      <header class="lk-strip" aria-label="Day and current order"><div class="top">
-        <span class="clock"></span><span class="grow"></span>
-        <span class="speed"><select aria-label="Clock speed" data-speed><option value="auto">Automatic</option><option value="3">Slow</option><option value="6">Steady</option><option value="12">Fast</option></select></span><button data-a="wait" hidden>Until something happens</button>
-        </div><div class="clock-rate"></div><div class="board"></div></header>
-      <div class="navigation"><button data-a="residents">Residents</button><button data-a="orders">All orders</button><button data-a="building" aria-expanded="false">Enlarge building</button></div>
-      <section class="scene lk-scene" aria-label="Building view"><div class="view-controls"><span class="view-caption soft"></span></div><div class="scene-drawing"></div></section>
-      <section class="journal" aria-label="Journal"></section>
-      <section class="sheet lk-sheet" aria-label="Neighbour or orders"></section>
-    </div>`;
+    app().innerHTML = `<div class="day game tab-here">${topbar('')}<div class="state-strip"><div class="order-pips"></div><span class="next-due"></span><span class="clock-rate"></span></div><section class="scene" aria-label="Building view"><div class="scene-drawing"></div><div class="speech-overlay" aria-live="polite"></div></section><div class="play-panel"><nav class="sheet-tabs" aria-label="Views"><button data-tab="none">Here</button><button data-tab="orders">Orders</button><button data-tab="residents">Residents</button></nav><section class="sheet" aria-label="Neighbour or orders"></section><section class="journal" aria-label="Journal"></section></div><div class="action-bar"></div></div>`;
+    root = app().querySelector<HTMLElement>('.day')!;
     stage?.destroy();
-    root = app().querySelector('.day') as HTMLElement;
-    stage = phoneStage(root, { observeOnly: true });
-    root.querySelector('[data-a=building]')?.addEventListener('click', () => {
-      buildingExpanded = !buildingExpanded;
-      render(false);
-      app().querySelector<HTMLElement>('[data-a=building]')?.focus();
-    });
-    root.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && buildingExpanded) {
-        buildingExpanded = false;
+    stage = null;
+    mountMenu(root.querySelector('.menu-slot'), s);
+    root.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) => {
+      b.addEventListener('click', () => {
+        ui.sheet = b.dataset.tab as Ui['sheet'];
+        if (ui.sheet === 'none') selection = null;
+        ui.sheetKey = '';
         render(false);
-        app().querySelector<HTMLElement>('[data-a=building]')?.focus();
+      });
+    });
+    root.querySelector('.scene')?.addEventListener('click', (e) => {
+      const hit = (e.target as Element).closest('[data-go]');
+      if (hit) choose(s, hit.getAttribute('data-go') as Place);
+    });
+    root.querySelector('.scene')?.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') {
+        const hit = (e.target as Element).closest('[data-go]');
+        if (hit) {
+          e.preventDefault();
+          choose(s, hit.getAttribute('data-go') as Place);
+        }
       }
     });
-    const speedSelect = root.querySelector<HTMLSelectElement>('[data-speed]')!;
-    speedSelect.value = selectedSpeed === null ? 'auto' : String(selectedSpeed);
-    speedSelect.addEventListener('change', () => {
-      const chosen = Number(speedSelect.value);
-      selectedSpeed = SPEEDS.includes(chosen) ? chosen : null;
-      ui.acc = 0;
+    ui.sheetKey = '';
+  }
+  const d = dayOf(s.minute);
+  const faces = faceToFace(s);
+  root.querySelector('.topbar-words')!.textContent =
+    `${DAY_NAMES[d - 1]?.slice(0, 3)} ${clockOf(s.minute)} · ${s.k.walk ? `→ ${placeName(s.k.walk.to)}` : placeName(s.k.at)}`;
+  root.querySelector('.info-content')!.innerHTML = infoContent(s);
+  const ctx = pacingContext(s);
+  const who = ui.sheetFor ?? faces[0];
+  const slowed = ctx.inspecting
+    ? 'Reading · time waits'
+    : ctx.talking
+      ? `${who ? RESIDENTS[who].name : 'Someone'} is talking · time waits`
+      : !s.k.walk && openTasks(s).length
+        ? 'slowed: orders waiting'
+        : '';
+  root.querySelector('.clock-rate')!.textContent = slowed;
+  const tasks = openTasks(s).sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
+  root.querySelector('.order-pips')!.innerHTML = s.tasks
+    .filter((t) => dayOf(t.by) === d)
+    .map(
+      (t) =>
+        `<span class="pip ${t.done ? 'done' : ''} ${!t.done && s.minute > t.by ? 'late' : ''}">${t.done ? '■' : '□'}</span>`,
+    )
+    .join('');
+  root.querySelector('.next-due')!.textContent = tasks.length ? `next by ${clockOf(tasks[0]!.by)}` : '';
+  for (const b of root.querySelectorAll<HTMLElement>('[data-tab]')) {
+    const active =
+      b.dataset.tab === ui.sheet || (b.dataset.tab === 'none' && !['orders', 'residents'].includes(ui.sheet));
+    b.setAttribute('aria-pressed', String(active));
+    b.textContent =
+      b.dataset.tab === 'orders'
+        ? `Orders ${tasks.length}`
+        : b.dataset.tab === 'residents'
+          ? 'Residents'
+          : who
+            ? RESIDENTS[who].name
+            : 'Here';
+  }
+  root.classList.toggle('tab-here', !['orders', 'residents', 'notebook'].includes(ui.sheet));
+  root.classList.toggle('decision', ['tell', 'invent'].includes(ui.sheet));
+  root.classList.toggle('travelling', !!s.k.walk || s.k.busyTask !== null);
+  root.querySelector('.scene-drawing')!.innerHTML = sceneSvg(s);
+  for (const hit of root.querySelectorAll<SVGElement>('.scene [data-go]')) {
+    hit.setAttribute('tabindex', s.k.walk || s.k.busyTask !== null ? '-1' : '0');
+    hit.setAttribute('role', 'button');
+    hit.setAttribute('aria-label', placeName(hit.getAttribute('data-go') as Place));
+    hit.setAttribute('aria-pressed', String(selection?.to === hit.getAttribute('data-go')));
+  }
+  const voice = [...s.said].reverse().find((x) => x.kind === 'voice');
+  root.querySelector<HTMLElement>('.speech-overlay')!.textContent =
+    voice && performance.now() < ui.readUntil ? `${nameOf(voice.who)}: ${voice.text}` : '';
+  const panel = root.querySelector<HTMLElement>('.sheet')!;
+  const action = root.querySelector<HTMLElement>('.action-bar')!;
+  const previousVerbs = action.querySelector('.verbs');
+  if (previousVerbs && panel.classList.contains('conversation')) panel.append(previousVerbs);
+  const expectedSubmenu = `${ui.sheetFor ?? faces[0] ?? null}:${ui.sheet}:${ui.inventAbout}`;
+  if (['tell', 'invent'].includes(ui.sheet) && panel.dataset.submenu === expectedSubmenu) {
+    while (action.firstChild) panel.append(action.firstChild);
+  }
+
+  // Keep the journal node stable while lists and conversation content change.
+  const scroll = panel.scrollTop;
+  const detailsOpen = !!panel.querySelector('details[open]');
+  ui.sheetKey = '';
+  sheet(s, panel);
+  panel.scrollTop = scroll;
+  if (detailsOpen) panel.querySelector('details')?.setAttribute('open', '');
+  const verbs = panel.querySelector<HTMLElement>('.verbs');
+  const submenu = ui.sheet === 'tell' || ui.sheet === 'invent';
+  if (submenu && who && !faces.includes(who)) {
+    const status = panel.querySelector('.availability');
+    if (status) status.textContent = departureLine(s, who);
+    for (const b of panel.querySelectorAll<HTMLButtonElement>(
+      'button:not([data-a=close]):not([data-a=back])',
+    ))
+      b.disabled = true;
+  }
+  root.classList.toggle('has-conversation', panel.classList.contains('conversation'));
+  if (selection && !submenu && ui.sheet !== 'notebook') {
+    tripActions(s, action);
+  } else if (verbs) {
+    action.replaceChildren(verbs);
+  } else if (submenu) {
+    const commit = panel.lastElementChild;
+    action.replaceChildren();
+    if (commit) action.append(commit);
+  } else if (ui.sheet === 'notebook') action.innerHTML = '';
+  else tripActions(s, action);
+  journal(s, root.querySelector<HTMLElement>('.journal')!, position);
+}
+
+function choose(s: GameState, to: Place, person: Rid | null = null, task: number | null = null) {
+  if (s.k.walk || s.k.busyTask !== null) return;
+  if (to === s.k.at) {
+    selection = null;
+    goTo(s, to, person);
+    return;
+  }
+  selection = { to, person, task };
+  render(false);
+}
+function tripActions(s: GameState, el: HTMLElement) {
+  if (s.k.walk) {
+    el.innerHTML = `<div class="travel-status">${s.k.walk.from === s.k.walk.to ? 'Sitting a minute · done' : `On the way to ${esc(placeName(s.k.walk.to))} · there`} about ${clockOf(s.k.walk.at1)}</div>`;
+    return;
+  }
+  if (s.k.busyTask !== null) {
+    const t = s.tasks.find((t) => t.id === s.k.busyTask);
+    el.innerHTML = `<div class="travel-status">Working: ${esc(t?.label ?? '')} · done about ${clockOf(s.k.busyUntil)}</div>`;
+    return;
+  }
+  const tasks = openTasks(s).sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
+  const task = selection
+    ? selection.task !== null
+      ? tasks.find((t) => t.id === selection?.task)
+      : tasks.find((t) => t.place === selection?.to && (t.carried || !t.pickup))
+    : tasks[0];
+  const to = selection?.to ?? (task ? (task.carried || !task.pickup ? task.place : task.pickup) : null);
+  if (to) {
+    const first = travelMinutes(s, s.k.at, to);
+    const second = task && !task.carried && task.pickup ? travelMinutes(s, to, task.place) : 0;
+    const arrive = s.minute + first + second;
+    const legs = legsLine(s, task?.place ?? to);
+    const person = selection?.person;
+    const title = task
+      ? `${task.kind === 'bins' ? 'Bins' : RESIDENTS[task.for].name} · ${task.label}`
+      : person
+        ? `${RESIDENTS[person].name} · flat ${RESIDENTS[person].flat}`
+        : placeName(to);
+    el.innerHTML = `<div class="trip-line"><b>${esc(title)}</b><span>${esc(placeName(to))} ${first} min${second ? `, then ${esc(placeName(task!.place))} ${second} min` : ''} · ${legs ? esc(legs) : `there about ${clockOf(arrive)}`}${task ? ` · due ${clockOf(task.by)}` : ''}${task && arrive > task.by ? `<strong class="late"> · late by about ${arrive - task.by} min</strong>` : ''}${!task && to.startsWith('door:') && rOf(s, to.slice(5) as Rid).where === 'work' ? ` · ${RESIDENTS[to.slice(5) as Rid].name} is out` : ''}</span></div><button class="primary" data-a="go">Go to ${esc(placeName(to))}</button>${selection && !task ? '<button data-a="clear-trip">Back</button>' : ''}`;
+    el.querySelector('[data-a=go]')?.addEventListener('click', () => {
+      const p = selection?.person ?? null;
+      selection = null;
+      goTo(s, to, p);
+    });
+    el.querySelector('[data-a=clear-trip]')?.addEventListener('click', () => {
+      selection = null;
       render(false);
     });
-    root.querySelector('[data-a=wait]')?.addEventListener('click', () => {
-      const { talking, inspecting } = pacingContext(s);
-      if (!canWait(s, talking, inspecting)) return;
+  } else {
+    const { talking, inspecting } = pacingContext(s);
+    el.innerHTML = canWait(s, talking, inspecting)
+      ? '<button class="primary" data-a="wait" aria-label="Skip to the next event">Skip ⏩</button>'
+      : '';
+    el.querySelector('[data-a=wait]')?.addEventListener('click', () => {
+      const ctx = pacingContext(s);
+      if (!canWait(s, ctx.talking, ctx.inspecting)) return;
       untilSomethingHappens(s);
       ui.acc = 0;
       ui.readUntil = performance.now() + 8000;
       save();
       render(false);
     });
-    mountMenu(root.querySelector('.top'), s);
-    for (const kind of ['orders', 'residents'] as const)
-      root.querySelector(`[data-a=${kind}]`)?.addEventListener('click', () => {
-        buildingExpanded = false;
-        ui.sheet = kind;
-        ui.sheetKey = '';
-        render(false);
-        app().querySelector<HTMLElement>('.sheet [data-a=close]')?.focus();
-      });
-    root.querySelector('.scene')?.addEventListener('click', (e) => {
-      const t = (e.target as Element).closest('[data-go]') as HTMLElement | SVGElement | null;
-      if (!t) return;
-      const to = t.getAttribute('data-go') as Place;
-      goTo(s, to);
-    });
-    ui.lastKey = '';
-    ui.sheetKey = '';
   }
-  const d = dayOf(s.minute);
-  (root.querySelector('.clock') as HTMLElement).textContent =
-    `${DAY_NAMES[d - 1]?.slice(0, 3)} ${clockOf(s.minute)}`;
-  const rate = clockPlayback(s);
-  (root.querySelector('.clock-rate') as HTMLElement).textContent = rate.reason;
-  (root.querySelector('[data-a=wait]') as HTMLButtonElement).hidden = !canWait(
-    s,
-    rate.reason.startsWith('Conversation'),
-    rate.reason.startsWith('Reading'),
-  );
-  (root.querySelector('[data-a=orders]') as HTMLElement).textContent = `All orders (${openTasks(s).length})`;
-  const log = root.querySelector('.journal') as HTMLElement;
-  root.dataset.building = buildingExpanded ? 'full' : 'floor';
-  const zoom = root.querySelector('[data-a=building]') as HTMLButtonElement;
-  zoom.textContent = buildingExpanded ? 'Back to journal' : 'Enlarge building';
-  zoom.setAttribute('aria-expanded', String(buildingExpanded));
-  (root.querySelector('.view-caption') as HTMLElement).textContent = buildingExpanded
-    ? 'Lale Apartmanı · all floors'
-    : `${placeName(s.k.at)}${s.k.walk ? ` → ${placeName(s.k.walk.to)}` : ''}`;
-  (root.querySelector('.scene-drawing') as HTMLElement).innerHTML = sceneSvg(s);
-  const boardKey = JSON.stringify([
-    openTasks(s).map((t) => [t.id, t.carried, s.minute > t.by]),
-    s.k.at,
-    s.k.walk?.to,
-  ]);
-  if (boardKey !== ui.lastKey) {
-    ui.lastKey = boardKey;
-    board(s, root.querySelector('.board') as HTMLElement);
-  }
-  const panel = root.querySelector('.sheet') as HTMLElement;
-  sheet(s, panel);
-  arrangeSheet(panel);
-  journal(s, log, position);
 }
-
-/** Keep secondary choices scrollable while their Back control stays in the commit row. */
-function arrangeSheet(panel: HTMLElement) {
-  const submenu = ui.sheet === 'tell' || ui.sheet === 'invent';
-  panel.classList.toggle('submenu', submenu);
-  if (!submenu || panel.querySelector(':scope > .lk-sheet-body')) return;
-  const head = panel.querySelector(':scope > .who');
-  const commit = panel.lastElementChild;
-  if (!head || !commit || head === commit) return;
-  head.classList.add('lk-sheet-head');
-  commit.classList.add('lk-commit');
-  const body = document.createElement('div');
-  body.className = 'lk-sheet-body';
-  while (head.nextSibling && head.nextSibling !== commit) body.append(head.nextSibling);
-  panel.insertBefore(body, commit);
-}
-
 function goTo(s: GameState, to: Place, person: Rid | null = null) {
   if (s.k.walk || s.k.busyTask !== null) return;
-  buildingExpanded = false;
   ui.pendingPerson = person;
   ui.sheetFor = null;
   if (to === s.k.at) {
     ui.dismissed = '';
-    ui.sheet = !person && (to === 'room' || to === 'step') ? 'place' : 'none';
+    ui.sheet = 'none';
     ui.sheetKey = '';
-    render(false);
+    send({ kind: 'go', to });
     return;
   }
   ui.sheet = 'none';
@@ -539,8 +679,8 @@ function goTo(s: GameState, to: Place, person: Rid | null = null) {
 
 // The building, drawn: floors from the top, flats on each landing, the stair zigzag on the left.
 const W = 360;
-const FLOOR_H = 56;
-const TOP_Y = 50;
+const FLOOR_H = 44;
+const TOP_Y = 16;
 const floorY = (f: number) => TOP_Y + (TOP_FLOOR + 1 - f) * FLOOR_H;
 
 function wob(x1: number, y1: number, x2: number, y2: number, k: number): string {
@@ -583,37 +723,38 @@ const guestsOf = (s: GameState, host: Rid): Rid[] =>
   RIDS.filter((id) => rOf(s, id).where === `visit:${host}`);
 
 function sceneSvg(s: GameState): string {
-  const cropped = !buildingExpanded && matchMedia('(max-width: 899px)').matches;
+  const cropped = (ui.sheet === 'tell' || ui.sheet === 'invent') && matchMedia('(max-width: 899px)').matches;
   const focusFloor = floorOf(s.k.walk?.to ?? s.k.at);
   const parts: string[] = [];
-  const H = floorY(-1) + 30;
+  const H = 288;
   // Roof line and floors.
   parts.push(`<path class="ink" d="${wob(30, TOP_Y + 4, 300, TOP_Y + 4, 1)}"/>`);
-  parts.push(`<rect class="hit" data-go="roof" x="40" y="0" width="250" height="48"/>`);
-  parts.push(`<text class="lbl soft" x="200" y="${TOP_Y - 2}" text-anchor="middle">roof</text>`);
+  parts.push(`<rect class="hit" data-go="roof" x="98" y="0" width="62" height="44"/>`);
+  parts.push(`<text class="lbl soft" x="130" y="${TOP_Y - 2}" text-anchor="middle">roof</text>`);
   for (let f = TOP_FLOOR; f >= 0; f--) {
     const y = floorY(f);
     parts.push(`<path class="ink" d="${wob(30, y, 300, y, f + 3)}"/>`);
     parts.push(`<path class="soft-ink" d="${wob(48, y, 96, y - FLOOR_H + 4, f + 9)}"/>`);
     parts.push(
-      `<rect class="hit" data-go="landing:${f}" x="30" y="${y - FLOOR_H + 6}" width="64" height="${FLOOR_H - 6}"/>`,
+      `<rect class="hit" data-go="landing:${f}" x="30" y="${y - FLOOR_H + 6}" width="64" height="${FLOOR_H}"/>`,
     );
     parts.push(`<text class="lbl soft" x="34" y="${y - 4}">${f === 0 ? 'G' : f}</text>`);
   }
+  // Targets occupy disjoint columns or rows. The bottom row starts after the ground-floor targets.
   // Ground: your room below, the step and the street.
   const g = floorY(0);
   parts.push(`<path class="ink" d="${wob(30, g + 28, 300, g + 28, 21)}"/>`);
-  parts.push(`<rect class="hit" data-go="room" x="30" y="${g + 2}" width="90" height="46"/>`);
-  parts.push(`<text class="lbl" x="44" y="${g + 20}">your room</text>`);
-  parts.push(`<rect class="hit" data-go="step" x="122" y="${g + 2}" width="70" height="46"/>`);
-  parts.push(`<text class="lbl" x="128" y="${g + 20}">the step</text>`);
+  parts.push(`<rect class="hit" data-go="room" x="30" y="${g + 6}" width="90" height="46"/>`);
+  parts.push(`<text class="lbl" x="44" y="${g + 26}">your room</text>`);
+  parts.push(`<rect class="hit" data-go="step" x="122" y="${g + 6}" width="70" height="46"/>`);
+  parts.push(`<text class="lbl" x="128" y="${g + 26}">the step</text>`);
   parts.push(
     `<path class="ink" d="${wob(300, TOP_Y + 4, 300, g + 28, 30)}"/><path class="ink" d="${wob(30, TOP_Y + 4, 30, g + 28, 31)}"/>`,
   );
   parts.push(`<rect class="hit" data-go="shop" x="304" y="${g - 50}" width="56" height="46"/>`);
   parts.push(`<text class="lbl" x="306" y="${g - 18}">shop</text>`);
-  parts.push(`<rect class="hit" data-go="bakery" x="304" y="${g + 2}" width="56" height="46"/>`);
-  parts.push(`<text class="lbl" x="306" y="${g + 14}">bakery</text>`);
+  parts.push(`<rect class="hit" data-go="bakery" x="304" y="${g + 6}" width="56" height="46"/>`);
+  parts.push(`<text class="lbl" x="306" y="${g + 26}">bakery</text>`);
   // Doors and residents.
   const carriedFor = new Set(
     openTasks(s)
@@ -634,8 +775,8 @@ function sceneSvg(s: GameState): string {
     const y = floorY(info.floor);
     const pl = `door:${id}` as Place;
     const want = carriedFor.has(pl) || wantedAt.has(pl);
-    parts.push(`<g class="door${want ? ' want' : ''}" data-go="${pl}">
-      <rect class="hit" x="${x - 34}" y="${y - FLOOR_H + 6}" width="${hitWidth}" height="${FLOOR_H - 6}"/>
+    parts.push(`<g class="door${selection?.to === pl ? ' selected' : ''}${want ? ' want' : ''}" data-go="${pl}" tabindex="0" role="button" aria-label="${info.name}, flat ${info.flat}">
+      <rect class="hit" x="${x - 34}" y="${y - FLOOR_H + 6}" width="${hitWidth}" height="${FLOOR_H}"/>
       <path class="ink" d="${wob(x, y, x, y - 30, info.flat)} ${wob(x, y - 30, x + 16, y - 30, info.flat + 1)} ${wob(x + 16, y - 30, x + 16, y, info.flat + 2)}"/>
       <text class="lbl hand" x="${x + 20}" y="${y - 18}">${info.flat} ${info.name}</text>
       ${
@@ -674,7 +815,7 @@ function sceneSvg(s: GameState): string {
   if (s.k.busyTask !== null)
     parts.push(`<text class="lbl hand me-t" x="${kp.x + 8}" y="${kp.y - 30}">working…</text>`);
   const cropY = Math.max(0, Math.min(H - 88, floorY(focusFloor) - 64));
-  return `<svg viewBox="0 ${cropped ? cropY : 0} ${W} ${cropped ? 88 : H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${cropped ? 'Current floor' : 'The building'}">${parts.join('')}</svg>`;
+  return `<svg viewBox="0 ${cropped ? cropY : 0} ${W} ${cropped ? 88 : H}" preserveAspectRatio="none" role="group" aria-label="${cropped ? 'Current floor' : 'The building'}">${parts.join('')}</svg>`;
 }
 
 function taskLine(s: GameState, t: Task, current: boolean): string {
@@ -687,32 +828,9 @@ function taskLine(s: GameState, t: Task, current: boolean): string {
       : `at ${placeName(t.place)}`;
   const what = t.kind === 'bins' ? 'down from the fourth floor' : t.label;
   const when = t.kind === 'bins' ? 'by 20:45' : `by ${clockOf(t.by)}`;
-  return `<button class="task${current ? ' current' : ''}${late ? ' late' : ''}${t.carried ? ' carried' : ''}" data-t="${t.id}">
+  return `<button class="task${current ? ' current' : ''}${late ? ' late' : ''}${t.carried ? ' carried' : ''}" data-t="${t.id}" aria-pressed="${current}">
     <span class="t">${t.carried ? '◼ ' : ''}${esc(who)}</span> <span>${esc(what)}</span>
-    <span class="hand soft">${where}, ${when}${late ? ' · late' : ''}</span></button>`;
-}
-
-function board(s: GameState, el: HTMLElement, all = false) {
-  const open = openTasks(s).sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
-  const swap =
-    open.some((t) => t.carried && t.for === 'nermin' && t.kind === 'bread') &&
-    open.some((t) => t.carried && t.for === 'sevim' && t.kind === 'bread') &&
-    s.swappedDay !== dayOf(s.minute);
-  el.innerHTML = open.length
-    ? `${open
-        .slice(0, all ? open.length : 1)
-        .map((t, i) => taskLine(s, t, i === 0))
-        .join(
-          '',
-        )}${!all && swap ? `<button class="prank" data-a="swap">Swap Nermin’s and Sevim’s papers</button>` : ''}`
-    : `<div class="soft hand">Nothing on the board. The step, or your room?</div>`;
-  for (const b of el.querySelectorAll<HTMLElement>('[data-t]'))
-    b.addEventListener('click', () => {
-      const t = s.tasks.find((x) => x.id === Number(b.dataset.t));
-      if (!t) return;
-      goTo(s, t.carried || !t.pickup ? t.place : t.pickup);
-    });
-  el.querySelector('[data-a="swap"]')?.addEventListener('click', () => send({ kind: 'prank', what: 'swap' }));
+    <span class="hand soft">${where}, ${when}${late ? ' · late' : ''} · ${travelMinutes(s, s.k.at, t.carried || !t.pickup ? t.place : t.pickup)}${!t.carried && t.pickup ? ` + ${travelMinutes(s, t.pickup, t.place)}` : ''} min</span></button>`;
 }
 
 function saidLine(x: Said): string {
@@ -807,18 +925,26 @@ function sheet(s: GameState, el: HTMLElement) {
       });
     }
     const items = el.querySelector('.directory-items') as HTMLElement;
+    if (orders && canSwap(s) && !el.querySelector('[data-a=swap]')) {
+      const b = document.createElement('button');
+      b.className = 'prank';
+      b.dataset.a = 'swap';
+      b.textContent = 'Swap Nermin’s and Sevim’s papers';
+      b.addEventListener('click', () => send({ kind: 'prank', what: 'swap' }));
+      el.insertBefore(b, items);
+    }
     if (orders) {
       // Keep existing rows in place. Requests that arrive while reading append below.
       const open = openTasks(s).sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
       for (const task of open) {
         let button = items.querySelector<HTMLButtonElement>(`[data-t="${task.id}"]`);
         const fresh = document.createElement('div');
-        fresh.innerHTML = taskLine(s, task, task.id === open[0]?.id);
+        fresh.innerHTML = taskLine(s, task, task.id === (selection?.task ?? open[0]?.id));
         const next = fresh.firstElementChild as HTMLButtonElement;
         if (!button) {
           button = next;
           button.addEventListener('click', () => {
-            if (!task.done) goTo(s, task.carried || !task.pickup ? task.place : task.pickup);
+            if (!task.done) choose(s, task.carried || !task.pickup ? task.place : task.pickup, null, task.id);
           });
           items.append(button);
         } else {
@@ -857,12 +983,13 @@ function sheet(s: GameState, el: HTMLElement) {
           button.dataset.resident = id;
           button.addEventListener('click', () => {
             const row = items.querySelector<HTMLButtonElement>(`[data-resident=${id}]`);
-            if (row) goTo(s, row.dataset.go as Place, id);
+            if (row) choose(s, row.dataset.go as Place, id);
           });
           items.append(button);
         }
         button.dataset.go = to;
-        const html = `${esc(info.name)} <span class="soft">· flat ${info.flat} · ${esc(status)}</span>`;
+        button.setAttribute('aria-pressed', String(selection?.person === id));
+        const html = `${esc(info.name)} <span class="soft">· flat ${info.flat} · ${esc(status)} · ${travelMinutes(s, s.k.at, to)} min</span>`;
         if (button.innerHTML !== html) button.innerHTML = html;
       }
     }
@@ -879,18 +1006,9 @@ function sheet(s: GameState, el: HTMLElement) {
     });
     return;
   }
-  if (s.k.walk) {
+  if (s.k.walk || s.k.busyTask !== null) {
     ui.sheetFor = null;
-    const line = ui.pendingTo === s.k.walk.to ? '' : '';
-    el.innerHTML =
-      s.k.walk.from === s.k.walk.to
-        ? '<div class="soft">Sitting a minute. Your legs are glad of it.</div>'
-        : `<div class="soft">On your way to ${placeName(s.k.walk.to)}.</div>${line}`;
-    return;
-  }
-  if (s.k.busyTask !== null) {
-    const t = s.tasks.find((x) => x.id === s.k.busyTask);
-    el.innerHTML = `<div class="soft">Working: ${esc(t?.label ?? '')}.</div>`;
+    el.innerHTML = '';
     return;
   }
   if (ui.pendingPerson) {
@@ -900,9 +1018,9 @@ function sheet(s: GameState, el: HTMLElement) {
   // A departure disables the chosen person's controls; only Close reveals routes.
   const who = ui.sheetFor ?? faces[0] ?? null;
   if (who) ui.sheetFor = who;
-  const present = who !== null && faces.includes(who);
   const submenu = `${who}:${ui.sheet}:${ui.inventAbout}`;
   if (who && (ui.sheet === 'tell' || ui.sheet === 'invent') && el.dataset.submenu === submenu) {
+    const present = faces.includes(who);
     const status = el.querySelector('.availability');
     if (status) status.textContent = present ? '' : departureLine(s, who);
     for (const button of el.querySelectorAll<HTMLButtonElement>(
@@ -915,6 +1033,7 @@ function sheet(s: GameState, el: HTMLElement) {
   if (!conversation) el.classList.remove('conversation');
   if (!who) {
     el.innerHTML = placeHtml(s);
+    el.querySelector('[data-a=swap]')?.addEventListener('click', () => send({ kind: 'prank', what: 'swap' }));
     el.querySelector('[data-a="gate"]')?.addEventListener('click', () =>
       send({ kind: 'prank', what: 'gate' }),
     );
@@ -922,7 +1041,7 @@ function sheet(s: GameState, el: HTMLElement) {
       if (at.startsWith('door:')) send({ kind: 'knock', who: at.slice(5) as Rid });
     });
     for (const b of el.querySelectorAll<HTMLElement>('[data-go]'))
-      b.addEventListener('click', () => goTo(s, b.dataset.go as Place));
+      b.addEventListener('click', () => choose(s, b.dataset.go as Place));
     return;
   }
   if (ui.dismissed === `${at}:${who}`) {
@@ -933,7 +1052,7 @@ function sheet(s: GameState, el: HTMLElement) {
       render(false);
     });
     for (const b of el.querySelectorAll<HTMLElement>('[data-go]'))
-      b.addEventListener('click', () => goTo(s, b.dataset.go as Place));
+      b.addEventListener('click', () => choose(s, b.dataset.go as Place));
     return;
   }
   const html = doorHtml(s, who, faces);
@@ -968,10 +1087,19 @@ function lastVoice(s: GameState): string {
   return x ? `${x.at}${x.text.length}` : '';
 }
 
-function placeHtml(s: GameState, small = false): string {
+function canSwap(s: GameState) {
+  const open = openTasks(s);
+  return (
+    s.swappedDay !== dayOf(s.minute) &&
+    ['nermin', 'sevim'].every((id) => open.some((t) => t.carried && t.kind === 'bread' && t.for === id))
+  );
+}
+
+function placeHtml(s: GameState, _small = false): string {
   const at = s.k.at;
   const bits: string[] = [];
-  if (!small) bits.push(`<div class="soft">At ${placeName(at)}.</div>`);
+  if (canSwap(s)) bits.push('<button class="prank" data-a="swap">Swap Nermin’s and Sevim’s papers</button>');
+
   if (at.startsWith('door:')) {
     const id = at.slice(5) as Rid;
     const r = rOf(s, id);
@@ -983,18 +1111,6 @@ function placeHtml(s: GameState, small = false): string {
   }
   if ((at === 'step' || at === 'room') && s.gateUntil < s.minute)
     bits.push(`<button class="prank" data-a="gate">Leave the courtyard gate on the latch</button>`);
-  // A few quick destinations with the legs' forecast for a long climb.
-  const tops = openTasks(s)
-    .filter((t) => t.carried)
-    .map((t) => t.place)
-    .filter((p, i, xs) => xs.indexOf(p) === i && p !== at)
-    .slice(0, 2);
-  for (const p of tops) {
-    const legs = legsLine(s, p);
-    bits.push(
-      `<button data-go="${p}">To ${placeName(p)} <span class="hand soft">${travelMinutes(s, at, p)} min${legs ? ` · ${esc(legs)}` : ''}</span></button>`,
-    );
-  }
   return bits.join('');
 }
 
@@ -1013,7 +1129,7 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
     .find((x) => x.who === who && dayOf(x.at) === dayOf(s.minute) && s.minute - x.at < 30);
   const tabs =
     faces.length > 1
-      ? `<div class="faces">${faces.map((f) => `<button class="${f === who ? 'on' : ''}" data-face="${f}">${RESIDENTS[f].name}</button>`).join('')}</div>`
+      ? `<div class="faces">${faces.map((f) => `<button class="${f === who ? 'on' : ''}" data-face="${f}" aria-pressed="${f === who}">${RESIDENTS[f].name}</button>`).join('')}</div>`
       : '';
   const head = `${tabs}<div class="who"><b>${esc(info.call)}</b><span class="soft small">flat ${info.flat} · ${read.warmth}, ${read.word}</span><button class="x" data-a="close" aria-label="Close conversation">✕</button></div>
     <div class="availability soft" aria-live="polite"></div>${lastLine ? `<div class="hand said">${esc(lastLine.text)}</div>` : `<div class="soft small">${esc(info.blurb)}</div>`}`;
@@ -1091,6 +1207,7 @@ function wireDoor(s: GameState, el: HTMLElement, who: Rid) {
   const r = rOf(s, who);
   for (const g of r.grudges) ui.grudgeSaid.add(`${who}:${g.at}`);
   on('[data-face]', (b) => {
+    selection = null;
     ui.sheetFor = b.dataset.face as Rid;
     ui.sheet = 'none';
     reset();
@@ -1154,7 +1271,7 @@ function notebookHtml(s: GameState): string {
     <h3>What the building keeps <span class="soft small">${found.length} of ${SECRET_PROPS.length}</span></h3>
     ${SECRET_PROPS.map((x) => (s.secrets[x.prop] !== undefined ? `<div>· ${esc(x.title)}</div>` : `<div class="soft">· …</div>`)).join('')}
     <h3>Stamps</h3><div>${s.stamps.length ? s.stamps.map((x) => esc(STAMPS[x.id] ?? x.id)).join(' · ') : '<span class="soft">none yet</span>'}</div>
-    </div>${footer}`;
+    </div>`;
 }
 
 const STAMPS: Record<string, string> = {
@@ -1181,8 +1298,13 @@ function nightPage(s: GameState) {
   const talks = s.talks.filter((t) => dayOf(t.at) === d && t.props.length > 0).length;
   const margin = nightMargin(s, d);
   const open = OPEN_Q[d] ?? '';
-  app().innerHTML = `<div class="page night">
-    <h2>${DAY_NAMES[d - 1]}, night</h2>
+  app().innerHTML = `<div class="page night">${topbar(`${DAY_NAMES[d - 1]}, night`)}<div class="state-strip"><div class="order-pips">${s.tasks
+    .filter((t) => dayOf(t.by) === d)
+    .map(
+      (t) =>
+        `<span class="pip ${t.done ? (t.done > t.by ? 'late' : 'done') : 'missed'}">${t.done ? (t.done > t.by ? '◩' : '■') : '□'}</span>`,
+    )
+    .join('')}</div><span>₺${s.k.money} in the tin</span></div><main class="page-body">
     <p>${rep ? `${rep.done} jobs done on time${rep.late ? `, ${rep.late} late` : ''}${rep.missed ? `, ${rep.missed} not done` : ''}.` : ''} Tips: <span class="money">₺${rep?.tips ?? 0}</span>. In the tin: <span class="money">₺${s.k.money}</span>.</p>
     ${rep?.treats.length ? `<p>${rep.treats.map(esc).join('; ')}.</p>` : ''}
     <p class="soft">The residents talked ${talks === 0 ? 'about nothing much' : talks < 6 ? 'a little' : talks < 14 ? 'a fair bit' : 'all day'} on the stairs and the step.</p>
@@ -1194,11 +1316,10 @@ function nightPage(s: GameState) {
     }).join('')}</div>
     ${margin ? `<div class="margin hand">${esc(margin)} <span class="soft">— R.</span></div>` : ''}
     ${open ? `<p class="open hand">${esc(open)}</p>` : ''}
-    <div class="actions"><button class="primary" data-a="next">${d === 6 ? 'Sunday: the meeting' : `Turn the page: ${DAY_NAMES[d]}`}</button>
-    <button data-a="title">Close the notebook</button></div>
-    ${footer}
+    </main><div class="action-bar"><button class="primary" data-a="next">${d === 6 ? 'Sunday: the meeting' : `Turn the page: ${DAY_NAMES[d]}`}</button>
+    </div>
   </div>`;
-  mountMenu(app().querySelector('.page'), s);
+  mountMenu(app().querySelector('.menu-slot'), s);
   app()
     .querySelector('[data-a="next"]')
     ?.addEventListener('click', () => send({ kind: 'next' }));
@@ -1251,8 +1372,7 @@ function sundayPage(s: GameState) {
   const secrets = Object.keys(s.secrets).length;
   const caught = s.residents.reduce((a, r) => a + r.caught.length + r.grudges.length, 0);
   const share = `The Stairwell, week 1: ₺${s.k.money} in the tin, ${secrets}/${SECRET_PROPS.length} secrets, caught ${caught}×, tea money ${m?.raise ? 'up' : 'unchanged'} (${m?.yes ?? 0} hands).${s.ring.answer === 'yes' ? ' A ring on the roof.' : ''}${s.catHome ? ' A cat on the step.' : ''} ◇`;
-  app().innerHTML = `<div class="page sunday">
-    <h2>Sunday, the meeting</h2>
+  app().innerHTML = `<div class="page sunday">${topbar('Sunday · the meeting')}<main class="page-body">
     ${lines.map(saidLine).join('')}
     <div class="votes">${RIDS.map((id) => {
       const r = rOf(s, id);
@@ -1264,13 +1384,12 @@ function sundayPage(s: GameState) {
     <p>Six days: <span class="money">₺${total}</span> in tips${m?.raise ? ', and the tea money goes up' : ''}. The tin: <span class="money">₺${s.k.money}</span>.</p>
     <p>${s.ring.answer === 'yes' ? 'Burak and Elif are engaged. ' : s.ring.answer === 'not yet' ? 'Elif asked Burak for time. ' : 'Burak still has the ring in his pocket. '}${s.catHome ? 'Pamuk sleeps on the step.' : ''}</p>
     <div class="margin hand">${m?.raise ? 'Not bad for a first week. They will want more next week.' : 'A first week is a first week. Next week they will know you better.'} <span class="soft">— R.</span></div>
-    <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See tally</button>${weekTallyHtml(s)}
+    <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
     <p class="soft small">Week 2 is still being written. Your notebook is saved.</p>
-    <div class="actions"><button class="primary" data-a="title">Close the notebook</button></div>
-    ${footer}
+    </main><div class="action-bar"><div class="row"><button data-a="feedback">Send word</button><button data-a="download">Download this run</button></div><button class="primary" data-a="title">Close the notebook</button></div>
   </div>`;
-  mountMenu(app().querySelector('.page'), s);
+  mountMenu(app().querySelector('.menu-slot'), s);
   app()
     .querySelector('[data-a="see-tally"]')
     ?.addEventListener('click', (event) => {
@@ -1282,6 +1401,12 @@ function sundayPage(s: GameState) {
   app()
     .querySelector('[data-a="copy"]')
     ?.addEventListener('click', () => navigator.clipboard?.writeText(share).catch(() => {}));
+  app()
+    .querySelector('[data-a="feedback"]')
+    ?.addEventListener('click', () => openFeedback(() => runOf(s)));
+  app()
+    .querySelector('[data-a="download"]')
+    ?.addEventListener('click', () => downloadRun(runOf(s)));
   app().querySelector('[data-a="title"]')?.addEventListener('click', titlePage);
 }
 

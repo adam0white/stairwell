@@ -1,16 +1,94 @@
-import { createLab } from '@adam0white/lab-client';
-import { notebookMenu } from '@adam0white/lab-kit';
+import { createLab, PRIVACY_URL } from '@adam0white/lab-client';
+import './lab.css';
 
 export const lab = createLab({ game: 'stairwell' });
 
 interface MenuOptions {
   getRun: () => unknown;
   beforeOpen: () => void;
+  onClose?: () => void;
   readNotebook?: () => void;
   title?: () => void;
-  mornings: { label: string; action: () => void }[];
-  importRun: (file: File) => void;
+  speed?: () => number | null;
+  setSpeed?: (speed: number | null) => void;
+  mornings?: { label: string; action: () => void }[];
+  importRun?: (file: File) => void;
   hasRun: boolean;
+}
+
+const NAME_KEY = 'hf-lab-feedback-name';
+function stored(key: string): string {
+  try {
+    return localStorage.getItem(key) ?? '';
+  } catch {
+    return '';
+  }
+}
+function recordingOff(): boolean {
+  return stored('hf-lab-recording-off') === '1' || stored('hf-lab-events-off:stairwell') === '1';
+}
+function rememberName(name: string): void {
+  try {
+    if (name) localStorage.setItem(NAME_KEY, name);
+    else localStorage.removeItem(NAME_KEY);
+  } catch {
+    /* Storage failure does not prevent feedback. */
+  }
+}
+function button(label: string, action: () => void): HTMLButtonElement {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.textContent = label;
+  el.addEventListener('click', action);
+  return el;
+}
+function privacyLink(): HTMLAnchorElement {
+  const link = document.createElement('a');
+  link.href = PRIVACY_URL;
+  link.textContent = 'Lab privacy';
+  link.target = '_blank';
+  link.rel = 'noopener';
+  return link;
+}
+function recordingSwitch(changed: () => void = () => {}): HTMLLabelElement {
+  const label = document.createElement('label');
+  label.className = 'sw-recording';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.role = 'switch';
+  input.checked = !recordingOff();
+  input.addEventListener('change', () => {
+    lab.setEventsOff(!input.checked);
+    changed();
+  });
+  label.append(input, 'Record play for the lab');
+  return label;
+}
+function dialogShell(kind: 'menu' | 'feedback', title: string): HTMLDialogElement {
+  const dialog = document.createElement('dialog');
+  dialog.className = `sw-${kind}`;
+  dialog.setAttribute('aria-label', title);
+  const heading = document.createElement('header');
+  heading.className = 'sw-dialog-header';
+  const h2 = document.createElement('h2');
+  h2.textContent = title;
+  const close = button('×', () => dialog.close());
+  close.setAttribute('aria-label', `Close ${title.toLowerCase()}`);
+  heading.append(h2, close);
+  dialog.append(heading);
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) {
+      const r = dialog.getBoundingClientRect();
+      if (
+        event.clientX < r.left ||
+        event.clientX > r.right ||
+        event.clientY < r.top ||
+        event.clientY > r.bottom
+      )
+        dialog.close();
+    }
+  });
+  return dialog;
 }
 
 export function compactRun(run: unknown): unknown {
@@ -18,82 +96,255 @@ export function compactRun(run: unknown): unknown {
   return replayable;
 }
 
-/** Keep run controls in the kit menu; the residents' notebook is a separate inspection. */
-export function gameMenu(options: MenuOptions): HTMLButtonElement {
-  const entry = notebookMenu({
-    lab,
-    getRun: options.getRun,
-    filename: 'stairwell-playtest.json',
-    compact: compactRun,
-    compactNote: 'Seed, inputs and minute reproduce the full state. The state summary is left out.',
-  });
-  entry.className = 'game-menu';
-  entry.addEventListener('click', options.beforeOpen, { capture: true });
-  // The kit owns its native dialog. Add the game's inspection and title destinations after it opens.
-  entry.addEventListener('click', () => {
-    const dialog = document.querySelector<HTMLDialogElement>('dialog.lk-notebook[open]');
-    if (!dialog) return;
-    const add = (label: string, action: (() => void) | undefined) => {
-      if (!action) return;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = label;
-      button.addEventListener('click', () => {
-        dialog.addEventListener('close', action, { once: true });
-        dialog.close();
+/** Keep only the replayable seed, inputs and minute in the playtest download. */
+export function downloadRun(run: unknown): void {
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(compactRun(run), null, 2)], { type: 'application/json' }),
+  );
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'stairwell-playtest.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function openFeedback(getRun: () => unknown, onClose?: () => void): HTMLDialogElement {
+  const dialog = dialogShell('feedback', 'Send word');
+  const form = document.createElement('form');
+  form.className = 'sw-feedback-form';
+  const body = document.createElement('div');
+  body.className = 'sw-feedback-body';
+  const lead = document.createElement('p');
+  lead.textContent = "Your run, saves and log reach us on their own. Tell us what they can't show.";
+  const verdicts = document.createElement('fieldset');
+  verdicts.className = 'sw-feedback-verdict';
+  const legend = document.createElement('legend');
+  legend.textContent = 'Would you keep playing? (optional)';
+  verdicts.append(legend);
+  for (const [value, label] of [
+    ['keep', "I'd keep playing"],
+    ['mixed', 'Not sure'],
+    ['quit', "I'd stop here"],
+  ]) {
+    const choice = document.createElement('label');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'verdict';
+    radio.value = value ?? '';
+    choice.append(radio, label ?? '');
+    verdicts.append(choice);
+  }
+  const noteLabel = document.createElement('label');
+  noteLabel.textContent = 'What happened on the stairs, what you wanted, what got in the way.';
+  const note = document.createElement('textarea');
+  note.rows = 4;
+  noteLabel.append(note);
+  const nameLabel = document.createElement('label');
+  nameLabel.textContent = 'Your name or tester id (optional)';
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.maxLength = 60;
+  name.autocomplete = 'off';
+  name.value = stored(NAME_KEY);
+  nameLabel.append(name);
+  const nameDetails = document.createElement('details');
+  const nameSummary = document.createElement('summary');
+  nameSummary.textContent = '+ Add a name';
+  nameDetails.append(nameSummary, nameLabel);
+  const explanation = document.createElement('p');
+  explanation.className = 'soft';
+  explanation.textContent =
+    'A name labels your player id and its linked play history, past and future on this device. It is remembered here. Leave it empty to stay pseudonymous.';
+  nameDetails.append(explanation);
+  const details = document.createElement('details');
+  const summary = document.createElement('summary');
+  summary.textContent = 'What is sent';
+  const preview = document.createElement('p');
+  preview.textContent =
+    'Your note and optional name, linked to your recorded run, saves and log. With browser privacy protection, your consent sends this run and note without a player id.';
+  details.append(summary, preview, privacyLink());
+  const preferences = document.createElement('div');
+  const status = document.createElement('p');
+  status.className = 'sw-feedback-status';
+  status.role = 'status';
+  const actions = document.createElement('div');
+  actions.className = 'sw-dialog-actions';
+  const send = document.createElement('button');
+  send.type = 'submit';
+  send.className = 'primary';
+  send.textContent = 'Send';
+  const copy = button('Keep a copy of this run', () => downloadRun(getRun()));
+  body.append(lead, verdicts, noteLabel, nameDetails, details, preferences, copy, status);
+  actions.append(send);
+  form.append(body, actions);
+  dialog.append(form);
+  let consent = false;
+  let sending = false;
+  let queued = false;
+  const update = () => {
+    preferences.replaceChildren();
+    const off = recordingOff();
+    const privateRun = lab.privacySignalOn && !lab.privacyOverride;
+    if (off) {
+      const notice = document.createElement('p');
+      notice.textContent = 'Recording is off, so nothing is sent.';
+      preferences.append(notice, recordingSwitch(update));
+    } else if (privateRun) {
+      const label = document.createElement('label');
+      label.className = 'sw-recording';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = consent;
+      input.addEventListener('change', () => {
+        consent = input.checked;
+        update();
       });
-      dialog.querySelector('h2')?.after(button);
-    };
-    const restore = document.createElement('div');
-    if (options.mornings.length > 1) {
-      const details = document.createElement('details');
-      const summary = document.createElement('summary');
-      summary.textContent = 'Turn back to a morning';
-      details.append(summary);
-      const choices = document.createElement('div');
-      choices.className = 'actions';
-      for (const morning of options.mornings) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.textContent = morning.label;
-        button.addEventListener('click', () => {
-          dialog.addEventListener('close', morning.action, { once: true });
-          dialog.close();
-        });
-        choices.append(button);
-      }
-      details.append(choices);
-      restore.append(details);
+      label.append(input, 'Send this run with my note');
+      preferences.append(label);
     }
-    const label = document.createElement('label');
-    label.textContent = 'Replay a notebook file';
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/json';
-    input.addEventListener('change', () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      dialog.addEventListener('close', () => options.importRun(file), { once: true });
+    send.disabled = !queued && (sending || off || (privateRun && !consent));
+  };
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (queued) {
       dialog.close();
-    });
-    label.append(input);
-    restore.append(label);
-    dialog.querySelector('h2')?.after(restore);
-    if (!options.hasRun) {
-      for (const button of dialog.querySelectorAll('button')) {
-        if (
-          button.textContent === 'Download this run' ||
-          button.textContent === 'Send this run to the notebook'
-        )
-          button.disabled = true;
-      }
-      const reason = document.createElement('p');
-      reason.textContent = 'Begin or replay a notebook to download or send a run.';
-      restore.after(reason);
+      return;
     }
-    add('Title page', options.title);
-    add('Read the residents’ notebook', options.readNotebook);
+    if (send.disabled) return;
+    sending = true;
+    update();
+    const chosen = form.querySelector<HTMLInputElement>('input[name=verdict]:checked');
+    const text = [chosen ? `Verdict: ${chosen.value}` : '', note.value.trim()].filter(Boolean).join('\n\n');
+    const submittedName = name.value.trim().slice(0, 60);
+    try {
+      if (lab.privacySignalOn && !lab.privacyOverride)
+        await lab.sendRun(getRun(), { note: text, name: submittedName });
+      else await lab.sendFeedback(text, { name: submittedName });
+      rememberName(submittedName);
+      queued = true;
+      status.textContent = 'Sent. Thank you.';
+      send.textContent = 'Back to the game';
+    } catch (error) {
+      status.textContent =
+        error instanceof Error ? error.message : 'Your note could not be queued. Please try again.';
+      if (lab.privacySignalOn && !lab.privacyOverride && !recordingOff()) {
+        lab.openSendDialog({ getRun, name: submittedName, note: text });
+        // Native modal dialogs make outside DOM inert; keep the fallback interactive.
+        const fallback = document.querySelector('.hflab-veil');
+        if (fallback) dialog.append(fallback);
+      }
+    } finally {
+      sending = false;
+      update();
+    }
   });
+  const refresh = () => update();
+  window.addEventListener('hf-lab-preference', refresh);
+  dialog.addEventListener(
+    'close',
+    () => {
+      window.removeEventListener('hf-lab-preference', refresh);
+      dialog.remove();
+      onClose?.();
+    },
+    { once: true },
+  );
+  update();
+  document.body.append(dialog);
+  dialog.showModal();
+  return dialog;
+}
+
+export function gameMenu(options: MenuOptions): HTMLButtonElement {
+  const entry = Object.assign(
+    button('≡', () => {
+      options.beforeOpen();
+      const dialog = dialogShell('menu', 'Game menu');
+      const body = document.createElement('div');
+      body.className = 'sw-menu-body';
+      let transfer = false;
+      const leave = (action: () => void) => {
+        transfer = true;
+        dialog.close();
+        action();
+      };
+      const readNotebook = options.readNotebook;
+      if (readNotebook) body.append(button('Read the residents’ notebook', () => leave(readNotebook)));
+      if (options.setSpeed) {
+        const speeds = document.createElement('fieldset');
+        speeds.className = 'sw-menu-speeds';
+        const legend = document.createElement('legend');
+        legend.textContent = 'Clock';
+        speeds.append(legend);
+        for (const [label, value] of [
+          ['Automatic', null],
+          ['Slow', 3],
+          ['Steady', 6],
+          ['Fast', 12],
+        ] as const) {
+          const choice = button(label, () => {
+            options.setSpeed?.(value);
+            for (const other of speeds.querySelectorAll('button'))
+              other.setAttribute('aria-pressed', String(other === choice));
+          });
+          choice.setAttribute('aria-pressed', String((options.speed?.() ?? null) === value));
+          speeds.append(choice);
+        }
+        body.append(speeds);
+      }
+      const feedback = button('Send word', () =>
+        leave(() => openFeedback(options.getRun, () => entry.click())),
+      );
+      feedback.disabled = !options.hasRun;
+      body.append(feedback);
+      const full = button(document.fullscreenElement ? 'Leave full screen' : 'Full screen', () => {
+        const result = document.fullscreenElement
+          ? document.exitFullscreen()
+          : document.documentElement.requestFullscreen?.();
+        void result
+          ?.then(() => {
+            full.textContent = document.fullscreenElement ? 'Leave full screen' : 'Full screen';
+          })
+          .catch(() => {
+            full.textContent = 'Full screen unavailable';
+          });
+      });
+      full.className = 'sw-fullscreen';
+      body.append(full);
+      const toTitle = options.title;
+      if (toTitle) body.append(button('To the title page', () => leave(toTitle)));
+      else {
+        const title = button('To the title page', () => dialog.close());
+        title.disabled = true;
+        body.append(title);
+      }
+      const games = document.createElement('a');
+      games.href = 'https://human.adamwhite.work/games/';
+      games.textContent = 'All games';
+      body.append(games);
+      const footer = document.createElement('footer');
+      footer.className = 'sw-menu-footer';
+      footer.append(recordingSwitch(), privacyLink());
+      body.append(footer);
+      const actions = document.createElement('div');
+      actions.className = 'sw-dialog-actions';
+      const resume = button('Back to the stairs', () => dialog.close());
+      resume.className = 'primary';
+      actions.append(resume);
+      dialog.append(body, actions);
+      dialog.addEventListener(
+        'close',
+        () => {
+          dialog.remove();
+          if (!transfer) options.onClose?.();
+        },
+        { once: true },
+      );
+      document.body.append(dialog);
+      dialog.showModal();
+    }),
+    { className: 'game-menu', ariaLabel: 'Game menu' },
+  );
   return entry;
 }
 
