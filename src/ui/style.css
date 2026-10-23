@@ -515,7 +515,7 @@ h3 {
 .game.decision .journal {
   display: none;
 }
-.game.tab-here:not(.has-conversation) .sheet {
+.game.tab-here:not(.has-conversation):not(.decision) .sheet {
   flex: 0 0 auto;
   max-height: 88px;
 }
@@ -791,7 +791,7 @@ details summary {
     flex: 1;
     border-top: 1px dashed var(--ink-soft);
   }
-  .game.tab-here:not(.has-conversation) .sheet {
+  .game.tab-here:not(.has-conversation):not(.decision) .sheet {
     max-height: 120px;
   }
   .journal {

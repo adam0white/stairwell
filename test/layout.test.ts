@@ -24,6 +24,15 @@ afterAll(async () => {
   await server?.close();
 }, 30000);
 
+// Layout fixtures must never upload a run or contact the identity bridge.
+async function testPage(options: Parameters<Browser['newPage']>[0] = {}) {
+  const page = await browser.newPage(options);
+  await page.route('**/lab/**', (route) => route.abort());
+  await page.route('**/cdn-cgi/**', (route) => route.abort());
+  await page.route('**/*cloudflareinsights.com/**', (route) => route.abort());
+  return page;
+}
+
 async function visibleInViewport(page: Page, selector: string) {
   const viewport = page.viewportSize();
   for (const element of await page.locator(selector).all()) {
@@ -82,7 +91,7 @@ it.each([
 ])(
   'anchors the entry being read when a full log rolls over at %ix%i (full render: %s)',
   async (width, height, full) => {
-    const page = await browser.newPage({ viewport: { width, height } });
+    const page = await testPage({ viewport: { width, height } });
     try {
       await importNotebook(page, 1254);
       if (await page.locator('.who [data-a=close]').isVisible())
@@ -125,7 +134,7 @@ it.each([
 );
 
 it('falls back to the oldest surviving entry when the entry being read is removed', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 780 } });
+  const page = await testPage({ viewport: { width: 360, height: 780 } });
   try {
     await importNotebook(page, 1254);
     if (await page.locator('.who [data-a=close]').isVisible())
@@ -144,7 +153,7 @@ it('falls back to the oldest surviving entry when the entry being read is remove
 });
 
 it('follows new entries at the newest end of a full log', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 780 } });
+  const page = await testPage({ viewport: { width: 360, height: 780 } });
   try {
     await importNotebook(page, 1254);
     if (await page.locator('.who [data-a=close]').isVisible())
@@ -166,7 +175,7 @@ it('follows new entries at the newest end of a full log', async () => {
 it.each(['newest', 'older', 'pending scroll'])(
   'preserves the journal through a late font load (%s)',
   async (reading) => {
-    const page = await browser.newPage({ viewport: { width: 360, height: 780 } });
+    const page = await testPage({ viewport: { width: 360, height: 780 } });
     try {
       await page.route('https://fonts.googleapis.com/**', (route) => route.abort());
       await importNotebook(page, 1254);
@@ -250,7 +259,7 @@ it.each([
     ],
   },
 ])('does not offer Continue for malformed inputs $inputs', async ({ inputs }) => {
-  const page = await browser.newPage();
+  const page = await testPage();
   try {
     await page.goto(url);
     await page.evaluate(
@@ -273,7 +282,7 @@ it.each([
   [360, 690],
   [1280, 800],
 ])('previews orders and destinations before walking at %ix%i', async (width, height) => {
-  const page = await browser.newPage({ viewport: { width, height }, hasTouch: true });
+  const page = await testPage({ viewport: { width, height }, hasTouch: true });
   try {
     await importNotebook(page, 420, []);
     const inputs = await page.evaluate('window.__st.s.inputs.length');
@@ -297,7 +306,7 @@ it.each([
   [360, 690],
   [1280, 800],
 ])('holds reading and conversation with reachable actions at %ix%i', async (width, height) => {
-  const page = await browser.newPage({ viewport: { width, height } });
+  const page = await testPage({ viewport: { width, height } });
   try {
     await importNotebook(page);
     await visibleInViewport(page, '.verbs button');
@@ -321,7 +330,7 @@ it.each([
 });
 
 it('keeps Tell addressed to the departed person and pins Back and invent', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await importNotebook(page, 560, [
       { kind: 'go', to: 'door:derya', at: 420 },
@@ -343,7 +352,7 @@ it.each([
   [360, 690],
   [1280, 800],
 ])('keeps all building destinations visible and at least 44px at %ix%i', async (width, height) => {
-  const page = await browser.newPage({ viewport: { width, height } });
+  const page = await testPage({ viewport: { width, height } });
   try {
     await importNotebook(page, 420, []);
     for (const hit of await page.locator('.scene .hit').all()) {
@@ -373,7 +382,7 @@ it.each([
 });
 
 it('keeps the optional tally outside replay state', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     const s = playWeek(11, 'honest');
     await importNotebook(page, s.minute, s.inputs, s.seed);
@@ -415,7 +424,7 @@ async function actionTarget(page: Page, selector: string) {
 }
 
 it('keeps Tell choices and focus stable when Derya returns to sleep', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
+  const page = await testPage({ viewport: { width: 360, height: 690 }, hasTouch: true });
   try {
     await importNotebook(page, 560, [
       { kind: 'go', to: 'door:derya', at: 420 },
@@ -442,7 +451,7 @@ it.each([
   [360, 690],
   [1280, 800],
 ])('anchors actions through changing speech at %ix%i', async (width, height) => {
-  const page = await browser.newPage({ viewport: { width, height }, hasTouch: true });
+  const page = await testPage({ viewport: { width, height }, hasTouch: true });
   try {
     await importNotebook(page);
     const before = await actionTarget(page, '[data-a=sit]');
@@ -468,7 +477,7 @@ it.each([
   [360, 690],
   [1280, 800],
 ])('holds the clock for information and menu, with shelf-only restart at %ix%i', async (width, height) => {
-  const page = await browser.newPage({ viewport: { width, height } });
+  const page = await testPage({ viewport: { width, height } });
   try {
     await importNotebook(page, 420, []);
     const before = await page.evaluate('window.__st.s.minute');
@@ -509,7 +518,7 @@ it.each([
 });
 
 it('offers Skip only for an empty stretch and stops at its first event', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await importNotebook(page, 420, []);
     await page.evaluate(() => {
@@ -537,7 +546,7 @@ it('offers Skip only for an empty stretch and stops at its first event', async (
 });
 
 it('shows lateness before an order is committed', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await importNotebook(page, 420, []);
     await page.evaluate(() => {
@@ -555,7 +564,7 @@ it('shows lateness before an order is committed', async () => {
 });
 
 it('restores pinned verbs when returning from an order preview to a person', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await importNotebook(page);
     await page.getByRole('button', { name: /^Orders/ }).click();
@@ -569,7 +578,7 @@ it('restores pinned verbs when returning from an order preview to a person', asy
 });
 
 it('includes a carried deadline when selecting its flat directly', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await importNotebook(page, 420, []);
     await page.evaluate(() => {
@@ -589,7 +598,7 @@ it('includes a carried deadline when selecting its flat directly', async () => {
 });
 
 it('shows the rate when the order slowdown ends', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await importNotebook(page, 420, []);
     await page.evaluate(() => {
@@ -609,7 +618,7 @@ it('shows the rate when the order slowdown ends', async () => {
 });
 
 it('preserves a legacy notebook edition through continue, export and morning rewind', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await page.clock.install();
     await page.goto(url);
@@ -653,7 +662,7 @@ it('preserves a legacy notebook edition through continue, export and morning rew
 });
 
 it('records completed hidden outcomes without exposing them in an untouched notebook', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await importNotebook(page, 420, []);
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
@@ -676,7 +685,7 @@ it('records completed hidden outcomes without exposing them in an untouched note
 });
 
 it('shows the working rate while unfinished orders remain', async () => {
-  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await importNotebook(page, 420, []);
     await page.evaluate(() => {
@@ -685,6 +694,73 @@ it('shows the working rate while unfinished orders remain', async () => {
       debug.render();
     });
     expect(await page.locator('.clock-rate').textContent()).toBe('6 game min/s');
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([
+  [360, 690, 'elif'],
+  [360, 690, 'huseyin'],
+  [1280, 800, 'elif'],
+  [1280, 800, 'huseyin'],
+] as const)('exposes every Tell choice at %ix%i for %s', async (width, height, who) => {
+  const page = await testPage({ viewport: { width, height } });
+  try {
+    await importNotebook(page, 440, [{ kind: 'go', to: `door:${who}`, at: 420 }]);
+    await page.locator('[data-a=news]').click();
+    await page.locator('[data-a=tell]').click();
+    if (process.env.STAIRWELL_RECEIPTS)
+      await page.screenshot({ path: `${process.env.STAIRWELL_RECEIPTS}/tell-${who}-${width}.png` });
+    expect((await page.locator('.sheet').boundingBox())?.height).toBeGreaterThan(180);
+    const choices = page.locator('[data-tell]');
+    expect(await choices.count()).toBeGreaterThan(0);
+    for (const choice of await choices.all()) {
+      await choice.scrollIntoViewIfNeeded();
+      await visibleInViewport(
+        page,
+        `[data-tell="${await choice.getAttribute('data-tell')}"][data-sure="${await choice.getAttribute('data-sure')}"]`,
+      );
+    }
+    await visibleInViewport(page, '.action-bar [data-a=back], .action-bar [data-a=invent]');
+    await choices.last().click();
+    expect(await page.locator('.game').getAttribute('class')).not.toContain('decision');
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([
+  [360, 690],
+  [1280, 800],
+])('opens the first bread instruction at its beginning at %ix%i', async (width, height) => {
+  const page = await testPage({ viewport: { width, height } });
+  try {
+    await page.clock.install();
+    await page.goto(url);
+    await page.getByRole('button', { name: 'Begin on Monday', exact: true }).click();
+    await page.evaluate(() => document.fonts.ready);
+    const journal = page.locator('.journal');
+    if (process.env.STAIRWELL_RECEIPTS)
+      await page.screenshot({ path: `${process.env.STAIRWELL_RECEIPTS}/bread-${width}.png` });
+    expect(await journal.evaluate((el) => el.scrollTop)).toBe(0);
+    expect(await journal.locator(':scope > div').first().textContent()).toContain(
+      'Bread first, before anything.',
+    );
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    await page.getByRole('button', { name: 'Read the residents’ notebook', exact: true }).click();
+    await page.locator('.sheet [data-a=close]').click();
+    expect(await journal.evaluate((el) => el.scrollTop)).toBe(0);
+    // The whole instruction can be read with ordinary scrolling.
+    await journal.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    expect(
+      await journal.evaluate((el) => {
+        const first = el.firstElementChild?.getBoundingClientRect();
+        return !!first && first.top >= el.getBoundingClientRect().top;
+      }),
+    ).toBe(true);
   } finally {
     await page.close();
   }

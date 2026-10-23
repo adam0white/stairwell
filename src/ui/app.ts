@@ -558,7 +558,11 @@ function dayView(s: GameState, full: boolean) {
   const position =
     oldLog && oldLog.clientHeight === 0
       ? (journalPositions.get(oldLog)?.position ?? journalPosition(oldLog))
-      : journalPosition(oldLog);
+      : !oldLog && s.inputs.length === 0 && s.minute === 7 * 60
+        ? // Open the new notebook at the start of Rıza’s instruction. Longer
+          // resumed notebooks still follow the newest entry by default.
+          { atEnd: false, n: undefined, offset: 0 }
+        : journalPosition(oldLog);
   let root = app().querySelector<HTMLElement>('.day');
   if (!root || full) {
     app().innerHTML = `<div class="day game tab-here">${topbar('')}<div class="state-strip"><div class="order-pips"></div><span class="next-due"></span><span class="clock-rate"></span></div><section class="scene" aria-label="Building view"><div class="scene-drawing"></div><div class="speech-overlay" aria-live="polite"></div></section><div class="play-panel"><nav class="sheet-tabs" aria-label="Views"><button data-tab="none">Here</button><button data-tab="orders">Orders</button><button data-tab="residents">Residents</button></nav><section class="sheet" aria-label="Neighbour or orders"></section><section class="journal" aria-label="Journal"></section></div><div class="action-bar"></div></div>`;
