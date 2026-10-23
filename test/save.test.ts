@@ -11,6 +11,11 @@ const notebook = (inputs: unknown = [], minute: unknown = 440) => ({
 });
 
 describe('saved notebook validation', () => {
+  it('accepts each supported rules edition and rejects unknown editions', () => {
+    expect(isSaved({ ...notebook(), game: 'stairwell@3' })).toBe(true);
+    expect(isSaved({ ...notebook(), game: 'stairwell@4' })).toBe(true);
+    expect(isSaved({ ...notebook(), game: 'stairwell@5' })).toBe(false);
+  });
   it('accepts exported weeks and notebooks without a saved minute', () => {
     for (const policy of ['quiet', 'honest', 'gossip', 'liar'] as const) {
       const state = playWeek(11, policy);

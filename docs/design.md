@@ -227,3 +227,11 @@ the owner's pacing acceptance.
 The title’s job background opens through a small information button and a native dismissible popover. Its prose is retained. The menu no longer has a tally preference. The Sunday ending always computes Rıza’s recorded-work tally, hidden until “See tally” is pressed. Automatic pacing, gameplay answer disclosures, simulation rules, saves and replay remain unchanged. Adam accepts feel.
 
 Clock controls offer Automatic (the default), Slow, Steady and Fast. Selected rates apply to travel and empty stretches. Orders, conversation, inspection and new speech retain their existing protection. Until something happens remains guarded. These are page-session preferences; saves and replay inputs are unchanged.
+
+## Hidden resident outcomes, rules edition 4 (2026-10-23)
+
+Owner F-185/F-311 asks for backstories that are difficult to untangle and have real outcomes. Edition 4 adds authored clues for existing residents in `src/sim/stories.ts`. Repeated sitting and earned trust reveal the accounts behind Nermin and Sevim's quarrel and Tarık's private repayment offer. Carrying the relevant true accounts can unlock reconciliation and a boiler repair funded by the building, each recorded by a hidden stamp. The notebook lists a clue only after discovery. It lists a stamp only after the event. Chore deadlines, travel, gossip exposure and the Sunday vote rules keep their existing difficulty.
+
+New notebooks use `stairwell@4`. Continue, file import, export, browser saves, morning rewind and the command-line front end retain each notebook's rules edition. `stairwell@3` keeps its exact state shape, authored lines and continuation; frozen state hashes remain unchanged. A legacy notebook does not acquire the new paths during continuation. Begin a new notebook to play edition 4.
+
+Delivery for this sweep means signed changes on main, green CI, a clean live release containing them, and live Chromium checks at 360×690 and 1280×800. Adam accepts the experience separately. The external sweep report records route dispositions; this worker does not edit the shared feedback ledger or curated listing.

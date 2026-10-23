@@ -142,3 +142,38 @@ it('preserves the verdict, note and name in an interactive fallback dialog', asy
     await page.close();
   }
 });
+
+it('explains clock rates and when protected time ends beside the speed choices', async () => {
+  const page = await feedbackPage();
+  try {
+    const result = await page.evaluate(() => {
+      const { gameMenu } = (window as unknown as { testLab: typeof import('../src/ui/lab.ts') }).testLab;
+      let speed: number | null = null;
+      gameMenu({
+        getRun: () => ({}),
+        beforeOpen: () => {},
+        hasRun: true,
+        speed: () => speed,
+        setSpeed: (value) => {
+          speed = value;
+        },
+      }).click();
+      const controls = document.querySelector('.sw-menu-speeds')!;
+      const fast = Array.from(controls.querySelectorAll('button')).find(
+        (button) => button.textContent === 'Fast',
+      )!;
+      fast.click();
+      return { text: controls.textContent, speed, pressed: fast.getAttribute('aria-pressed') };
+    });
+    expect(result.text).toContain('Game minutes per real second: Automatic 6 · Slow 3 · Steady 6 · Fast 12.');
+    expect(result.text).toContain('Your choice applies during travel, work and quiet time.');
+    expect(result.text).toContain(
+      'While you are idle, open orders slow time to 0.6. Your chosen rate resumes when no orders remain or you start travel or work.',
+    );
+    expect(result.text).toContain('Conversation and reading pause time until you close them.');
+    expect(result.speed).toBe(12);
+    expect(result.pressed).toBe('true');
+  } finally {
+    await page.close();
+  }
+});

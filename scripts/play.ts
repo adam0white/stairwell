@@ -4,11 +4,11 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import {
   act,
+  canReplay,
   clockOf,
   DAY_NAMES,
   dayOf,
   faceToFace,
-  GAME_VERSION,
   type GameState,
   INVENTABLE,
   type Input,
@@ -29,6 +29,7 @@ import {
   wordHint,
 } from '../src/sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../src/sim/people.ts';
+import { STORY_SECRETS } from '../src/sim/stories.ts';
 
 interface Save {
   game: string;
@@ -66,10 +67,11 @@ const HELP = `Commands:
 function load(): { s: GameState; save: Save } | null {
   if (!existsSync(file as string)) return null;
   const save = JSON.parse(readFileSync(file as string, 'utf8')) as Save;
-  return { s: replay(save.seed, save.inputs, save.minute), save };
+  if (!canReplay(save.game)) throw new Error('Unsupported notebook edition');
+  return { s: replay(save.seed, save.inputs, save.minute, save.game), save };
 }
 function store(s: GameState, seen: number) {
-  const save: Save = { game: GAME_VERSION, seed: s.seed, inputs: s.inputs, minute: s.minute, seen };
+  const save: Save = { game: s.version, seed: s.seed, inputs: s.inputs, minute: s.minute, seen };
   writeFileSync(file as string, JSON.stringify(save));
 }
 
@@ -258,11 +260,12 @@ function main() {
       send({ kind: 'next' });
       break;
     case 'notebook':
-      for (const x of SECRET_PROPS) console.log(`  ${s.secrets[x.prop] !== undefined ? x.title : '…'}`);
+      for (const x of s.stories ? [...SECRET_PROPS, ...STORY_SECRETS] : SECRET_PROPS)
+        console.log(`  ${s.secrets[x.prop] !== undefined ? x.title : '…'}`);
       console.log(`Stamps: ${s.stamps.map((x) => x.id).join(', ') || 'none'}`);
       return;
     case 'export':
-      console.log(JSON.stringify({ game: GAME_VERSION, seed: s.seed, inputs: s.inputs, minute: s.minute }));
+      console.log(JSON.stringify({ game: s.version, seed: s.seed, inputs: s.inputs, minute: s.minute }));
       return;
     default:
       console.log(HELP);

@@ -49,8 +49,10 @@ import {
   TRAITS,
 } from './people.ts';
 import { DRAW, hashUnit } from './rng.ts';
+import { newStories, STORY_FACTS, STORY_LINES, STORY_WORDS, type StoryState } from './stories.ts';
 
-export const GAME_VERSION = 'stairwell@3';
+export const LEGACY_GAME_VERSION = 'stairwell@3';
+export const GAME_VERSION = 'stairwell@4';
 export const DAY_START = 7 * 60;
 export const DAY_END = 21 * 60;
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -195,6 +197,8 @@ export interface Kapici {
 }
 
 export interface GameState {
+  /** Present only in v4. Legacy notebooks retain their exact serialized state. */
+  stories?: StoryState;
   version: string;
   seed: number;
   minute: number;
@@ -450,7 +454,8 @@ export function planDay(s: GameState, day: number) {
 
 // ---------- new game ----------
 
-export function newGame(seed: number): GameState {
+export function newGame(seed: number, edition = GAME_VERSION): GameState {
+  if (!canReplay(edition)) throw new Error(`Unsupported rules edition: ${edition}`);
   const now = DAY_START;
   // Everyone wakes at 06:20 and has breakfast before the day starts.
   const people = RIDS.map((id) => makeResident(id, seed, now - 40));
@@ -460,7 +465,7 @@ export function newGame(seed: number): GameState {
     tick(p, now);
   }
   const s: GameState = {
-    version: GAME_VERSION,
+    version: edition,
     seed,
     minute: now,
     phase: 'day',
@@ -506,6 +511,7 @@ export function newGame(seed: number): GameState {
     jobsUsed: [],
     knocks: 0,
   };
+  if (edition === GAME_VERSION) s.stories = newStories();
   // Derya is coming home from her night shift.
   const d = rOf(s, 'derya');
   d.where = 'work';
@@ -832,7 +838,7 @@ export function talk(s: GameState, a: Rid, b: Rid, where: string, maxClaims?: nu
     for (const ev of res.socialEvents.listener) socialEvent(li, ev);
     for (const c of res.told.flatMap((pc) => pc.claims ?? []))
       if (!(c.prop === 'notice:water' && waterGone(s)))
-        heard.push(`${nameOf(sp.id)}: ${claimWords(c.prop, c.value)}`);
+        heard.push(`${nameOf(sp.id)}: ${claimWords(c.prop, c.value, s.version)}`);
     if (near)
       perceive(
         s.kapici,
@@ -953,7 +959,7 @@ function doubtKapici(s: GameState, who: Rid, from: Rid, prop: string, value: boo
   say(
     s,
     'narrator',
-    `${nameOf(from)} told ${nameOf(who)} what you had said: “${claimWords(prop, value)}” ${nameOf(who)} knows better.`,
+    `${nameOf(from)} told ${nameOf(who)} what you had said: “${claimWords(prop, value, s.version)}” ${nameOf(who)} knows better.`,
     'event',
   );
 }
@@ -1003,7 +1009,9 @@ const TRAIT_WORDS: Record<string, [string, string]> = {
   owes: ['owes money', 'owes nothing'],
 };
 
-export function claimWords(prop: string, value: boolean): string {
+export function claimWords(prop: string, value: boolean, edition = LEGACY_GAME_VERSION): string {
+  const story = edition === GAME_VERSION && Object.hasOwn(STORY_WORDS, prop) ? STORY_WORDS[prop] : undefined;
+  if (story) return story[value ? 0 : 1];
   const [who, trait, other] = prop.split(':');
   if (prop === FACTS.ring)
     return value ? 'Burak had a parcel from a jeweller.' : 'Burak’s parcel was nothing special.';
@@ -1061,7 +1069,7 @@ export function tellables(s: GameState, to: Rid): Tellable[] {
       prop: b.prop,
       value,
       sure: side >= 0.8 ? 'sure' : side >= 0.65 ? 'heard' : 'doubt',
-      words: claimWords(b.prop, value),
+      words: claimWords(b.prop, value, s.version),
     });
   }
   return out.sort((x, y) => (x.prop < y.prop ? -1 : 1));
@@ -1421,6 +1429,7 @@ function sit(s: GameState, who: Rid) {
   const lines = SIT_LINES[who];
   say(s, who, lines[r.sits % lines.length] as string, 'voice');
   r.sits++;
+  storySitting(s, who);
   const p = personOf(s, who);
   tick(p, Math.max(p.now, s.minute));
   socialEvent(p, { at: s.minute, kind: 'chat', otherId: KAPICI, byMe: false, magnitude: 0.3 });
@@ -1445,6 +1454,7 @@ function askNews(s: GameState, who: Rid) {
   tick(p, Math.max(p.now, s.minute));
   tick(s.kapici, Math.max(s.kapici.now, s.minute));
   const aff = relationshipWith(p, KAPICI).affection;
+  if (storyNews(s, who)) return;
   if (aff < -0.2) {
     say(s, who, 'Nothing for you today.', 'voice');
     return;
@@ -1488,7 +1498,7 @@ function askNews(s: GameState, who: Rid) {
     return;
   }
   for (const c of claims) {
-    say(s, who, claimWords(c.prop, c.value), 'voice');
+    say(s, who, claimWords(c.prop, c.value, s.version), 'voice');
     for (const sp of SECRET_PROPS)
       if (sp.prop === c.prop && sp.value === c.value && s.secrets[c.prop] === undefined) {
         learn(s, c.prop);
@@ -1551,6 +1561,7 @@ const NO_STORIES: Record<Rid, string[]> = {
 /** The kapıcı tells a resident something: HF told testimony, believed as far as they trust his word. */
 function tell(s: GameState, who: Rid, prop: string, value: boolean, sure: boolean) {
   if (!canTalk(s, who)) return;
+  if (storyTell(s, who, prop, value)) return;
   const own = credence(s.kapici, prop);
   const side = value ? own : 1 - own;
   const conf = sure ? 0.95 : Math.max(0.55, Math.min(0.9, side));
@@ -1598,7 +1609,7 @@ function deliverClaim(s: GameState, who: Rid, prop: string, value: boolean, conf
       actorId: KAPICI,
       targetId: who,
       salience: 0.75,
-      summary: claimWords(prop, value),
+      summary: claimWords(prop, value, s.version),
       claims: [{ prop, value, confidence: conf }],
     },
   ]);
@@ -1921,6 +1932,102 @@ function prank(s: GameState, what: 'swap' | 'gate') {
   }
 }
 
+// ---------- v4 hidden resident stories ----------
+
+function trustedStoryListener(s: GameState, who: Rid): boolean {
+  const p = personOf(s, who);
+  return trustOf(p, KAPICI) >= 0.58 && relationshipWith(p, KAPICI).affection >= 0.12;
+}
+
+function storyClue(s: GameState, who: Rid, prop: string, words: string) {
+  if (s.secrets[prop] !== undefined) return;
+  perceive(s.kapici, [
+    {
+      at: s.minute,
+      channel: 'told',
+      kind: 'fact',
+      actorId: who,
+      salience: 0.9,
+      summary: words,
+      claims: [{ prop, value: true, confidence: 0.95 }],
+    },
+  ]);
+  learn(s, prop);
+  say(s, who, words, 'voice');
+  say(s, 'narrator', 'A new line in the notebook.', 'event');
+}
+
+function storySitting(s: GameState, who: Rid) {
+  if (!s.stories || rOf(s, who).sits < 3 || !trustedStoryListener(s, who)) return;
+  if (who === 'nermin' || who === 'sevim') storyClue(s, who, STORY_FACTS[who], STORY_LINES[who]);
+  if (who === 'tarik') storyClue(s, who, STORY_FACTS.instalments, STORY_LINES.instalments);
+  if (who === 'huseyin' && s.boilerBroken && !s.stories.fund.bookRead) {
+    s.stories.fund.bookRead = true;
+    storyClue(s, who, STORY_FACTS.book, STORY_LINES.book);
+  }
+}
+
+/** A specific discovered account can be passed on; guessing a fact cannot unlock a story. */
+function storyTell(s: GameState, who: Rid, prop: string, value: boolean): boolean {
+  if (!s.stories || !Object.values(STORY_FACTS).some((fact) => fact === prop)) return false;
+  if (!value || s.secrets[prop] === undefined) return false;
+  const f = s.stories.feud;
+  if (who === 'sevim' && prop === STORY_FACTS.nermin) f.nerminPassed = true;
+  else if (who === 'nermin' && prop === STORY_FACTS.sevim) f.sevimPassed = true;
+  else if (who === 'huseyin' && prop === STORY_FACTS.instalments) s.stories.fund.consentPassed = true;
+  else return false;
+  // Keep the testimony in HF and the ordinary ledger, so it remains ordinary gossip too.
+  deliverClaim(s, who, prop, true, 0.95, false);
+  say(
+    s,
+    who,
+    who === 'huseyin'
+      ? 'He asked you to tell me? Ask me about the fund again. I’ll have the book ready.'
+      : 'That is not how I remember it. Let me think. Perhaps we should speak ourselves.',
+    'voice',
+  );
+  return true;
+}
+
+function storyNews(s: GameState, who: Rid): boolean {
+  const fund = s.stories?.fund;
+  if (who !== 'huseyin' || !fund || !s.boilerBroken || !trustedStoryListener(s, who)) return false;
+  if (rOf(s, who).sits >= 2 && !fund.bookRead) {
+    fund.bookRead = true;
+    storyClue(s, who, STORY_FACTS.book, STORY_LINES.book);
+    return true;
+  }
+  if (!fund.bookRead || !fund.consentPassed || fund.agreed) return false;
+  // The engineer can still come on Saturday evening; later requests stay unresolved this week.
+  if (today(s) > 6 || (today(s) === 6 && tod(s) > 18 * 60)) return false;
+  fund.agreed = true;
+  fund.repairAt = today(s) < 6 ? dayStart(today(s) + 1) + 10 * 60 : dayStart(6) + 19 * 60;
+  say(s, who, STORY_LINES.agreement, 'voice');
+  return true;
+}
+
+function storyEvents(s: GameState) {
+  if (!s.stories) return;
+  const { feud, fund } = s.stories;
+  if (!feud.reconciled && feud.nerminPassed && feud.sevimPassed && today(s) === 6 && tod(s) >= 17 * 60) {
+    feud.reconciled = true;
+    for (const [a, b] of [
+      ['nermin', 'sevim'],
+      ['sevim', 'nermin'],
+    ] as const) {
+      socialEvent(personOf(s, a), { at: s.minute, kind: 'gift', otherId: b, byMe: false, magnitude: 0.8 });
+    }
+    say(s, 'narrator', STORY_LINES.tea, 'event');
+    stamp(s, 'two_cups');
+  }
+  if (fund.agreed && !fund.repaired && fund.repairAt !== null && s.minute >= fund.repairAt) {
+    fund.repaired = true;
+    s.boilerBroken = false;
+    say(s, 'narrator', STORY_LINES.repair, 'event');
+    stamp(s, 'warm_stairs');
+  }
+}
+
 // ---------- arcs ----------
 
 function boilerFound(s: GameState) {
@@ -2139,7 +2246,9 @@ function meeting(s: GameState) {
   say(
     s,
     'huseyin',
-    'Here is the book. Every kuruş. One flat is behind, and that is their business.',
+    s.stories?.fund.repaired
+      ? 'Here is the pump invoice and the deposit. The balance is due next week. The private repayment arrangement is in hand.'
+      : 'Here is the book. Every kuruş. One flat is behind, and that is their business.',
     'voice',
   );
   const duesOut = RIDS.filter(
@@ -2420,6 +2529,7 @@ export function step(s: GameState): void {
   if (d === 3 && t === 10 * 60) waterOff(s);
   for (const r of s.residents) residentMinute(s, r);
   kapiciMinute(s);
+  storyEvents(s);
   if (t >= DAY_END) endDay(s);
 }
 
@@ -2456,8 +2566,13 @@ export function act(s: GameState, inp: NewInput) {
   applyPending(s);
 }
 
-export function replay(seed: number, inputs: readonly Input[], until?: number): GameState {
-  const s = newGame(seed);
+export function replay(
+  seed: number,
+  inputs: readonly Input[],
+  until?: number,
+  edition = GAME_VERSION,
+): GameState {
+  const s = newGame(seed, edition);
   for (const inp of inputs) {
     while (s.phase === 'day' && s.minute < inp.at) step(s);
     s.inputs.push(inp);
@@ -2467,7 +2582,8 @@ export function replay(seed: number, inputs: readonly Input[], until?: number): 
   return s;
 }
 
-export const canReplay = (game: string | undefined): boolean => game === GAME_VERSION;
+export const canReplay = (game: string | undefined): boolean =>
+  game === GAME_VERSION || game === LEGACY_GAME_VERSION;
 
 export function fingerprint(s: GameState): string {
   const people = s.people.map((p) => ({

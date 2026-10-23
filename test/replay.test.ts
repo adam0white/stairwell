@@ -25,7 +25,7 @@ function restore() {
   const notebook: unknown = fixture.notebook;
   if (!isSaved(notebook)) throw new Error('The frozen notebook must remain importable');
   expect(canReplay(notebook.game)).toBe(true);
-  return replay(notebook.seed, notebook.inputs, notebook.minute);
+  return replay(notebook.seed, notebook.inputs, notebook.minute, notebook.game);
 }
 
 describe('pre-playback-change notebook compatibility', () => {
@@ -54,7 +54,7 @@ function restoreOwnerStyle() {
   const notebook: unknown = ownerStyleFixture.notebook;
   if (!isSaved(notebook)) throw new Error('The frozen owner-style export must remain importable');
   expect(canReplay(notebook.game)).toBe(true);
-  return replay(notebook.seed, notebook.inputs, notebook.minute);
+  return replay(notebook.seed, notebook.inputs, notebook.minute, notebook.game);
 }
 
 describe('frozen owner-style export compatibility', () => {

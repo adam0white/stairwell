@@ -14,7 +14,6 @@ import {
   dayStart,
   faceToFace,
   floorOf,
-  GAME_VERSION,
   type GameState,
   INVENTABLE,
   type Input,
@@ -39,6 +38,7 @@ import {
   wordHint,
 } from '../sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
+import { STORY_SECRETS } from '../sim/stories.ts';
 import { downloadRun, gameMenu, lab, labScreen, openFeedback } from './lab.ts';
 import { canWait, playback, untilSomethingHappens } from './playback.ts';
 import { isSaved, type Saved } from './save.ts';
@@ -98,7 +98,7 @@ function save() {
   const s = ui.s;
   if (!s) return;
   try {
-    const text = JSON.stringify({ game: GAME_VERSION, seed: s.seed, inputs: s.inputs, minute: s.minute });
+    const text = JSON.stringify({ game: s.version, seed: s.seed, inputs: s.inputs, minute: s.minute });
     localStorage.setItem(SAVE_KEY, text);
     lab.captureSave(JSON.parse(text));
   } catch {}
@@ -110,7 +110,7 @@ function loadSaved(): Saved | null {
     if (!raw) return null;
     const x: unknown = JSON.parse(raw);
     if (!isSaved(x)) return null;
-    replay(x.seed, x.inputs, x.minute);
+    replay(x.seed, x.inputs, x.minute, x.game);
     return x;
   } catch {
     return null;
@@ -133,7 +133,7 @@ function mornings(saved: Saved): { day: number; inputs: Input[] }[] {
 function runOf(s = ui.s) {
   if (!s) return;
   return {
-    game: GAME_VERSION,
+    game: s.version,
     seed: s.seed,
     inputs: s.inputs,
     minute: s.minute,
@@ -163,7 +163,7 @@ function importRun(file: File) {
         alert('Could not read that notebook. Check its inputs or choose another file.');
         return;
       }
-      begin(replay(x.seed, x.inputs, x.minute));
+      begin(replay(x.seed, x.inputs, x.minute, x.game));
     } catch {
       alert('Could not read that file.');
     }
@@ -358,6 +358,9 @@ function mountMenu(target: Element | null, s: GameState | null) {
         ui.acc = 0;
       },
       beforeOpen: save,
+      onClose: () => {
+        if (ui.s?.phase === 'day') render(false);
+      },
       readNotebook:
         s?.phase === 'day' && ui.s
           ? () => {
@@ -389,7 +392,7 @@ function titlePage() {
   ui.s = null;
   infoOpen = false;
   const saved = loadSaved();
-  const savedState = saved ? replay(saved.seed, saved.inputs, saved.minute) : null;
+  const savedState = saved ? replay(saved.seed, saved.inputs, saved.minute, saved.game) : null;
   app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1><p>Keep seven flats supplied through Saturday. On Sunday, the residents vote on your tea money.</p><p>Rıza left you his caretaker’s notebook. The job is yours.</p><p class="soft small">Six days and a Sunday. Nothing happens while you are away.</p></div><button data-a="other">Other ways in ▸</button><div class="title-spacer"></div></main><div class="action-bar">
     ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${DAY_NAMES[dayOf(savedState.minute) - 1]} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
     <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'A new notebook' : 'Begin on Monday'}</button><div class="new-confirm" hidden>The old notebook will be replaced.<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
@@ -449,7 +452,7 @@ function titlePage() {
           const m = ms[Number(b.dataset.yes)];
           if (saved && m) {
             dialog.close();
-            begin(replay(saved.seed, m.inputs));
+            begin(replay(saved.seed, m.inputs, undefined, saved.game));
           }
         });
       });
@@ -518,9 +521,9 @@ function dayView(s: GameState, full: boolean) {
     ? 'Reading · time waits'
     : ctx.talking
       ? `${who ? RESIDENTS[who].name : 'Someone'} is talking · time waits`
-      : !s.k.walk && openTasks(s).length
-        ? 'slowed: orders waiting'
-        : '';
+      : !s.k.walk && s.k.busyUntil <= s.minute && openTasks(s).length
+        ? 'orders · 0.6 game min/s'
+        : `${clockPlayback(s).rate} game min/s`;
   root.querySelector('.clock-rate')!.textContent = slowed;
   const tasks = openTasks(s).sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
   root.querySelector('.order-pips')!.innerHTML = s.tasks
@@ -1259,8 +1262,13 @@ function wireDoor(s: GameState, el: HTMLElement, who: Rid) {
 
 // ---------- the notebook ----------
 
+function secretProps(s: GameState) {
+  return s.stories ? [...SECRET_PROPS, ...STORY_SECRETS] : SECRET_PROPS;
+}
+
 function notebookHtml(s: GameState): string {
-  const found = SECRET_PROPS.filter((x) => s.secrets[x.prop] !== undefined);
+  const props = secretProps(s);
+  const found = props.filter((x) => s.secrets[x.prop] !== undefined);
   const flats = RIDS.map((id) => {
     const rd = readOf(s, id);
     return `<div class="flatline"><b>${RESIDENTS[id].flat} ${RESIDENTS[id].name}</b> <span class="hand soft">${rd.warmth}; ${rd.word}</span></div>`;
@@ -1268,13 +1276,15 @@ function notebookHtml(s: GameState): string {
   return `<div class="who"><b>The notebook</b><button class="x" data-a="close">✕</button></div>
     <div class="nb">
     <h3>The flats</h3>${flats}
-    <h3>What the building keeps <span class="soft small">${found.length} of ${SECRET_PROPS.length}</span></h3>
-    ${SECRET_PROPS.map((x) => (s.secrets[x.prop] !== undefined ? `<div>· ${esc(x.title)}</div>` : `<div class="soft">· …</div>`)).join('')}
+    <h3>What the building keeps <span class="soft small">${found.length} of ${props.length}</span></h3>
+    ${props.map((x) => (s.secrets[x.prop] !== undefined ? `<div>· ${esc(x.title)}</div>` : `<div class="soft">· …</div>`)).join('')}
     <h3>Stamps</h3><div>${s.stamps.length ? s.stamps.map((x) => esc(STAMPS[x.id] ?? x.id)).join(' · ') : '<span class="soft">none yet</span>'}</div>
     </div>`;
 }
 
 const STAMPS: Record<string, string> = {
+  two_cups: 'Two cups',
+  warm_stairs: 'Warm stairs',
   caught: 'Caught in two stories',
   treat: 'Fed for news',
   wrong_door: 'The wrong door',
@@ -1371,7 +1381,7 @@ function sundayPage(s: GameState) {
   const total = s.reports.reduce((a, x) => a + x.tips, 0);
   const secrets = Object.keys(s.secrets).length;
   const caught = s.residents.reduce((a, r) => a + r.caught.length + r.grudges.length, 0);
-  const share = `The Stairwell, week 1: ₺${s.k.money} in the tin, ${secrets}/${SECRET_PROPS.length} secrets, caught ${caught}×, tea money ${m?.raise ? 'up' : 'unchanged'} (${m?.yes ?? 0} hands).${s.ring.answer === 'yes' ? ' A ring on the roof.' : ''}${s.catHome ? ' A cat on the step.' : ''} ◇`;
+  const share = `The Stairwell, week 1: ₺${s.k.money} in the tin, ${secrets}/${secretProps(s).length} secrets, caught ${caught}×, tea money ${m?.raise ? 'up' : 'unchanged'} (${m?.yes ?? 0} hands).${s.ring.answer === 'yes' ? ' A ring on the roof.' : ''}${s.catHome ? ' A cat on the step.' : ''} ◇`;
   app().innerHTML = `<div class="page sunday">${topbar('Sunday · the meeting')}<main class="page-body">
     ${lines.map(saidLine).join('')}
     <div class="votes">${RIDS.map((id) => {
@@ -1383,6 +1393,7 @@ function sundayPage(s: GameState) {
     }).join('')}</div>
     <p>Six days: <span class="money">₺${total}</span> in tips${m?.raise ? ', and the tea money goes up' : ''}. The tin: <span class="money">₺${s.k.money}</span>.</p>
     <p>${s.ring.answer === 'yes' ? 'Burak and Elif are engaged. ' : s.ring.answer === 'not yet' ? 'Elif asked Burak for time. ' : 'Burak still has the ring in his pocket. '}${s.catHome ? 'Pamuk sleeps on the step.' : ''}</p>
+    <p class="story-outcomes">${s.stories?.feud.reconciled ? 'Nermin and Sevim shared dolma and tea at the entrance. ' : ''}${s.stories?.fund.repaired ? 'The new pump is running; the repair is recorded in the fund book.' : ''}</p>
     <div class="margin hand">${m?.raise ? 'Not bad for a first week. They will want more next week.' : 'A first week is a first week. Next week they will know you better.'} <span class="soft">— R.</span></div>
     <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>

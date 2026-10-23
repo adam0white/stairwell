@@ -290,6 +290,12 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
           choice.setAttribute('aria-pressed', String((options.speed?.() ?? null) === value));
           speeds.append(choice);
         }
+        const rates = document.createElement('p');
+        rates.textContent = 'Game minutes per real second: Automatic 6 · Slow 3 · Steady 6 · Fast 12.';
+        const protection = document.createElement('p');
+        protection.textContent =
+          'Your choice applies during travel, work and quiet time. While you are idle, open orders slow time to 0.6. Your chosen rate resumes when no orders remain or you start travel or work. Conversation and reading pause time until you close them.';
+        speeds.append(rates, protection);
         body.append(speeds);
       }
       const feedback = button('Send word', () =>

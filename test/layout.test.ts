@@ -583,3 +583,105 @@ it('includes a carried deadline when selecting its flat directly', async () => {
     await page.close();
   }
 });
+
+it('shows the rate when the order slowdown ends', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page, 420, []);
+    await page.evaluate(() => {
+      const debug = (window as unknown as { __st: { s: GameState; render: () => void } }).__st;
+      for (const task of debug.s.tasks) if (task.from <= debug.s.minute) task.done = debug.s.minute;
+      debug.render();
+    });
+    expect(await page.locator('.clock-rate').textContent()).toBe('6 game min/s');
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    await page.getByRole('button', { name: 'Fast', exact: true }).click();
+    await page.getByRole('button', { name: 'Back to the stairs', exact: true }).click();
+    await page.clock.runFor(32);
+    expect(await page.locator('.clock-rate').textContent()).toBe('12 game min/s');
+  } finally {
+    await page.close();
+  }
+});
+
+it('preserves a legacy notebook edition through continue, export and morning rewind', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await page.clock.install();
+    await page.goto(url);
+    await page.evaluate(() =>
+      localStorage.setItem(
+        'stairwell:notebook',
+        JSON.stringify({
+          game: 'stairwell@3',
+          seed: 7,
+          inputs: [{ at: 1260, kind: 'next' }],
+          minute: 1860,
+        }),
+      ),
+    );
+    await page.reload();
+    await page.locator('[data-a=continue]').click();
+    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@3');
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    expect(
+      await page.evaluate(() => JSON.parse(localStorage.getItem('stairwell:notebook') ?? '{}').game),
+    ).toBe('stairwell@3');
+    await page.getByRole('button', { name: 'Send word', exact: true }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: /Keep a copy of this run/ }).click(),
+    ]);
+    const stream = await download.createReadStream();
+    let text = '';
+    if (!stream) throw new Error('Missing download stream');
+    for await (const chunk of stream) text += chunk.toString();
+    expect(JSON.parse(text).game).toBe('stairwell@3');
+    await page.getByRole('button', { name: 'Close send word', exact: true }).click();
+    await page.getByRole('button', { name: 'To the title page', exact: true }).click();
+    await page.locator('[data-a=other]').click();
+    await page.getByRole('button', { name: 'Turn back to Monday morning', exact: true }).click();
+    await page.getByRole('button', { name: 'Yes, turn back', exact: true }).click();
+    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@3');
+  } finally {
+    await page.close();
+  }
+});
+
+it('records completed hidden outcomes without exposing them in an untouched notebook', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page, 420, []);
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    await page.getByRole('button', { name: 'Read the residents’ notebook', exact: true }).click();
+    expect(await page.locator('.nb').textContent()).not.toContain('Two cups');
+    expect(await page.locator('.nb').textContent()).not.toContain('Warm stairs');
+    await page.evaluate(() => {
+      const debug = (window as unknown as { __st: { s: GameState; render: () => void } }).__st;
+      debug.s.stamps.push({ id: 'two_cups', day: 6 }, { id: 'warm_stairs', day: 4 });
+      if (!debug.s.stories) throw new Error('Expected current edition stories');
+      debug.s.stories.feud.reconciled = true;
+      debug.s.stories.fund.repaired = true;
+      debug.render();
+    });
+    expect(await page.locator('.nb').textContent()).toContain('Two cups');
+    expect(await page.locator('.nb').textContent()).toContain('Warm stairs');
+  } finally {
+    await page.close();
+  }
+});
+
+it('shows the working rate while unfinished orders remain', async () => {
+  const page = await browser.newPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await importNotebook(page, 420, []);
+    await page.evaluate(() => {
+      const debug = (window as unknown as { __st: { s: GameState; render: () => void } }).__st;
+      debug.s.k.busyUntil = debug.s.minute + 20;
+      debug.render();
+    });
+    expect(await page.locator('.clock-rate').textContent()).toBe('6 game min/s');
+  } finally {
+    await page.close();
+  }
+});
