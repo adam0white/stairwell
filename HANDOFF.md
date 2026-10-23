@@ -4,7 +4,7 @@
 
 Owner play is held for 2026-11-03. The owner accepts whether recognizing Derya adds to either game. The wave-1 deliverable is edition 5 source departure and a strict new return chapter, signed/pushed with green exact-commit CI, deployed and verified at 360×690 and 1280×800. Delivery receipts and unresolved peer verification live in `~/code/.lab-scratch/universe/stairwell.md`.
 
-The current Hearsay release initially rejects real source fitness drift and cannot resolve its automatically acquired friendship goal before Day14 relief release. The lead owns those peer corrections. Never heal the source or remove the goal to claim a roundtrip. Return additionally requires Hearsay to publish the original source revision and checkpoint digest. See the scratch contracts and lead note for current target receipts.
+The current Hearsay release initially rejects real source fitness drift and cannot resolve its automatically acquired friendship goal before Day14 relief release. The lead owns those peer corrections. Never heal the source or remove the goal to claim a roundtrip. Return accepts Hearsay rules 4 or 5 under the same immutable mapping and additionally requires Hearsay to publish the original source revision and checkpoint digest. See the scratch contracts and lead note for current target receipts.
 
 Edition 5 records an ordinary worked night-shift outcome. A request made before eight pauses the rota at its actual completion. It grants no clinical skill or license. Flat 5 remains home; Volkan's job loss stays private. The original week and current-version replay remain deterministic. Existing edition 3/4 loaders remain without expanded compatibility work under the owner's waiver.
 

@@ -160,3 +160,20 @@ it('rejects malformed received measurement rows without changing the loaded run'
   });
   await expect(validateDeryaContinuity(s)).rejects.toThrow(/measurement/);
 });
+
+it('admits the unchanged source-bound return contract from Hearsay rules 4 or 5 only', async () => {
+  const s = await boundary();
+  const original = await returnControl(s);
+  const { revision: _revision, ...body } = original;
+  const expected = await prepareDeryaReturn(original, s, { build: 'test' });
+  for (const rules of ['4', '5']) {
+    const envelope = await createPersona({ ...body, source: { ...body.source, rules } });
+    const admitted = await prepareDeryaReturn(envelope, s, { build: 'test' });
+    expect(admitted.prefix.sourceHead.revision).toBe(s.oneCast?.head?.revision);
+    expect(admitted.person).toEqual(expected.person);
+  }
+  const future = await createPersona({ ...body, source: { ...body.source, rules: '6' } });
+  await expect(prepareDeryaReturn(future, s, { build: 'test' })).rejects.toThrow(
+    /unsupported returning source/,
+  );
+});

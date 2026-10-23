@@ -122,7 +122,7 @@ export async function prepareDeryaReturn(
     envelope.castRevision !== '1' ||
     envelope.source.game !== 'hearsay' ||
     envelope.source.engine !== '2.14.1' ||
-    envelope.source.rules !== '4'
+    !['4', '5'].includes(envelope.source.rules)
   )
     return fail('unsupported returning source');
   if (
