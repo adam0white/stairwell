@@ -1,4 +1,5 @@
 import { canReplay, DAY_START, type Input, type Place, TOP_FLOOR } from '../sim/game.ts';
+import type { DeryaContinuity } from '../sim/one-cast.ts';
 import { RIDS, type Rid } from '../sim/people.ts';
 
 export interface Saved {
@@ -6,6 +7,7 @@ export interface Saved {
   seed: number;
   inputs: Input[];
   minute?: number;
+  oneCast?: DeryaContinuity;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -47,6 +49,7 @@ function isInput(value: unknown): value is Input {
     case 'prank':
       return value.what === 'swap' || value.what === 'gate';
     case 'next':
+    case 'one-cast-depart':
       return true;
     default:
       return false;

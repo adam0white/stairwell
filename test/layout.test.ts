@@ -12,7 +12,11 @@ beforeAll(async () => {
   server = await createServer({ server: { host: '127.0.0.1', port: 0 } });
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? '';
-  browser = await chromium.launch();
+  browser = await chromium.launch(
+    process.platform === 'darwin'
+      ? { executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }
+      : {},
+  );
 });
 
 afterAll(async () => {

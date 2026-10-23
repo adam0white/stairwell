@@ -12,10 +12,10 @@ const fixture = JSON.parse(
 );
 function stateHash(state: GameState, fixtureEngine: string) {
   const saved = structuredClone(state);
-  // HF 2.10.0 changes only Person.engine in these legacy replays. Normalize that
+  // HF 2.15.0 changes only Person.engine in these legacy replays. Normalize that
   // stamp to the fixture's HF version; keep every other field and the pinned hashes.
   for (const person of [...saved.people, saved.kapici]) {
-    expect(person.engine).toBe('2.10.0');
+    expect(person.engine).toBe('2.14.1');
     person.engine = fixtureEngine;
   }
   return createHash('sha256').update(JSON.stringify(saved)).digest('hex');

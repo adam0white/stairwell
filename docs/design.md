@@ -235,3 +235,11 @@ Owner F-185/F-311 asks for backstories that are difficult to untangle and have r
 New notebooks use `stairwell@4`. Continue, file import, export, browser saves, morning rewind and the command-line front end retain each notebook's rules edition. `stairwell@3` keeps its exact state shape, authored lines and continuation; frozen state hashes remain unchanged. A legacy notebook does not acquire the new paths during continuation. Begin a new notebook to play edition 4.
 
 Delivery for this sweep means signed changes on main, green CI, a clean live release containing them, and live Chromium checks at 360×690 and 1280×800. Adam accepts the experience separately. The external sweep report records route dispositions; this worker does not edit the shared feedback ledger or curated listing.
+
+## Derya source and return, edition 5 (2026-10-23)
+
+Derya remains the single 44-year-old night nurse at flat 5. Edition 5 runs her last hour of an ordinary shift through HF, with a received night-work fact. The player may request a rota pause before eight. The pause takes effect only when that actual shift finishes. Her morning sleep remains due. No private family fact or medical qualification is inferred from the occupation.
+
+Continuity uses the shared opt-in browser shelf. It carries the approved HF projection, one bounded attended fact and SHA256 checkpoint stamps. The source notebook retains the full checkpoint and accepted input/world prefix. A receiving claim must advance the exact parent before loading. Competing continuations require an explicit fork. Recording needs its own selected-history permission when the recording identity changed or the history came from a file.
+
+The return is a new chapter beginning at the locally saved source boundary. Replay pins the returned initial Person and both envelopes before simulating the suffix. Clinical health and circadian mismatch block admission. Only compatible approved fitness can be copied into the detached opening; no healing is claimed. Missing local source prefix or unsupported obligations/goals refuse continuation and leave fresh play available. Hearsay target dependencies and actual browser receipts are recorded in the scratch delivery report. Old-save work is waived; existing old loaders remain without additional compatibility machinery.

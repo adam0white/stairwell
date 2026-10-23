@@ -20,7 +20,6 @@ import {
   legsLine,
   type NewInput,
   nameOf,
-  newGame,
   openTasks,
   type Place,
   personOf,
@@ -39,6 +38,17 @@ import {
 } from '../sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
 import { STORY_SECRETS } from '../sim/stories.ts';
+import {
+  acknowledgeContinuity,
+  arrive,
+  checkpointContinuity,
+  continuityPanel,
+  gateContinuity,
+  installContinuity,
+  invalidateContinuity,
+  shelf,
+  validateContinuity,
+} from './continuity.ts';
 import { downloadRun, gameMenu, lab, labScreen, openFeedback } from './lab.ts';
 import { canWait, playback, untilSomethingHappens } from './playback.ts';
 import { isSaved, type Saved } from './save.ts';
@@ -94,14 +104,29 @@ const esc = (x: string) => x.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 // ---------- saves ----------
 
-function save() {
+function save(): boolean {
   const s = ui.s;
-  if (!s) return;
+  if (!s) return false;
   try {
-    const text = JSON.stringify({ game: s.version, seed: s.seed, inputs: s.inputs, minute: s.minute });
+    const text = JSON.stringify({
+      game: s.version,
+      seed: s.seed,
+      inputs: s.inputs,
+      minute: s.minute,
+      oneCast: s.oneCast,
+    });
     localStorage.setItem(SAVE_KEY, text);
     lab.captureSave(JSON.parse(text));
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function restoreNotebook(x: Saved): GameState {
+  const s = replay(x.seed, x.inputs, x.minute, x.game, x.oneCast?.admission);
+  if (x.oneCast) s.oneCast = structuredClone(x.oneCast);
+  return s;
 }
 
 function loadSaved(): Saved | null {
@@ -110,7 +135,7 @@ function loadSaved(): Saved | null {
     if (!raw) return null;
     const x: unknown = JSON.parse(raw);
     if (!isSaved(x)) return null;
-    replay(x.seed, x.inputs, x.minute, x.game);
+    restoreNotebook(x);
     return x;
   } catch {
     return null;
@@ -137,6 +162,8 @@ function runOf(s = ui.s) {
     seed: s.seed,
     inputs: s.inputs,
     minute: s.minute,
+    oneCast: s.oneCast?.rows ?? [],
+    continuity: s.oneCast,
     state: {
       day: dayOf(s.minute),
       clock: clockOf(s.minute),
@@ -154,7 +181,11 @@ function runOf(s = ui.s) {
 function importRun(file: File) {
   file.text().then((t) => {
     try {
-      const x = JSON.parse(t) as Saved;
+      const raw = JSON.parse(t);
+      const x = {
+        ...raw,
+        oneCast: raw.continuity ?? (Array.isArray(raw.oneCast) ? undefined : raw.oneCast),
+      } as Saved;
       if (!canReplay(x.game)) {
         alert('This notebook is from another edition of the game.');
         return;
@@ -163,7 +194,9 @@ function importRun(file: File) {
         alert('Could not read that notebook. Check its inputs or choose another file.');
         return;
       }
-      begin(replay(x.seed, x.inputs, x.minute, x.game));
+      void begin(restoreNotebook(x), true).catch(() =>
+        alert('Could not validate that notebook’s pinned history.'),
+      );
     } catch {
       alert('Could not read that file.');
     }
@@ -182,10 +215,31 @@ function send(inp: NewInput) {
   else if (s.said.some((line) => (line.n ?? -1) >= lines && line.kind !== 'journal'))
     ui.readUntil = performance.now() + 6000;
   save();
+  if (inp.kind === 'next') void checkpointContinuity();
   render(false);
 }
 
-function begin(s: GameState) {
+let loadSerial = 0;
+async function startFresh(authored = false) {
+  const serial = ++loadSerial;
+  invalidateContinuity();
+  const s = await arrive((Date.now() % 1_000_000) + 1, authored);
+  if (serial !== loadSerial) return;
+  await begin(s);
+}
+
+async function begin(s: GameState, file = false) {
+  const serial = ++loadSerial;
+  invalidateContinuity();
+  ui.s = null;
+  await validateContinuity(s);
+  if (file && s.oneCast) {
+    s.oneCast.originScope = 'file';
+    s.oneCast.recordingFileKey = crypto.randomUUID();
+  }
+  if (serial !== loadSerial) return;
+  await gateContinuity(s, file);
+  if (serial !== loadSerial) return;
   ui.s = s;
   selection = null;
   buildingExpanded = false;
@@ -195,11 +249,20 @@ function begin(s: GameState) {
   ui.acc = 0;
   ui.readUntil = 0;
   ui.dismissed = '';
-  save();
+  if (save()) acknowledgeContinuity(s);
   render(true);
 }
 
-export function start() {
+export async function start() {
+  lab.setPersonaRecording('pending-history');
+  await shelf.ready;
+  installContinuity(
+    () => ui.s ?? undefined,
+    save,
+    async (s) => {
+      await begin(s);
+    },
+  );
   lab.trackRun(
     () => {
       try {
@@ -264,7 +327,12 @@ function loop(t: number) {
         .map((task) => task.id)
         .join(',');
       const faces = faceToFace(s).join(',');
+      const departure = s.oneCast?.departure;
       step(s);
+      if (!departure && s.oneCast?.departure) {
+        save();
+        void checkpointContinuity();
+      }
       n++;
       if (
         s.said.some((line) => (line.n ?? -1) >= lines && line.kind !== 'journal') ||
@@ -290,6 +358,7 @@ function loop(t: number) {
     if (n > 0 && s.minute % 10 === 0) save();
     if (s.phase !== 'day') {
       save();
+      void checkpointContinuity();
       render(true);
     }
   }
@@ -350,8 +419,9 @@ function mountMenu(target: Element | null, s: GameState | null) {
   if (!target) return;
   target.append(
     gameMenu({
-      hasRun: !!s,
-      getRun: () => runOf(ui.s ?? s),
+      hasRun: !!ui.s,
+      getRun: () => runOf(ui.s),
+      continuityPanel,
       speed: () => selectedSpeed,
       setSpeed: (speed) => {
         selectedSpeed = speed;
@@ -390,9 +460,11 @@ function titlePage() {
   stage?.destroy();
   stage = null;
   ui.s = null;
+  ++loadSerial;
+  invalidateContinuity();
   infoOpen = false;
   const saved = loadSaved();
-  const savedState = saved ? replay(saved.seed, saved.inputs, saved.minute, saved.game) : null;
+  const savedState = saved ? restoreNotebook(saved) : null;
   app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1><p>Keep seven flats supplied through Saturday. On Sunday, the residents vote on your tea money.</p><p>Rıza left you his caretaker’s notebook. The job is yours.</p><p class="soft small">Six days and a Sunday. Nothing happens while you are away.</p></div><button data-a="other">Other ways in ▸</button><div class="title-spacer"></div></main><div class="action-bar">
     ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${DAY_NAMES[dayOf(savedState.minute) - 1]} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
     <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'A new notebook' : 'Begin on Monday'}</button><div class="new-confirm" hidden>The old notebook will be replaced.<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
@@ -406,7 +478,7 @@ function titlePage() {
     ?.addEventListener('click', () => {
       if (savedState) begin(savedState);
     });
-  const fresh = () => begin(newGame((Date.now() % 1_000_000) + 1));
+  const fresh = () => startFresh();
   app()
     .querySelector('[data-a=new]')
     ?.addEventListener('click', () => {
@@ -424,10 +496,17 @@ function titlePage() {
     ?.addEventListener('click', () => {
       const dialog = document.createElement('dialog');
       dialog.className = 'other-ways';
-      const ms = saved ? mornings(saved) : [];
+      const ms = saved && !saved.oneCast ? mornings(saved) : [];
       dialog.innerHTML = `<div class="who"><b>Other ways in</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body">${ms.length > 1 ? ms.map((m, i) => `<div><button data-morning="${i}">Turn back to ${DAY_NAMES[m.day - 1]} morning</button><div data-confirm="${i}" hidden>Everything after that morning is torn out.<div class="row"><button data-yes="${i}">Yes, turn back</button><button data-no="${i}">No</button></div></div></div>`).join('') : ''}<label class="file-button">Load a playtest run<input type="file" accept="application/json"></label></div>`;
       document.body.append(dialog);
       dialog.showModal();
+      const authored = document.createElement('button');
+      authored.textContent = 'Begin fresh without continuity';
+      authored.addEventListener('click', async () => {
+        dialog.close();
+        await startFresh(true);
+      });
+      dialog.querySelector('.sheet-body')?.append(authored);
       dialog.querySelector('[data-a=close]')?.addEventListener('click', () => dialog.close());
       dialog.addEventListener('close', () => dialog.remove());
       dialog.querySelector<HTMLInputElement>('input')?.addEventListener('change', (e) => {

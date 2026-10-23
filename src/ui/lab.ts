@@ -14,6 +14,7 @@ interface MenuOptions {
   mornings?: { label: string; action: () => void }[];
   importRun?: (file: File) => void;
   hasRun: boolean;
+  continuityPanel?: () => HTMLElement;
 }
 
 const NAME_KEY = 'hf-lab-feedback-name';
@@ -57,10 +58,21 @@ function recordingSwitch(changed: () => void = () => {}): HTMLLabelElement {
   input.type = 'checkbox';
   input.role = 'switch';
   input.checked = !recordingOff();
+  const refresh = () => {
+    input.checked = !recordingOff();
+  };
+  window.addEventListener('hf-lab-preference', refresh);
   input.addEventListener('change', () => {
     lab.setEventsOff(!input.checked);
     changed();
   });
+  queueMicrotask(() =>
+    label
+      .closest('dialog')
+      ?.addEventListener('close', () => window.removeEventListener('hf-lab-preference', refresh), {
+        once: true,
+      }),
+  );
   label.append(input, 'Record play for the lab');
   return label;
 }
@@ -185,6 +197,12 @@ export function openFeedback(getRun: () => unknown, onClose?: () => void): HTMLD
     preferences.replaceChildren();
     const off = recordingOff();
     const privateRun = lab.privacySignalOn && !lab.privacyOverride;
+    if (!lab.personaRecordingAllowed) {
+      const notice = document.createElement('p');
+      notice.textContent =
+        'Recording this continuing person needs your choice in the game menu. Local play and file export remain available.';
+      preferences.append(notice);
+    }
     if (off) {
       const notice = document.createElement('p');
       notice.textContent = 'Recording is off, so nothing is sent.';
@@ -202,7 +220,7 @@ export function openFeedback(getRun: () => unknown, onClose?: () => void): HTMLD
       label.append(input, 'Send this run with my note');
       preferences.append(label);
     }
-    send.disabled = !queued && (sending || off || (privateRun && !consent));
+    send.disabled = !queued && (sending || off || !lab.personaRecordingAllowed || (privateRun && !consent));
   };
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -210,7 +228,7 @@ export function openFeedback(getRun: () => unknown, onClose?: () => void): HTMLD
       dialog.close();
       return;
     }
-    if (send.disabled) return;
+    if (send.disabled || !lab.personaRecordingAllowed) return;
     sending = true;
     update();
     const chosen = form.querySelector<HTMLInputElement>('input[name=verdict]:checked');
@@ -328,6 +346,7 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
       games.href = 'https://human.adamwhite.work/games/';
       games.textContent = 'All games';
       body.append(games);
+      if (options.continuityPanel) body.append(options.continuityPanel());
       const footer = document.createElement('footer');
       footer.className = 'sw-menu-footer';
       footer.append(recordingSwitch(), privacyLink());

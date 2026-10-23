@@ -10,7 +10,11 @@ beforeAll(async () => {
   server = await createServer({ server: { host: '127.0.0.1', port: 0 } });
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? '';
-  browser = await chromium.launch();
+  browser = await chromium.launch(
+    process.platform === 'darwin'
+      ? { executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }
+      : {},
+  );
 });
 afterAll(async () => {
   await browser?.close();
@@ -26,7 +30,11 @@ async function feedbackPage(privacy = false): Promise<Page> {
   });
   if (privacy) await page.addInitScript(() => Object.defineProperty(navigator, 'doNotTrack', { value: '1' }));
   await page.goto(url);
-  await page.evaluate("import('/src/ui/lab.ts').then(m => window.testLab = m)");
+  await page.getByRole('button', { name: 'Begin on Monday', exact: true }).click();
+  await page.locator('.day').waitFor();
+  await page.evaluate(
+    "import('/src/ui/lab.ts').then(m => { window.testLab = m; m.lab.setPersonaRecording(null); })",
+  );
   return page;
 }
 
@@ -179,6 +187,27 @@ it('explains clock rates and when protected time ends beside the speed choices',
     });
     expect(explanationWidths).toHaveLength(2);
     for (const fraction of explanationWidths) expect(fraction).toBeGreaterThan(0.9);
+  } finally {
+    await page.close();
+  }
+});
+
+it('blocks every explicit feedback send while continuing history lacks linkage approval', async () => {
+  const page = await feedbackPage();
+  try {
+    const result = await page.evaluate(() => {
+      const { lab, openFeedback } = (window as unknown as { testLab: typeof import('../src/ui/lab.ts') })
+        .testLab;
+      lab.setPersonaRecording('imported-branch');
+      lab.allowPersonaRecording(false);
+      const dialog = openFeedback(() => ({ seed: 3, inputs: [], minute: 500 }));
+      const blocked = dialog.querySelector<HTMLButtonElement>('button[type=submit]')!.disabled;
+      const explanation = dialog.textContent;
+      dialog.close();
+      return { blocked, explanation };
+    });
+    expect(result.blocked).toBe(true);
+    expect(result.explanation).toContain('Recording this continuing person needs your choice');
   } finally {
     await page.close();
   }

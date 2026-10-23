@@ -37,6 +37,7 @@ import {
   tick,
   trustOf,
 } from '@adam0white/human-framework';
+import { applyDeryaReturn, type DeryaContinuity, type DeryaReturnAdmission } from './one-cast.ts';
 import {
   FACTS,
   INVENTABLE,
@@ -52,7 +53,8 @@ import { DRAW, hashUnit } from './rng.ts';
 import { newStories, STORY_FACTS, STORY_LINES, STORY_WORDS, type StoryState } from './stories.ts';
 
 export const LEGACY_GAME_VERSION = 'stairwell@3';
-export const GAME_VERSION = 'stairwell@4';
+export const PREVIOUS_GAME_VERSION = 'stairwell@4';
+export const GAME_VERSION = 'stairwell@5';
 export const DAY_START = 7 * 60;
 export const DAY_END = 21 * 60;
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -197,6 +199,7 @@ export interface Kapici {
 }
 
 export interface GameState {
+  oneCast?: DeryaContinuity;
   /** Present only in v4. Legacy notebooks retain their exact serialized state. */
   stories?: StoryState;
   version: string;
@@ -248,7 +251,8 @@ export type Input =
   | { at: number; kind: 'misdeliver'; who: Rid; task: number }
   | { at: number; kind: 'knock'; who: Rid }
   | { at: number; kind: 'prank'; what: 'swap' | 'gate' }
-  | { at: number; kind: 'next' };
+  | { at: number; kind: 'next' }
+  | { at: number; kind: 'one-cast-depart' };
 
 type DistOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 export type NewInput = DistOmit<Input, 'at'>;
@@ -511,7 +515,20 @@ export function newGame(seed: number, edition = GAME_VERSION): GameState {
     jobsUsed: [],
     knocks: 0,
   };
-  if (edition === GAME_VERSION) s.stories = newStories();
+  if (edition !== LEGACY_GAME_VERSION) s.stories = newStories();
+  if (edition === GAME_VERSION) {
+    s.oneCast = { rows: [] };
+    const nurse = personOf(s, 'derya');
+    const work = offer('derya-night-work', {
+      action: 'work',
+      label: 'Finish the night shift',
+      duration: 60,
+      effort: 0.05,
+      advertises: {},
+    });
+    const decision = decide(nurse, [work], { now });
+    if (decision.chosenAffordanceId === work.id) begin(nurse, work, decision);
+  }
   // Derya is coming home from her night shift.
   const d = rOf(s, 'derya');
   d.where = 'work';
@@ -698,6 +715,7 @@ function moveTo(s: GameState, r: RState, w: Where, doing: string, minutes: numbe
 }
 
 function residentMinute(s: GameState, r: RState) {
+  if (r.id === 'derya' && s.oneCast?.departure && !s.oneCast.admission) return;
   const t = tod(s);
   if (s.minute < r.until) return;
   const p = personOf(s, r.id);
@@ -714,6 +732,18 @@ function residentMinute(s: GameState, r: RState) {
       out.needs = { belonging: 0.12 };
     if (p.activity.action === 'eat') out.needs = { food: 0.5, water: 0.45 };
     if (p.activity.action === 'rest') out.needs = { water: 0.08 };
+    if (p.activity.affordanceId === 'derya-night-work')
+      out.percepts = [
+        {
+          at: s.minute,
+          channel: 'saw',
+          kind: 'night-work',
+          actorId: 'derya',
+          salience: 1,
+          valence: 0.1,
+          summary: 'I finished the night shift and came home to flat 5.',
+        },
+      ];
     finish(p, out);
   }
   // Work and sleep are the host's: the timetable of a working life.
@@ -724,17 +754,53 @@ function residentMinute(s: GameState, r: RState) {
   }
   if (info.nights) {
     if (r.where === 'work' && t < 12 * 60) {
+      if (s.version === GAME_VERSION && s.oneCast?.departureRequested && s.minute === 480) {
+        pauseDeryaRota(s);
+        return;
+      }
       moveTo(s, r, 'asleep', 'sleep', 15 * 60 + 30 - t);
+      if (s.version === GAME_VERSION) {
+        const sleep = offer('derya-day-sleep', {
+          action: 'sleep',
+          mode: 'sleep',
+          duration: 15 * 60 + 30 - t,
+          advertises: { sleep: 0.8, rest: 0.5 },
+        });
+        const rec = decide(p, [sleep], { now: s.minute });
+        if (rec.chosenAffordanceId === sleep.id) begin(p, sleep, rec);
+      }
       say(s, 'narrator', 'Derya came in from her night shift and went straight up.', 'journal');
       return;
     }
     if (t < 15 * 60) {
+      if (s.version === GAME_VERSION && !p.activity) {
+        const sleep = offer('derya-day-sleep', {
+          action: 'sleep',
+          mode: 'sleep',
+          duration: 15 * 60 - t,
+          advertises: { sleep: 0.8, rest: 0.5 },
+        });
+        const rec = decide(p, [sleep], { now: s.minute });
+        if (rec.chosenAffordanceId === sleep.id) begin(p, sleep, rec);
+      }
       r.where = 'asleep';
       r.until = s.minute + (15 * 60 - t);
       return;
     }
     if (wd <= 5 && t >= 19 * 60 + 30) {
       moveTo(s, r, 'work', 'work', DAY_END + 60 - t);
+      if (s.version === GAME_VERSION) {
+        const work = offer('derya-night-work', {
+          action: 'work',
+          label: 'Complete the night rota',
+          duration: 1440 + 480 - t,
+          effort: 0.05,
+          advertises: {},
+        });
+        const rec = decide(p, [work], { now: s.minute });
+        if (rec.chosenAffordanceId === work.id) begin(p, work, rec);
+        r.until = dayStart(today(s) + 1) + 480;
+      }
       return;
     }
   }
@@ -1010,7 +1076,10 @@ const TRAIT_WORDS: Record<string, [string, string]> = {
 };
 
 export function claimWords(prop: string, value: boolean, edition = LEGACY_GAME_VERSION): string {
-  const story = edition === GAME_VERSION && Object.hasOwn(STORY_WORDS, prop) ? STORY_WORDS[prop] : undefined;
+  const story =
+    (edition === GAME_VERSION || edition === PREVIOUS_GAME_VERSION) && Object.hasOwn(STORY_WORDS, prop)
+      ? STORY_WORDS[prop]
+      : undefined;
   if (story) return story[value ? 0 : 1];
   const [who, trait, other] = prop.split(':');
   if (prop === FACTS.ring)
@@ -1331,8 +1400,48 @@ function arrive(s: GameState) {
 
 // ---------- inputs ----------
 
+/** Explicit player request completes only at the real worked-shift boundary. */
+function pauseDeryaRota(s: GameState) {
+  const p = personOf(s, 'derya');
+  const episode = p.memory.episodes.findLast((e) => e.action === 'night-work');
+  if (!episode || s.minute !== 480) return;
+  if (p.activity) {
+    if (p.activity.affordanceId !== 'derya-day-sleep' || p.activity.startedAt !== 480) return;
+    finish(p, {
+      affordanceId: p.activity.affordanceId,
+      action: p.activity.action,
+      status: 'interrupted',
+      at: p.now,
+    });
+  }
+  s.oneCast = {
+    ...s.oneCast,
+    rows: s.oneCast?.rows ?? [],
+    departure: { at: s.minute, episodeId: episode.id },
+  };
+  say(
+    s,
+    'derya',
+    'My night rota is finished. I am pausing here before the temporary relief chapter; flat 5 is still home.',
+    'voice',
+  );
+}
+
 function applyInput(s: GameState, inp: Input) {
   switch (inp.kind) {
+    case 'one-cast-depart': {
+      if (s.version !== GAME_VERSION || s.oneCast?.departure || s.minute > 480) return;
+      s.oneCast = { ...s.oneCast, rows: s.oneCast?.rows ?? [], departureRequested: true };
+      if (s.minute === 480) pauseDeryaRota(s);
+      else
+        say(
+          s,
+          'narrator',
+          'Derya will pause her rota when this night shift ends at eight. Her morning sleep is still due.',
+          'journal',
+        );
+      return;
+    }
     case 'go': {
       if (s.phase !== 'day' || s.k.walk || s.k.busyTask !== null) return;
       const mins = travelMinutes(s, s.k.at, inp.to);
@@ -2087,7 +2196,7 @@ function tarikEnvelope(s: GameState) {
 
 function nightEvents(s: GameState, day: number) {
   // Tuesday to Thursday: a man rings flat 5 near midnight. From your window you see him; so does Nermin.
-  if (day >= 2 && day <= 4) {
+  if (day >= 2 && day <= 4 && !(s.oneCast?.departure && !s.oneCast.admission)) {
     perceive(s.kapici, [
       {
         at: s.minute,
@@ -2239,6 +2348,7 @@ function meeting(s: GameState) {
   );
   for (const id of RIDS) {
     const p = personOf(s, id);
+    if (id === 'derya' && s.oneCast?.departure && !s.oneCast.admission) continue;
     tick(p, Math.max(p.now, s.minute));
     confirm(p, 'huseyin:dishonest', false, s.minute);
     confirm(p, FACTS.fund, true, s.minute);
@@ -2265,7 +2375,10 @@ function meeting(s: GameState) {
   for (const id of RIDS) {
     const r = rOf(s, id);
     const p = personOf(s, id);
-    if (id === 'derya' && relationshipWith(p, KAPICI).affection < -0.1) {
+    if (
+      id === 'derya' &&
+      ((s.oneCast?.departure && !s.oneCast.admission) || relationshipWith(p, KAPICI).affection < -0.1)
+    ) {
       r.vote = 'away';
       continue;
     }
@@ -2346,6 +2459,11 @@ function morning(s: GameState, day: number) {
   s.k.busyTask = null;
   // Sleep on it: everyone (and the kapıcı's legs) through the night.
   for (const p of [...s.people, s.kapici]) {
+    if (s.version === GAME_VERSION && p.id === 'derya') {
+      if (s.oneCast?.departure && !s.oneCast.admission) continue;
+      tick(p, Math.max(p.now, s.minute));
+      continue;
+    }
     if (p.activity)
       finish(p, {
         affordanceId: p.activity.affordanceId,
@@ -2571,9 +2689,23 @@ export function replay(
   inputs: readonly Input[],
   until?: number,
   edition = GAME_VERSION,
+  admission?: DeryaReturnAdmission,
 ): GameState {
-  const s = newGame(seed, edition);
-  for (const inp of inputs) {
+  let s = newGame(seed, edition);
+  let suffix = inputs;
+  if (admission) {
+    const prefix = admission.prefix;
+    if (
+      seed !== prefix.seed ||
+      edition !== prefix.edition ||
+      JSON.stringify(inputs.slice(0, prefix.inputs.length)) !== JSON.stringify(prefix.inputs) ||
+      (until !== undefined && until < prefix.minute)
+    )
+      throw new Error('One cast: return replay prefix mismatch');
+    s = applyDeryaReturn(replay(seed, prefix.inputs, prefix.minute, edition), admission);
+    suffix = inputs.slice(prefix.inputs.length);
+  }
+  for (const inp of suffix) {
     while (s.phase === 'day' && s.minute < inp.at) step(s);
     s.inputs.push(inp);
     applyPending(s);
@@ -2583,7 +2715,7 @@ export function replay(
 }
 
 export const canReplay = (game: string | undefined): boolean =>
-  game === GAME_VERSION || game === LEGACY_GAME_VERSION;
+  game === GAME_VERSION || game === PREVIOUS_GAME_VERSION || game === LEGACY_GAME_VERSION;
 
 export function fingerprint(s: GameState): string {
   const people = s.people.map((p) => ({
