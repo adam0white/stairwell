@@ -67,6 +67,12 @@ dialog.sw-feedback::backdrop {
   grid-template-columns: repeat(4, 1fr);
   gap: 4px;
 }
+.sw-menu-speeds p {
+  grid-column: 1 / -1;
+  margin: 4px 0;
+  font-size: 14px;
+  line-height: 1.35;
+}
 .sw-menu-speeds button {
   padding: 4px;
   min-width: 0;

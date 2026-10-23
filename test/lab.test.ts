@@ -173,6 +173,12 @@ it('explains clock rates and when protected time ends beside the speed choices',
     expect(result.text).toContain('Conversation and reading pause time until you close them.');
     expect(result.speed).toBe(12);
     expect(result.pressed).toBe('true');
+    const explanationWidths = await page.locator('.sw-menu-speeds').evaluate((fieldset) => {
+      const width = fieldset.getBoundingClientRect().width;
+      return Array.from(fieldset.querySelectorAll('p'), (p) => p.getBoundingClientRect().width / width);
+    });
+    expect(explanationWidths).toHaveLength(2);
+    for (const fraction of explanationWidths) expect(fraction).toBeGreaterThan(0.9);
   } finally {
     await page.close();
   }
