@@ -2,20 +2,26 @@
 
 ## What remains
 
-Owner play is held for 2026-11-03. The owner accepts whether recognizing Derya adds to either game. The wave-1 deliverable is edition 5 source departure and a strict new return chapter, signed/pushed with green exact-commit CI, deployed and verified at 360×690 and 1280×800. Delivery receipts and unresolved peer verification live in `~/code/.lab-scratch/universe/stairwell.md`.
+The genuine Voice Hacer→Stairwell journey at both sizes and its browser changed-away-life proof are blocked. Voice's existing local Continue run reached a real Hacer conversation and actual action boundary, then checkpoint refused: “Another chapter owns this person. Export or explicitly fork.” Do not replace another worker's head to force success. The next action is to coordinate the current Hacer branch with its owner, then resume from that branch through ordinary source UI. The fallback Hearsay Derya dialect is not declared by the current adapter, and Derya's fresh opening night duty cannot be waived. No new implementer is needed.
 
-The current Hearsay release initially rejects real source fitness drift and cannot resolve its automatically acquired friendship goal before Day14 relief release. The lead owns those peer corrections. Never heal the source or remove the goal to claim a roundtrip. Return accepts Hearsay rules 4 or 5 under the same immutable mapping and additionally requires Hearsay to publish the original source revision and checkpoint digest. See the scratch contracts and lead note for current target receipts.
+Manual browser download also remains unverified: Keep a copy was clicked, but the supported download event timed out. Browser security rejected chrome://downloads inspection; no workaround was used. Automated export/layout controls pass. Owner review remains after technical delivery, dated2026-11-03; no human acceptance is claimed.
 
-Edition 5 records an ordinary worked night-shift outcome. A request made before eight pauses the rota at its actual completion. It grants no clinical skill or license. Flat 5 remains home; Volkan's job loss stays private. The original week and current-version replay remain deterministic. Existing edition 3/4 loaders remain without expanded compatibility work under the owner's waiver.
+## Done and verified
 
-A returned chapter uses the exact locally retained departure world/input prefix and admitted initial Person. Missing local prefix, unsupported obligations/goals, incompatible health, or stale shelf parent refuse continuation. Fresh authored play remains available under Other ways in. No latest-shelf lookup occurs during replay.
+- Edition7 canonical five-person adoption, complete census, actual choice-dependent discoveries and preserved errands/gossip/Sunday vote. See docs/cast-adoption.md for exact playable facts and limits.
+- Released HF2.18.0/engine2.17.0, client0.4.0 and kit0.5.0 immutable vendor pins. Whole-cast atomic admission, pinned replay, local accepted ownership, file-origin recording gate, recovery, terminal closure and actual pause boundaries have focused controls.
+- Signed implementation8de043157782a05f2a372ab81f143cbc707e57ab is on origin/main. Exact CI40047408305 passed; normal locked deployment875ca15c-10a5-4474-ad80-805e90500c8b succeeded. Live manifest matched that commit/framework2.18/dirty:false. Final local lane and normal deploy each passed147tests/12files on actual Vitest5.0.5, Node26.12.0.
+- Existing signed-in Chrome live360×690 and1280×800 play/menu and save→reload→Continue observed. Actual scrollWidth equalled each viewport. Source recording/continuity restored unchecked, source clock restored Automatic. Target retained its original recording-on/continuity-off settings. Own browser lease released; own tabs closed and viewport restored.
+- One independent Codex reviewer covered correctness/privacy and Priya Menon's game-design lens. Findings reproduced and fixed; whole-week pause control preserves the exact source Person. No extra panel or human test claimed.
 
-## Operations
+## Done but unchecked
 
-Use Node ≥24 with `/opt/homebrew/bin` first. Dependencies are HF exactly 2.15.0, vendor lab-client 0.3.1 and lab-kit 0.4.0. Compare vendor SHA256 against `~/code/.lab-scratch/universe/artifacts.json`. Installed dependencies must resolve to directories, not workspace symlinks.
+The browser export click completed without a supported download receipt. Automated export controls pass, but they do not prove that manual receipt. Final documentation commit and deployment identifiers are recorded in the scratch report to avoid a self-referential manifest update.
 
-The package scripts do not acquire the shared suite lock. Before each signed commit run `node ~/code/human-framework/scripts/suite-lock.ts -- npm run check:lane`. Deploy through `node ~/code/human-framework/scripts/suite-lock.ts -- npm run deploy` after exact-commit green CI. Keep signing enabled and add `Co-Authored-By: Codex <noreply@openai.com>`. Rebase origin/main before push. Verify production `/release.json` commit and `dirty:false`.
+## Untouched or bounded
 
-Continuity and recording remain separate. The host waits for shelf.ready, validates saved pins, and gates all persona-derived uploads with selected-envelope and opaque recording-epoch checks. File histories need their own choice. CAS conflicts require visible explicit forks. Only projection/history/digest go to the central shelf; raw source Person and world remain in own saves/exports and origin storage.
+No silent migration from editions3–6; Start fresh is explicit. No debt discharge, clinical license, healing or whole-state transfer claim. Burak account/Tarık dues and Derya active duty restrict carry. Source raw snapshots stay local. No central HF ledger edited, no other test person deleted and no source head replaced.
 
-Wider cast revision 2 and elapsed life are outside this worker's scope. Do not modify the HF feedback ledger; write proposed rows to the scratch Stairwell ledger.
+## Operations and receipts
+
+The task authority is ~/code/.lab-scratch/cast/stairwell.md with proposed rows in stairwell-ledger.md; logs, screenshots and reviewer report are in the same directory. Managed branch cast-stairwell lives at ~/code/.lab-scratch/wt/stairwell/cast-stairwell until remaining browser evidence is resolved. Keep the shared checkout untouched. Full check and deploy commands: PATH=/opt/homebrew/bin:$PATH node ~/code/human-framework/scripts/suite-lock.ts -- npm run check:lane (or npm run deploy). Read coordinator notes at phase boundaries. No browser lease is held while waiting for CI or deployment.
