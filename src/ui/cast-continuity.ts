@@ -633,22 +633,6 @@ export function continuityPanel(): HTMLElement {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }),
   );
-  const privacy = document.createElement('p');
-  privacy.textContent =
-    'Recording linked histories is a separate choice for this complete pinned group. No keeps all play and exports local.';
-  section.append(privacy);
-  section.append(
-    button('Allow recording all these linked histories', async () => {
-      await chooseContinuityRecording(true);
-      line.textContent = 'Recording choice accepted for this pinned group and current identity.';
-    }),
-  );
-  section.append(
-    button('Keep these linked histories local', async () => {
-      await chooseContinuityRecording(false);
-      line.textContent = 'These histories remain local.';
-    }),
-  );
   for (const recovery of acceptedCastRecoveries()) {
     section.append(
       button('Resume an accepted saved cast chapter', async () => {

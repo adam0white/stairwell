@@ -1,5 +1,5 @@
 import { createLab, PRIVACY_URL } from '@adam0white/lab-client';
-import { feedbackPersonaControl } from '@adam0white/lab-kit';
+import { feedbackPersonaControl, feedbackSharePlay } from '@adam0white/lab-kit';
 import './lab.css';
 
 export const lab = createLab({ game: 'stairwell' });
@@ -78,13 +78,13 @@ function recordingSwitch(changed: () => void = () => {}): HTMLLabelElement {
   const input = document.createElement('input');
   input.type = 'checkbox';
   input.role = 'switch';
-  input.checked = !recordingOff();
+  input.checked = lab.telemetryOn;
   const refresh = () => {
-    input.checked = !recordingOff();
+    input.checked = lab.telemetryOn;
   };
   window.addEventListener('hf-lab-preference', refresh);
   input.addEventListener('change', () => {
-    lab.setEventsOff(!input.checked);
+    lab.setTelemetryOff(!input.checked);
     changed();
   });
   queueMicrotask(() =>
@@ -146,7 +146,7 @@ export function downloadRun(run: unknown): void {
 export function openFeedback(
   getRun: () => unknown,
   onClose?: () => void,
-  chooseRecording?: (allow: boolean) => Promise<void>,
+  _chooseRecording?: (allow: boolean) => Promise<void>,
 ): HTMLDialogElement {
   const dialog = dialogShell('feedback', 'Send word');
   const form = document.createElement('form');
@@ -154,7 +154,7 @@ export function openFeedback(
   const body = document.createElement('div');
   body.className = 'sw-feedback-body';
   const lead = document.createElement('p');
-  lead.textContent = "Your run, saves and log reach us on their own. Tell us what they can't show.";
+  lead.textContent = 'Send a note about this game.';
   const verdicts = document.createElement('fieldset');
   verdicts.className = 'sw-feedback-verdict';
   const legend = document.createElement('legend');
@@ -211,7 +211,7 @@ export function openFeedback(
   const send = document.createElement('button');
   send.type = 'submit';
   send.className = 'primary';
-  send.textContent = 'Send';
+  send.textContent = 'Submit';
   const copy = button('Keep a copy of this run', () => downloadRun(getRun()));
   body.append(lead, verdicts, noteLabel, nameDetails, details, preferences, copy, status);
   actions.append(send);
@@ -219,31 +219,9 @@ export function openFeedback(
   dialog.append(form);
   let sending = false;
   let queued = false;
+  const choice = feedbackPersonaControl(lab);
+  if (choice) preferences.append(choice);
   const update = () => {
-    preferences.replaceChildren();
-    if (chooseRecording) {
-      const scoped = Object.create(lab) as typeof lab;
-      scoped.allowPersonaRecording = (allow) => {
-        void chooseRecording(allow)
-          .then(update)
-          .catch(() => {
-            status.textContent = 'History choice could not be applied. Your note can still send.';
-          });
-      };
-      const choice = feedbackPersonaControl(scoped);
-      if (choice) {
-        if (choice.lastChild)
-          choice.lastChild.textContent =
-            ' Link all continuing people in this run to lab recording (optional)';
-        preferences.append(choice);
-      }
-    }
-    const notice = document.createElement('p');
-    notice.textContent =
-      lab.telemetryOn && !(lab.privacySignalOn && !lab.privacyOverride)
-        ? 'An available run may also be included with continuing character state. Without linkage approval it is sent without a player id or recorded history linkage.'
-        : 'Recording is off or browser privacy is on. Send includes only your note and verdict.';
-    preferences.append(notice);
     send.disabled = !queued && sending;
   };
   form.addEventListener('submit', async (event) => {
@@ -259,10 +237,12 @@ export function openFeedback(
     const text = [chosen ? `Verdict: ${chosen.value}` : '', note.value.trim()].filter(Boolean).join('\n\n');
     const submittedName = name.value.trim().slice(0, 60);
     try {
-      const noteOnly = !lab.telemetryOn || (lab.privacySignalOn && !lab.privacyOverride);
+      const sharePlay = feedbackSharePlay(choice);
+      const noteOnly = !lab.telemetryOn && !sharePlay;
       await lab.sendFeedback(text, {
         name: submittedName,
         run: feedbackRun(getRun),
+        sharePlay,
       });
       rememberName(submittedName);
       queued = true;
