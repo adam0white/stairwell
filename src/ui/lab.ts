@@ -1,4 +1,5 @@
 import { createLab, PRIVACY_URL } from '@adam0white/lab-client';
+import { feedbackPersonaControl } from '@adam0white/lab-kit';
 import './lab.css';
 
 export const lab = createLab({ game: 'stairwell' });
@@ -18,6 +19,13 @@ interface MenuOptions {
 }
 
 const NAME_KEY = 'hf-lab-feedback-name';
+function feedbackRun(getRun: () => unknown): unknown {
+  try {
+    return getRun();
+  } catch {
+    return undefined;
+  }
+}
 function stored(key: string): string {
   try {
     return localStorage.getItem(key) ?? '';
@@ -111,7 +119,9 @@ export function compactRun(run: unknown): unknown {
 /** Keep only the replayable seed, inputs and minute in the playtest download. */
 export function downloadRun(run: unknown): void {
   const url = URL.createObjectURL(
-    new Blob([JSON.stringify(compactRun(run), null, 2)], { type: 'application/json' }),
+    new Blob([JSON.stringify(compactRun(run), null, 2)], {
+      type: 'application/json',
+    }),
   );
   const a = document.createElement('a');
   a.href = url;
@@ -173,7 +183,7 @@ export function openFeedback(getRun: () => unknown, onClose?: () => void): HTMLD
   summary.textContent = 'What is sent';
   const preview = document.createElement('p');
   preview.textContent =
-    'Your note and optional name, linked to your recorded run, saves and log. With browser privacy protection, your consent sends this run and note without a player id.';
+    'Your note and optional name, linked to your recorded run, saves and log. With recording off or browser privacy protection, only your note is sent without a player id.';
   details.append(summary, preview, privacyLink());
   const preferences = document.createElement('div');
   const status = document.createElement('p');
@@ -190,37 +200,18 @@ export function openFeedback(getRun: () => unknown, onClose?: () => void): HTMLD
   actions.append(send);
   form.append(body, actions);
   dialog.append(form);
-  let consent = false;
   let sending = false;
   let queued = false;
   const update = () => {
     preferences.replaceChildren();
-    const off = recordingOff();
-    const privateRun = lab.privacySignalOn && !lab.privacyOverride;
-    if (!lab.personaRecordingAllowed) {
-      const notice = document.createElement('p');
-      notice.textContent =
-        'Recording this continuing person needs your choice in the game menu. Local play and file export remain available.';
-      preferences.append(notice);
-    }
-    if (off) {
-      const notice = document.createElement('p');
-      notice.textContent = 'Recording is off, so nothing is sent.';
-      preferences.append(notice, recordingSwitch(update));
-    } else if (privateRun) {
-      const label = document.createElement('label');
-      label.className = 'sw-recording';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.checked = consent;
-      input.addEventListener('change', () => {
-        consent = input.checked;
-        update();
-      });
-      label.append(input, 'Send this run with my note');
-      preferences.append(label);
-    }
-    send.disabled = !queued && (sending || off || !lab.personaRecordingAllowed || (privateRun && !consent));
+    const choice = feedbackPersonaControl(lab);
+    if (choice) preferences.append(choice);
+    const notice = document.createElement('p');
+    notice.textContent = lab.telemetryOn
+      ? 'Send includes this run and continuing character state. Without linkage approval it is sent without a player id or recorded history linkage.'
+      : 'Recording is off or browser privacy is on. Send includes only your note and verdict.';
+    preferences.append(notice);
+    send.disabled = !queued && sending;
   };
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -228,29 +219,26 @@ export function openFeedback(getRun: () => unknown, onClose?: () => void): HTMLD
       dialog.close();
       return;
     }
-    if (send.disabled || !lab.personaRecordingAllowed) return;
+    if (send.disabled) return;
     sending = true;
     update();
     const chosen = form.querySelector<HTMLInputElement>('input[name=verdict]:checked');
     const text = [chosen ? `Verdict: ${chosen.value}` : '', note.value.trim()].filter(Boolean).join('\n\n');
     const submittedName = name.value.trim().slice(0, 60);
     try {
-      if (lab.privacySignalOn && !lab.privacyOverride)
-        await lab.sendRun(getRun(), { note: text, name: submittedName });
-      else await lab.sendFeedback(text, { name: submittedName });
+      await lab.sendFeedback(text, {
+        name: submittedName,
+        run: feedbackRun(getRun),
+      });
       rememberName(submittedName);
       queued = true;
-      status.textContent = 'Sent. Thank you.';
+      status.textContent = lab.telemetryOn
+        ? 'Run and note queued. This is not a delivery receipt.'
+        : 'Note queued without a run or history linkage. This is not a delivery receipt.';
       send.textContent = 'Back to the game';
     } catch (error) {
       status.textContent =
         error instanceof Error ? error.message : 'Your note could not be queued. Please try again.';
-      if (lab.privacySignalOn && !lab.privacyOverride && !recordingOff()) {
-        lab.openSendDialog({ getRun, name: submittedName, note: text });
-        // Native modal dialogs make outside DOM inert; keep the fallback interactive.
-        const fallback = document.querySelector('.hflab-veil');
-        if (fallback) dialog.append(fallback);
-      }
     } finally {
       sending = false;
       update();

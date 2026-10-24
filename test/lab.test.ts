@@ -12,7 +12,9 @@ beforeAll(async () => {
   url = server.resolvedUrls?.local[0] ?? '';
   browser = await chromium.launch(
     process.platform === 'darwin'
-      ? { executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }
+      ? {
+          executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        }
       : {},
   );
 });
@@ -38,114 +40,68 @@ async function feedbackPage(privacy = false): Promise<Page> {
   return page;
 }
 
-it('blocks recording-off sends, then queues linked feedback with a trimmed remembered name', async () => {
+it('sends feedback in one sheet with recording off, privacy on, or unanswered continuing history', async () => {
   const page = await feedbackPage();
   try {
-    const result = await page.evaluate(async () => {
+    const results = await page.evaluate(async () => {
       const { lab, openFeedback } = (window as unknown as { testLab: typeof import('../src/ui/lab.ts') })
         .testLab;
       const calls: unknown[] = [];
-      lab.sendFeedback = async (note: string, options: unknown) => {
+      lab.sendFeedback = async (note, options) => {
         calls.push({ note, options });
-        return 'queued-test';
+        return 'queued';
       };
-      localStorage.setItem('hf-lab-recording-off', '1');
-      const dialog = openFeedback(() => ({ seed: 1, inputs: [], minute: 420 }));
-      const send = dialog.querySelector<HTMLButtonElement>('button[type=submit]')!;
-      const blocked = send.disabled;
-      dialog.querySelector<HTMLInputElement>('.sw-recording input')!.click();
-      const enabled = !send.disabled;
-      dialog.querySelector<HTMLTextAreaElement>('textarea')!.value = 'Wanted to see the trip.';
-      dialog.querySelector<HTMLInputElement>('input[type=text]')!.value = '  tester  ';
-      dialog.querySelector<HTMLInputElement>('input[value=keep]')!.click();
-      dialog.querySelector('form')!.requestSubmit();
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      const status = dialog.querySelector('[role=status]')!.textContent;
-      const actionBottom = send.getBoundingClientRect().bottom;
-      dialog.close();
-      const reopened = openFeedback(() => ({}));
-      const prefill = reopened.querySelector<HTMLInputElement>('input[type=text]')!.value;
-      reopened.close();
-      return {
-        blocked,
-        enabled,
-        calls,
-        status,
-        prefill,
-        actionBottom,
-        scroll: document.scrollingElement!.scrollHeight,
-      };
+      const results = [];
+      for (const off of [false, true]) {
+        lab.setEventsOff(off);
+        lab.setPersonaRecording('continuing-test');
+        const dialog = openFeedback(() => ({
+          seed: 3,
+          inputs: [],
+          minute: 500,
+        }));
+        const send = dialog.querySelector<HTMLButtonElement>('button[type=submit]')!;
+        const enabled = !send.disabled;
+        dialog.querySelector<HTMLTextAreaElement>('textarea')!.value = 'QA feedback-fix';
+        dialog.querySelector<HTMLInputElement>('input[value=mixed]')!.click();
+        dialog.querySelector('form')!.requestSubmit();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        results.push({
+          enabled,
+          status: dialog.querySelector('[role=status]')!.textContent,
+          nested: dialog.querySelectorAll('.hflab-veil').length,
+        });
+        dialog.close();
+      }
+      return { calls, results };
     });
-    expect(result.blocked).toBe(true);
-    expect(result.enabled).toBe(true);
-    expect(result.calls).toEqual([
-      { note: 'Verdict: keep\n\nWanted to see the trip.', options: { name: 'tester' } },
-    ]);
-    expect(result.status).toBe('Sent. Thank you.');
-    expect(result.prefill).toBe('tester');
-    expect(result.actionBottom).toBeLessThanOrEqual(690);
-    expect(result.scroll).toBe(690);
+    expect(results.calls).toHaveLength(2);
+    for (const result of results.results) {
+      expect(result.enabled).toBe(true);
+      expect(result.status).toContain('queued');
+      expect(result.nested).toBe(0);
+    }
   } finally {
     await page.close();
   }
 });
 
-it('requires privacy consent and sends the run with its note and name', async () => {
+it('keeps a failed send and its note on the original sheet', async () => {
   const page = await feedbackPage(true);
   try {
-    const result = await page.evaluate(async () => {
+    await page.evaluate(() => {
       const { lab, openFeedback } = (window as unknown as { testLab: typeof import('../src/ui/lab.ts') })
         .testLab;
-      const calls: unknown[] = [];
-      lab.sendRun = async (run: unknown, options: unknown) => {
-        calls.push({ run, options });
-        return 'test';
-      };
-      const dialog = openFeedback(() => ({ seed: 3, inputs: [], minute: 500 }));
-      const blocked = dialog.querySelector<HTMLButtonElement>('button[type=submit]')!.disabled;
-      dialog.querySelector<HTMLInputElement>('.sw-recording input')!.click();
-      dialog.querySelector<HTMLTextAreaElement>('textarea')!.value = 'Private note';
-      dialog.querySelector<HTMLInputElement>('input[type=text]')!.value = 'Private tester';
-      dialog.querySelector('form')!.requestSubmit();
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      dialog.close();
-      return { blocked, calls };
-    });
-    expect(result.blocked).toBe(true);
-    expect(result.calls).toEqual([
-      {
-        run: { seed: 3, inputs: [], minute: 500 },
-        options: { note: 'Private note', name: 'Private tester' },
-      },
-    ]);
-  } finally {
-    await page.close();
-  }
-});
-
-it('preserves the verdict, note and name in an interactive fallback dialog', async () => {
-  const page = await feedbackPage(true);
-  try {
-    await page.evaluate(async () => {
-      const { lab, openFeedback } = (window as unknown as { testLab: typeof import('../src/ui/lab.ts') })
-        .testLab;
-      lab.sendRun = async () => {
+      lab.sendFeedback = async () => {
         throw new Error('Test send failure');
       };
-      const dialog = openFeedback(() => ({ seed: 4, inputs: [], minute: 420 }));
-      dialog.querySelector<HTMLInputElement>('.sw-recording input')!.click();
-      dialog.querySelector<HTMLInputElement>('input[value=mixed]')!.click();
-      dialog.querySelector<HTMLTextAreaElement>('textarea')!.value = 'Fallback note';
-      dialog.querySelector<HTMLInputElement>('input[type=text]')!.value = 'Fallback tester';
+      const dialog = openFeedback(() => ({}));
+      dialog.querySelector<HTMLTextAreaElement>('textarea')!.value = 'Retained note';
       dialog.querySelector('form')!.requestSubmit();
     });
-    const fallback = page.locator('dialog.sw-feedback .hflab-veil');
-    await fallback.waitFor();
-    expect(await fallback.locator('textarea').first().inputValue()).toBe('Verdict: mixed\n\nFallback note');
-    expect(await fallback.locator('#hflab-name').inputValue()).toBe('Fallback tester');
-    await fallback.getByRole('button', { name: 'Not now', exact: true }).click();
-    expect(await fallback.count()).toBe(0);
-    expect(await page.locator('dialog.sw-feedback').isVisible()).toBe(true);
+    await expect.poll(() => page.locator('[role=status]').innerText()).toContain('Test send failure');
+    expect(await page.locator('.hflab-veil').count()).toBe(0);
+    expect(await page.locator('textarea').inputValue()).toBe('Retained note');
   } finally {
     await page.close();
   }
@@ -171,7 +127,11 @@ it('explains clock rates and when protected time ends beside the speed choices',
         (button) => button.textContent === 'Fast',
       )!;
       fast.click();
-      return { text: controls.textContent, speed, pressed: fast.getAttribute('aria-pressed') };
+      return {
+        text: controls.textContent,
+        speed,
+        pressed: fast.getAttribute('aria-pressed'),
+      };
     });
     expect(result.text).toContain('Game minutes per real second: Automatic 6 · Slow 3 · Steady 6 · Fast 12.');
     expect(result.text).toContain('Your choice applies during travel, work and quiet time.');
@@ -187,27 +147,6 @@ it('explains clock rates and when protected time ends beside the speed choices',
     });
     expect(explanationWidths).toHaveLength(2);
     for (const fraction of explanationWidths) expect(fraction).toBeGreaterThan(0.9);
-  } finally {
-    await page.close();
-  }
-});
-
-it('blocks every explicit feedback send while continuing history lacks linkage approval', async () => {
-  const page = await feedbackPage();
-  try {
-    const result = await page.evaluate(() => {
-      const { lab, openFeedback } = (window as unknown as { testLab: typeof import('../src/ui/lab.ts') })
-        .testLab;
-      lab.setPersonaRecording('imported-branch');
-      lab.allowPersonaRecording(false);
-      const dialog = openFeedback(() => ({ seed: 3, inputs: [], minute: 500 }));
-      const blocked = dialog.querySelector<HTMLButtonElement>('button[type=submit]')!.disabled;
-      const explanation = dialog.textContent;
-      dialog.close();
-      return { blocked, explanation };
-    });
-    expect(result.blocked).toBe(true);
-    expect(result.explanation).toContain('Recording this continuing person needs your choice');
   } finally {
     await page.close();
   }
