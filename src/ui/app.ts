@@ -43,6 +43,7 @@ import {
   arrive,
   castReceipts,
   checkpointContinuity,
+  chooseContinuityRecording,
   continuityPanel,
   gateContinuity,
   installContinuity,
@@ -446,6 +447,7 @@ function mountMenu(target: Element | null, s: GameState | null) {
       hasRun: !!ui.s,
       getRun: () => runOf(ui.s),
       continuityPanel,
+      chooseRecording: chooseContinuityRecording,
       speed: () => selectedSpeed,
       setSpeed: (speed) => {
         selectedSpeed = speed;
@@ -1526,7 +1528,7 @@ function sundayPage(s: GameState) {
     ?.addEventListener('click', () => navigator.clipboard?.writeText(share).catch(() => {}));
   app()
     .querySelector('[data-a="feedback"]')
-    ?.addEventListener('click', () => openFeedback(() => runOf(s)));
+    ?.addEventListener('click', () => openFeedback(() => runOf(s), undefined, chooseContinuityRecording));
   app()
     .querySelector('[data-a="download"]')
     ?.addEventListener('click', () => downloadRun(runOf(s)));

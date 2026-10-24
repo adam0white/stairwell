@@ -16,12 +16,25 @@ interface MenuOptions {
   importRun?: (file: File) => void;
   hasRun: boolean;
   continuityPanel?: () => HTMLElement;
+  chooseRecording?: (allow: boolean) => Promise<void>;
 }
 
 const NAME_KEY = 'hf-lab-feedback-name';
 function feedbackRun(getRun: () => unknown): unknown {
   try {
-    return getRun();
+    const run = getRun();
+    if (lab.personaRecordingAllowed || !run || typeof run !== 'object') return run;
+    const unlinked = { ...run } as Record<string, unknown>;
+    delete unlinked.castReceipts;
+    for (const key of ['continuity', 'oneCast']) {
+      const value = unlinked[key];
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const continuity = { ...value } as Record<string, unknown>;
+        delete continuity.recordingFileKey;
+        unlinked[key] = continuity;
+      }
+    }
+    return unlinked;
   } catch {
     return undefined;
   }
@@ -130,7 +143,11 @@ export function downloadRun(run: unknown): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function openFeedback(getRun: () => unknown, onClose?: () => void): HTMLDialogElement {
+export function openFeedback(
+  getRun: () => unknown,
+  onClose?: () => void,
+  chooseRecording?: (allow: boolean) => Promise<void>,
+): HTMLDialogElement {
   const dialog = dialogShell('feedback', 'Send word');
   const form = document.createElement('form');
   form.className = 'sw-feedback-form';
@@ -204,8 +221,23 @@ export function openFeedback(getRun: () => unknown, onClose?: () => void): HTMLD
   let queued = false;
   const update = () => {
     preferences.replaceChildren();
-    const choice = feedbackPersonaControl(lab);
-    if (choice) preferences.append(choice);
+    if (chooseRecording) {
+      const scoped = Object.create(lab) as typeof lab;
+      scoped.allowPersonaRecording = (allow) => {
+        void chooseRecording(allow)
+          .then(update)
+          .catch(() => {
+            status.textContent = 'History choice could not be applied. Your note can still send.';
+          });
+      };
+      const choice = feedbackPersonaControl(scoped);
+      if (choice) {
+        if (choice.lastChild)
+          choice.lastChild.textContent =
+            ' Link all continuing people in this run to lab recording (optional)';
+        preferences.append(choice);
+      }
+    }
     const notice = document.createElement('p');
     notice.textContent =
       lab.telemetryOn && !(lab.privacySignalOn && !lab.privacyOverride)
@@ -307,7 +339,7 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
         body.append(speeds);
       }
       const feedback = button('Send word', () =>
-        leave(() => openFeedback(options.getRun, () => entry.click())),
+        leave(() => openFeedback(options.getRun, () => entry.click(), options.chooseRecording)),
       );
       body.append(feedback);
       const full = button(document.fullscreenElement ? 'Leave full screen' : 'Full screen', () => {

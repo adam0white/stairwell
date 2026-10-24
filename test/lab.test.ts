@@ -189,3 +189,52 @@ it('keeps title-menu feedback available without a run', async () => {
     await page.close();
   }
 });
+
+it('routes inline history permission through the host and omits only optional ownership from replayable feedback', async () => {
+  const page = await feedbackPage();
+  try {
+    const result = await page.evaluate<{
+      choices: boolean[];
+      direct: boolean[];
+      exported: { continuity: Record<string, unknown> };
+      original: { continuity: { recordingFileKey: string } };
+      valid: boolean;
+      seed: number;
+    }>(`(async () => {
+      const {lab,openFeedback} = window.testLab;
+      const { isSaved } = await import('/src/ui/save.ts');
+      const { replay, GAME_VERSION } = await import('/src/sim/game.ts');
+      lab.setPersonaRecording('test-group');
+      const choices = [];
+      const direct = [];
+      lab.allowPersonaRecording = (value) => { direct.push(value); };
+      let sent;
+      lab.sendFeedback = async (_note, extra) => { sent = extra?.run; return 'queued'; };
+      const original = { game: GAME_VERSION, seed: 42, inputs: [], minute: 480, continuity: { rows: [], recordingFileKey: 'browser-consent-key' }, castReceipts: { owned: {} } };
+      const dialog = openFeedback(() => original, undefined, async (value) => { choices.push(value); });
+      const checkbox = dialog.querySelector('label input[type=checkbox]');
+      checkbox.click();
+      await Promise.resolve();
+      checkbox.checked = false;
+      checkbox.dispatchEvent(new Event('change'));
+      await Promise.resolve();
+      dialog.querySelector('form').requestSubmit();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      const exported = sent;
+      const decoded = { ...exported, oneCast: exported.continuity };
+      const valid = isSaved(decoded);
+      const restored = replay(decoded.seed, decoded.inputs, decoded.minute, decoded.game);
+      dialog.close();
+      return { choices, direct, exported, original, valid, seed: restored.seed };
+    })()`);
+    expect(result.choices).toEqual([true, false]);
+    expect(result.direct).toEqual([]);
+    expect(result.exported).not.toHaveProperty('castReceipts');
+    expect(result.exported.continuity).not.toHaveProperty('recordingFileKey');
+    expect(result.original.continuity.recordingFileKey).toBe('browser-consent-key');
+    expect(result.valid).toBe(true);
+    expect(result.seed).toBe(42);
+  } finally {
+    await page.close();
+  }
+});
