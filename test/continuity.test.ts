@@ -333,3 +333,28 @@ it('automatic linkage does not call the shelf permission service', async () => {
   expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(true);
   expect(fake.request).not.toHaveBeenCalled();
 });
+
+it('does not cancel a pending arrival for a compatibility recording choice', async () => {
+  const { arrive } = await import('../src/ui/continuity.ts');
+  const { envelope } = await returnArrivalFixture();
+  let finish!: (v: unknown) => void;
+  let sent!: () => void;
+  const started = new Promise<void>((r) => {
+    sent = r;
+  });
+  fake.request.mockImplementation((req) => {
+    if (req.action === 'get') {
+      sent();
+      return new Promise((r) => {
+        finish = r;
+      });
+    }
+    return Promise.resolve(req.envelope);
+  });
+  const arrival = arrive(9);
+  await started;
+  await chooseContinuityRecording(false);
+  finish(envelope);
+  await expect(arrival).resolves.toBeDefined();
+  expect(fake.request.mock.calls.some(([req]) => req.action === 'put')).toBe(true);
+});

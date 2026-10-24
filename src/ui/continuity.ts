@@ -61,7 +61,7 @@ export async function gateContinuity(g: GameState | undefined, file = false): Pr
   lab.allowPersonaRecording(true);
 }
 export async function chooseContinuityRecording(_value: boolean): Promise<void> {
-  await gateContinuity(current(), gatedFile);
+  // Compatibility only. Recording is controlled by the menu switch.
 }
 const CAST = 'hf.cast.derya.stairwell';
 let candidate: PersonaEnvelope | null = null;
