@@ -1,31 +1,37 @@
-## Frictionless recording direction, 2026-10-23
-
-Immutable client0.4.4 and kit0.5.4 implement this direction. The owner directs automatic linkage across games on this device whenever recording is on. The first-visit notice covers recording and linkage. One menu switch turns recording on even with DNT/GPC; those signals set the initial default off. Send word uses one optional unchecked “Share this run and my play with the lab” checkbox only while recording is off. Submit with it checked enables recording/linkage and sends an available run; unchecked sends the note alone. Old linkage choices migrate silently. No separate continuing-person recording consent applies, including identity changes and loaded histories. This supersedes earlier recording-consent sections below. Owner words and authority: human-framework/docs/owner-directions-2026-10-18.md (2026-10-23 frictionless feedback).
-
 # Stairwell — current handoff
 
 ## What remains
 
-The genuine Voice Hacer→Stairwell journey at both sizes and its browser changed-away-life proof are blocked. Voice's existing local Continue run reached a real Hacer conversation and actual action boundary, then checkpoint refused: “Another chapter owns this person. Export or explicitly fork.” Do not replace another worker's head to force success. The next action is to coordinate the current Hacer branch with its owner, then resume from that branch through ordinary source UI. The fallback Hearsay Derya dialect is not declared by the current adapter, and Derya's fresh opening night duty cannot be waived. No new implementer is needed.
+Canonical adoption and its technical delivery are verified. Owner review of the cross-game feel remains on 2026-11-03; no owner acceptance or human recognition is claimed. The earlier Voice Hacer ownership conflict was resolved through the supported explicit alternative flow. It is not a current journey blocker.
 
-Manual browser download also remains unverified: Keep a copy was clicked, but the supported download event timed out. Browser security rejected chrome://downloads inspection; no workaround was used. Automated export/layout controls pass. Owner review remains after technical delivery, dated2026-11-03; no human acceptance is claimed.
+The manual browser download receipt remains unverified. Keep a copy was clicked, but the supported download event timed out. Browser security rejected internal Downloads inspection; no workaround was used. Preserved source export payloads, exact source-file replay and automated target export/replay controls are separate successful evidence. They do not prove a manual download completed.
 
-## Done and verified
+## Delivered and verified
 
-- Edition7 canonical five-person adoption, complete census, actual choice-dependent discoveries and preserved errands/gossip/Sunday vote. See docs/cast-adoption.md for exact playable facts and limits.
-- Released HF2.18.0/engine2.17.0, client0.4.0 and kit0.5.0 immutable vendor pins. Whole-cast atomic admission, pinned replay, local accepted ownership, historical file-origin recording gate (superseded by the2026-10-23 owner rule), recovery, terminal closure and actual pause boundaries have focused controls.
-- Signed implementation8de043157782a05f2a372ab81f143cbc707e57ab is on origin/main. Exact CI40047408305 passed; normal locked deployment875ca15c-10a5-4474-ad80-805e90500c8b succeeded. Live manifest matched that commit/framework2.18/dirty:false. Final local lane and normal deploy each passed147tests/12files on actual Vitest5.0.5, Node26.12.0.
-- Existing signed-in Chrome live360×690 and1280×800 play/menu and save→reload→Continue observed. Actual scrollWidth equalled each viewport. Source recording/continuity restored unchecked, source clock restored Automatic. Target retained its original recording-on/continuity-off settings. Own browser lease released; own tabs closed and viewport restored.
-- One independent Codex reviewer covered correctness/privacy and Priya Menon's game-design lens. Findings reproduced and fixed; whole-week pause control preserves the exact source Person. No extra panel or human test claimed.
+- Edition 7 has exactly Derya44 revision2, Burak31, Sevim69, Tarık81 and Hacer58. The census, choice-dependent discoveries and preserved errands/gossip/Sunday vote are documented in docs/cast-adoption.md.
+- Whole-cast admission preflights every allocated head and expected absence before one atomic claim. Current exports/replays pin complete admitted initial state. Local reload restores exact accepted ownership; imported files do not grant ownership. Recovery, terminal closure and actual pause boundaries have focused controls.
+- Real ordinary Voice Hacer play produced explicit alternative branches with null parents. Prior history was retained. These alternatives are not continuations of the old branch. Exact source envelopes, full raw snapshots, matching SHA256 digests and source-file UI replay hashes were preserved.
+- Genuine Voice→Stairwell admission was verified at 360×690 and 1280×800 without horizontal overflow. Only Hacer had an applicable allocated head in those live batches; the other four allocated heads were absent. Multi-person batch controls are automated evidence, not a claimed multi-person browser journey.
+- The target accepted Hacer's played minute480 checkpoint after the actual morning boundary. Save→reload→Continue restored ownership, and a repeated save kept the unchanged accepted checkpoint active. A fresh native return accepted that exact checkpoint as parent.
+- The captured real absence clock had zero completed intervals. The resulting unchanged life state was valid. Changed-life effects have separate focused/headless controls; no changed-away-life browser outcome is claimed.
+- One independent Codex review covered correctness/privacy and Priya Menon's game-design lens. Findings were reproduced and fixed. Browser preferences were restored, task tabs and overrides closed, the lease released, and the original merged worktree removed. Exact delivery identifiers and receipts live in the scratch reports below.
 
-## Done but unchecked
+## Current recording and feedback authority — F-491
 
-The browser export click completed without a supported download receipt. Automated export controls pass, but they do not prove that manual receipt. Final documentation commit and deployment identifiers are recorded in the scratch report to avoid a self-referential manifest update.
+Immutable client0.4.4 and kit0.5.4 implement the current owner direction alongside HF2.18.0/engine2.17.0. Recording on automatically links play across games on this device. The first-visit notice covers recording and linkage. One menu switch turns recording on even under DNT/GPC; those signals set the initial default off.
 
-## Untouched or bounded
+Send word has one optional unchecked “Share this run and my play with the lab” checkbox only while recording is off. Checked Submit enables recording/linkage and sends an available run; unchecked Submit sends the unlinked note alone. Old linkage choices migrate silently. There is no separate continuing-person recording consent, including after identity changes or file imports. Character analysis retains its separate opt-in.
 
-No silent migration from editions3–6; Start fresh is explicit. No debt discharge, clinical license, healing or whole-state transfer claim. Burak account/Tarık dues and Derya active duty restrict carry. Source raw snapshots stay local. No central HF ledger edited, no other test person deleted and no source head replaced.
+Recording identity and linkage choices do not establish source ownership. Preserve file nonownership, semantic admission, exact-parent CAS, explicit branch alternatives, loaded-run pinning, current replay, actual body/duty/clinical restrictions and terminal safeguards. Native checkpoint publication must not await recording or recordingBatch. Current authority is ~/code/.lab-scratch/cast/current-feedback-authority.md and human-framework/docs/owner-directions-2026-10-18.md (2026-10-23 frictionless feedback).
+
+## Bounded carry
+
+No silent migration from editions3–6; Start fresh is explicit. No debt discharge, clinical license, healing or whole-state transfer claim. Burak's account, Tarık's dues and Derya's active opening duty restrict carry. The fallback Hearsay Derya dialect is not declared by the current adapter. Raw source snapshots are retained in source saves/exports rather than the central people shelf; recording and feedback follow F-491 above. Explicit alternatives retain old history rather than deleting it.
 
 ## Operations and receipts
 
-The task authority is ~/code/.lab-scratch/cast/stairwell.md with proposed rows in stairwell-ledger.md; logs, screenshots and reviewer report are in the same directory. Managed branch cast-stairwell lives at ~/code/.lab-scratch/wt/stairwell/cast-stairwell until remaining browser evidence is resolved. Keep the shared checkout untouched. Full check and deploy commands: PATH=/opt/homebrew/bin:$PATH node ~/code/human-framework/scripts/suite-lock.ts -- npm run check:lane (or npm run deploy). Read coordinator notes at phase boundaries. No browser lease is held while waiting for CI or deployment.
+Start with ~/code/.lab-scratch/cast/current-feedback-authority.md before reading older recording instructions in game-common-brief.md. The final canonical adoption resolution is in stairwell-ledger.md and stairwell-journey-receipts.json in that directory. The detailed report is stairwell.md; the public handoff correction receipt is stairwell-handoff-correction.md. These scratch records hold dynamic commit, CI, deployment, viewport, source and cleanup identifiers.
+
+Use the managed npm run wt helper from human-framework for isolated worktrees. Keep the shared checkout and task-external files untouched. Prefix commands with PATH=/opt/homebrew/bin:$PATH (Node>=24). Stairwell scripts do not acquire the machine-wide suite lock: wrap each full check:lane and normal deploy once with node ~/code/human-framework/scripts/suite-lock.ts. Check disk before launches; stop below5GiB. Do not duplicate implementers.
+
+Before each signed commit run check:lane. Include Co-Authored-By: Codex <noreply@openai.com>, fetch/rebase authoritative origin/main before push, and wait for exact green CI before normal deployment. Verify the live /release.json commit, framework and dirty:false independently. Prose-only descendants need a runtime-path equivalence check, not a repeated live journey. Preserve source archives and preferences. Write proposed ledger rows only to the own scratch ledger; do not mutate the central ledger or director report. Remove only the own clean merged worktree after preserving receipts.
