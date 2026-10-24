@@ -125,7 +125,7 @@ it('claims both known people together and replays their full actual admitted sta
     replay(current.seed, current.inputs, current.minute, GAME_VERSION, undefined, current.castChapter),
   ).toEqual(current);
   await gateContinuity(current);
-  expect(mocks.allowed).toBe(false);
+  expect(mocks.allowed).toBe(true);
   await chooseContinuityRecording(true);
   expect(mocks.allowed).toBe(true);
 });
@@ -175,8 +175,8 @@ it('restores only local accepted heads, refuses stale CAS and keeps imported rec
   await gateContinuity(imported, true);
   expect(castReceipts(imported).fileOrigin).toBe(true);
   expect(Object.keys(castReceipts(imported).owned)).toHaveLength(0);
-  await expect(chooseContinuityRecording(true)).rejects.toThrow(/first alternate shelf head/);
-  expect(mocks.allowed).toBe(false);
+  await expect(chooseContinuityRecording(true)).resolves.toBeUndefined();
+  expect(mocks.allowed).toBe(true);
   // Competing current head closes the owned branch; an old living checkpoint must not revive it.
   current = restored;
   const { closePersonaBranch } = await import('@adam0white/lab-client');

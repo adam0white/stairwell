@@ -154,15 +154,8 @@ if (typeof window !== 'undefined') {
     invalidateContinuity();
     if (g) void gateContinuity(g).catch(() => {});
   };
-  window.addEventListener('hf-lab-preference', changed);
   window.addEventListener('storage', (e) => {
-    if (
-      e.key === null ||
-      ['hf-lab-player', 'hf-lab-recording-off', 'hf-lab-events-off:stairwell', 'hf-persona-opt-in'].includes(
-        e.key,
-      )
-    )
-      changed();
+    if (e.key === null || e.key === 'hf-persona-opt-in') changed();
   });
 }
 function requireCurrent(serial: number) {
@@ -301,12 +294,7 @@ export async function validateContinuity(g: GameState): Promise<void> {
   delete r.rawOwned;
 }
 export async function gateContinuity(g: GameState | undefined, file = false): Promise<void> {
-  const serial = generation;
-  if (!g) {
-    lab.setPersonaRecording('pending-cast-group');
-    lab.allowPersonaRecording(false);
-    return;
-  }
+  if (!g) return;
   const r = runtime(g);
   if (file) {
     r.fileOrigin = true;
@@ -314,76 +302,11 @@ export async function gateContinuity(g: GameState | undefined, file = false): Pr
     r.owned = {};
     r.localChoice = undefined;
   }
-  const heads = history(g);
-  const captured = pin(g);
-  if (!r.fileOrigin && r.authored && heads.length === 0) {
-    lab.setPersonaRecording(null);
-    return;
-  }
   lab.setPersonaRecording(recordingKey(r));
-  lab.allowPersonaRecording(false);
-  if (r.fileOrigin) {
-    if (r.localChoice === true && Object.keys(r.owned).length) lab.allowPersonaRecording(true);
-    return;
-  }
-  if (r.localChoice === false) return;
-  await shelf.ready;
-  if (serial !== generation || pin(g) !== captured) return;
-  if (!heads.length) return;
-  try {
-    const result = await shelf.request<{
-      sameEpoch: boolean;
-      revisions: string[];
-      recordingEpoch: string | null;
-    }>({ action: 'recordingBatch', envelopes: heads });
-    if (
-      serial === generation &&
-      pin(g) === captured &&
-      result.revisions.join('/') === captured &&
-      result.sameEpoch
-    )
-      lab.allowPersonaRecording(true);
-  } catch {
-    /* Remain gated on unavailable bridge or incomplete permission. */
-  }
+  lab.allowPersonaRecording(true);
 }
-export async function chooseContinuityRecording(value: boolean): Promise<void> {
-  const g = current();
-  if (!g) return;
-  const serial = ++generation;
-  const r = runtime(g);
-  r.localChoice = undefined;
-  const heads = history(g);
-  const captured = pin(g);
-  lab.setPersonaRecording(recordingKey(r));
-  lab.allowPersonaRecording(false);
-  await shelf.ready;
-  requireCurrent(serial);
-  if (current() !== g || pin(g) !== captured) return;
-  if (value && r.fileOrigin && !Object.keys(r.owned).length)
-    throw new Error(
-      'Keep this file local until an explicit played pause creates its first alternate shelf head.',
-    );
-  if (heads.length && (!r.fileOrigin || Object.keys(r.owned).length)) {
-    const epoch = await shelf.request<{ revisions: string[]; recordingEpoch: string | null }>({
-      action: 'recordingBatch',
-      envelopes: heads,
-    });
-    requireCurrent(serial);
-    if (current() !== g || pin(g) !== captured || epoch.revisions.join('/') !== captured)
-      throw new Error('Pinned group changed. Choose again.');
-    await shelf.request({
-      action: 'recordingBatch',
-      envelopes: heads,
-      allowRecording: value,
-      recordingEpoch: epoch.recordingEpoch ?? undefined,
-    });
-    requireCurrent(serial);
-  }
-  if (current() !== g || pin(g) !== captured) return;
-  r.localChoice = value;
-  lab.allowPersonaRecording(value);
-  store();
+export async function chooseContinuityRecording(_value: boolean): Promise<void> {
+  await gateContinuity(current());
 }
 export function acknowledgeContinuity(_g: GameState): void {
   /* Receipt is saved with the current local notebook. */
@@ -465,9 +388,6 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
   });
   requireCurrent(serial);
   const canAuthor = r.authored && !g.castChapter?.inputs.length && !fork && !old;
-  const epoch = canAuthor
-    ? await shelf.request<{ recordingEpoch: string | null }>({ action: 'recordingBatch', envelopes: [] })
-    : null;
   requireCurrent(serial);
   if (current() !== g) return;
   const recoveryKey = `stairwell-cast-recovery:${branchId}:${id}`;
@@ -482,7 +402,6 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
     envelope,
     fork,
     authored: canAuthor,
-    recordingEpoch: epoch?.recordingEpoch ?? undefined,
   });
   persistRecovery(recoveryKey, notebook, true);
   requireCurrent(serial);

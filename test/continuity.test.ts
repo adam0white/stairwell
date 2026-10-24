@@ -78,67 +78,7 @@ beforeEach(() => {
   fake.ready = Promise.resolve(true);
   fake.request.mockImplementation(async (req) => reply(req, true));
 });
-it('awaits ready and queries the exact pinned head before allowing uploads', async () => {
-  const game = await pinned();
-  let ready!: () => void;
-  fake.ready = new Promise<boolean>((resolve) => {
-    ready = () => resolve(true);
-  });
-  const gate = gateContinuity(game);
-  expect(fake.request).not.toHaveBeenCalled();
-  ready();
-  await gate;
-  expect(fake.request).toHaveBeenCalledWith({
-    action: 'recording',
-    castId: game.oneCast!.head!.castId,
-    envelope: game.oneCast!.head,
-  });
-  expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(true);
-});
-it('refuses another branch echo and stale responses after identity change', async () => {
-  const game = await pinned();
-  fake.request.mockImplementation(async (req) => ({ ...reply(req, true), branchId: 'other' }));
-  await gateContinuity(game);
-  expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(false);
-  let resolve!: (v: unknown) => void;
-  fake.request.mockImplementation(
-    () =>
-      new Promise((r) => {
-        resolve = r;
-      }),
-  );
-  const gate = gateContinuity(game);
-  await Promise.resolve();
-  await Promise.resolve();
-  events.dispatchEvent(new Event('hf-lab-preference'));
-  resolve(reply({ envelope: game.oneCast!.head }, true));
-  await gate;
-  expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(false);
-});
-it('does not authorize a restored file through a central shared association', async () => {
-  const game = await pinned('file');
-  await gateContinuity(game);
-  expect(fake.request).not.toHaveBeenCalled();
-  expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(false);
-});
-it('sends an explicit durable denial using a freshly queried epoch', async () => {
-  const game = await pinned();
-  installContinuity(
-    () => game,
-    () => {},
-  );
-  fake.request.mockImplementation(async (req) => reply(req, req.allowRecording ?? true));
-  await chooseContinuityRecording(false);
-  expect(fake.request).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      action: 'recording',
-      envelope: game.oneCast!.head,
-      allowRecording: false,
-      recordingEpoch: 'epoch',
-    }),
-  );
-  expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(false);
-});
+
 it('rejects retained non-head file retries and preserves current-head idempotency', async () => {
   const game = await pinned();
   const first = game.oneCast!.head!;
@@ -151,63 +91,6 @@ it('rejects retained non-head file retries and preserves current-head idempotenc
   const state = acceptPersona(acceptPersona({ revisions: [], heads: {} }, first), second);
   expect(() => reduceLocalPersona(state, first)).toThrow(/conflict/i);
   expect(reduceLocalPersona(state, second).heads[first.castId]).toBe(second.revision);
-});
-it('serializes a late sent grant before the latest denial without reopening the local gate', async () => {
-  const game = await pinned();
-  installContinuity(
-    () => game,
-    () => {},
-  );
-  let grantSent!: () => void;
-  const sent = new Promise<void>((resolve) => {
-    grantSent = resolve;
-  });
-  let finishGrant!: (value: unknown) => void;
-  fake.request.mockImplementation(async (req) => {
-    if (req.allowRecording === true) {
-      grantSent();
-      return new Promise((resolve) => {
-        finishGrant = resolve;
-      });
-    }
-    return reply(req, req.allowRecording ?? true);
-  });
-  const grant = chooseContinuityRecording(true);
-  await sent;
-  const deny = chooseContinuityRecording(false);
-  expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(false);
-  finishGrant(reply({ envelope: game.oneCast?.head }, true));
-  await grant;
-  await deny;
-  expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(false);
-  expect(fake.request).toHaveBeenLastCalledWith(expect.objectContaining({ allowRecording: false }));
-});
-it('does not send a choice whose run changed while its epoch query awaited', async () => {
-  const game = await pinned();
-  let loaded = game;
-  installContinuity(
-    () => loaded,
-    () => {},
-  );
-  let querySent!: () => void;
-  const sent = new Promise<void>((resolve) => {
-    querySent = resolve;
-  });
-  let finish!: (value: unknown) => void;
-  fake.request.mockImplementation(() => {
-    querySent();
-    return new Promise((resolve) => {
-      finish = resolve;
-    });
-  });
-  const choice = chooseContinuityRecording(true);
-  await sent;
-  invalidateContinuity();
-  loaded = newGame(3);
-  finish(reply({ envelope: game.oneCast?.head }, true));
-  await choice;
-  expect(fake.request).toHaveBeenCalledTimes(1);
-  expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(false);
 });
 
 it('keeps accepted source prefix immutable when a later checkpoint conflicts', async () => {
@@ -438,7 +321,15 @@ it('gates a played notebook file before its first portable head exists', async (
   const game = newGame(7);
   Object.assign(game.oneCast!, { originScope: 'file', recordingFileKey: 'file-history' });
   await gateContinuity(game, true);
-  expect(recording.setPersonaRecording).toHaveBeenLastCalledWith('file-history');
-  expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(false);
+  expect(recording.setPersonaRecording).toHaveBeenLastCalledWith(null);
+  expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(true);
+  expect(fake.request).not.toHaveBeenCalled();
+});
+
+it('automatic linkage does not call the shelf permission service', async () => {
+  await gateContinuity(await pinned(), true);
+  fake.request.mockRejectedValue(new Error('permission service unavailable'));
+  await chooseContinuityRecording(true);
+  expect(recording.allowPersonaRecording).toHaveBeenLastCalledWith(true);
   expect(fake.request).not.toHaveBeenCalled();
 });

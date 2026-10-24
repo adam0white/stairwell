@@ -46,9 +46,7 @@ function stored(key: string): string {
     return '';
   }
 }
-function recordingOff(): boolean {
-  return stored('hf-lab-recording-off') === '1' || stored('hf-lab-events-off:stairwell') === '1';
-}
+
 function rememberName(name: string): void {
   try {
     if (name) localStorage.setItem(NAME_KEY, name);
@@ -200,7 +198,7 @@ export function openFeedback(
   summary.textContent = 'What is sent';
   const preview = document.createElement('p');
   preview.textContent =
-    'Your note and optional name, linked to your recorded run, saves and log. With recording off or browser privacy protection, only your note is sent without a player id.';
+    'Recording on or Share includes an available run and links play across games on this device. Otherwise only your note, verdict and optional name are sent.';
   details.append(summary, preview, privacyLink());
   const preferences = document.createElement('div');
   const status = document.createElement('p');

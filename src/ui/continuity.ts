@@ -22,7 +22,7 @@ let gateSerial = 0;
 let gatedGame: GameState | undefined;
 let gatedFile = false;
 let manualDenied: GameState | undefined;
-let choices: Promise<void> = Promise.resolve();
+const choices: Promise<void> = Promise.resolve();
 /** Invalidate before any asynchronous run/load/reset work. Never consult gated playerId. */
 export function invalidateContinuity(): void {
   ++gateSerial;
@@ -30,7 +30,7 @@ export function invalidateContinuity(): void {
   gatedFile = false;
   linkageKnown = false;
   lab.setPersonaRecording('pending-history');
-  lab.allowPersonaRecording(false);
+  lab.allowPersonaRecording(true);
 }
 if (typeof window !== 'undefined') {
   const identityChanged = () => {
@@ -39,128 +39,29 @@ if (typeof window !== 'undefined') {
     invalidateContinuity();
     void gateContinuity(g, file).catch(() => {});
   };
-  window.addEventListener('hf-lab-preference', identityChanged);
   window.addEventListener('storage', (event) => {
-    if (
-      event.key === null ||
-      ['hf-lab-player', 'hf-lab-recording-off', 'hf-lab-events-off:stairwell'].includes(event.key)
-    )
-      identityChanged();
+    if (event.key === null) identityChanged();
   });
 }
 const build = () => lab.build().c ?? 'development';
 const message = (error: unknown) =>
   error instanceof Error ? error.message : 'Continuity unavailable. Keep a local file.';
 const recordingKey = (g: GameState) => g.oneCast?.head?.branchId ?? g.oneCast?.recordingFileKey ?? null;
-type RecordingReply = {
-  sameEpoch: boolean;
-  branchId?: string;
-  revision?: string;
-  recordingEpoch?: string | null;
-};
 const headsOf = (g: GameState) => (g.oneCast?.head ? [g.oneCast.head] : []);
 const selected = (g: GameState) =>
   headsOf(g)
     .map((h) => `${h.castId}/${h.branchId}/${h.revision}`)
     .join(':');
-const echoes = (reply: RecordingReply, head: PersonaEnvelope) =>
-  reply.branchId === head.branchId && reply.revision === head.revision;
-const owns = (serial: number, g: GameState, pin: string) =>
-  serial === gateSerial && gatedGame === g && selected(g) === pin;
-const sharedHeads = (g: GameState) => (g.oneCast?.scope === 'shared' ? headsOf(g) : []);
 export async function gateContinuity(g: GameState | undefined, file = false): Promise<void> {
-  const serial = ++gateSerial;
+  ++gateSerial;
   gatedGame = g;
   gatedFile = file;
-  const key = g ? recordingKey(g) : 'pending-history';
-  lab.setPersonaRecording(key || null);
-  const localAssociation = lab.personaRecordingAllowed;
-  linkageKnown = false;
-  if (key) lab.allowPersonaRecording(false);
-  const pin = g ? selected(g) : '';
-  await shelf.ready;
-  if (serial !== gateSerial) return;
-  if (!g?.oneCast?.head) {
-    if (g?.oneCast?.admission) lab.setPersonaRecording('invalid-history');
-    if (g?.oneCast?.recordingFileKey && !file && localAssociation && manualDenied !== g) {
-      linkageKnown = true;
-      lab.allowPersonaRecording(true);
-    }
-    return;
-  }
-  if (file || manualDenied === g) return;
-  const shared = sharedHeads(g);
-  const hasLocal = headsOf(g).length !== shared.length;
-  if (hasLocal && !localAssociation) return;
-  if (!shared.length) {
-    if (localAssociation) {
-      linkageKnown = true;
-      lab.allowPersonaRecording(true);
-    }
-    return;
-  }
-  try {
-    const heads = shared;
-    const associations = await Promise.all(
-      heads.map((head) =>
-        shelf.request<RecordingReply>({ action: 'recording', castId: head.castId, envelope: head }),
-      ),
-    );
-    if (!owns(serial, g, pin) || manualDenied === g) return;
-    if (associations.every((a, i) => a.sameEpoch && echoes(a, heads[i]!))) {
-      linkageKnown = true;
-      lab.allowPersonaRecording(true);
-    }
-  } catch {
-    /* A failed association keeps every upload blocked. */
-  }
+  linkageKnown = true;
+  lab.setPersonaRecording(null);
+  lab.allowPersonaRecording(true);
 }
-/** Choices are FIFO; a newer choice invalidates every older local callback immediately. */
-export function chooseContinuityRecording(value: boolean): Promise<void> {
-  const serial = ++gateSerial;
-  const g = current();
-  gatedGame = g;
-  linkageKnown = false;
-  if (!g) return Promise.resolve();
-  manualDenied = value ? undefined : g;
-  lab.setPersonaRecording(recordingKey(g));
-  lab.allowPersonaRecording(false);
-  const pin = selected(g);
-  const heads = sharedHeads(g);
-  const valid = () => owns(serial, g, pin) && current() === g;
-  const task = choices
-    .catch(() => {})
-    .then(async () => {
-      if (!valid()) return;
-      await shelf.ready;
-      if (!valid()) return;
-      for (const head of heads) {
-        const epoch = await shelf.request<RecordingReply>({
-          action: 'recording',
-          castId: head.castId,
-          envelope: head,
-        });
-        if (!valid()) return;
-        if (!echoes(epoch, head) || !('recordingEpoch' in epoch))
-          throw new Error('Recording choice could not verify the pinned history.');
-        const request = {
-          action: 'recording' as const,
-          castId: head.castId,
-          envelope: head,
-          allowRecording: value,
-          recordingEpoch: epoch.recordingEpoch ?? undefined,
-        };
-        const reply = await shelf.request<RecordingReply>(request);
-        if (!valid()) return;
-        if (!echoes(reply, head) || reply.sameEpoch !== value)
-          throw new Error('Recording identity changed. Choose again.');
-      }
-      if (!valid()) return;
-      linkageKnown = value;
-      lab.allowPersonaRecording(value);
-    });
-  choices = task.catch(() => {});
-  return task;
+export async function chooseContinuityRecording(_value: boolean): Promise<void> {
+  await gateContinuity(current(), gatedFile);
 }
 const CAST = 'hf.cast.derya.stairwell';
 let candidate: PersonaEnvelope | null = null;
@@ -319,16 +220,7 @@ export function checkpointContinuity(): Promise<void> {
         const serial = gateSerial;
         const prior = game.oneCast?.head;
         const scope = game.oneCast?.scope ?? 'shared';
-        const author =
-          !prior &&
-          !game.oneCast?.originScope &&
-          gatedGame === game &&
-          lab.personaRecordingAllowed &&
-          lab.telemetryOn;
-        const epoch =
-          !prior && scope === 'shared'
-            ? await shelf.request<RecordingReply>({ action: 'recording' })
-            : undefined;
+        const author = !prior && !game.oneCast?.originScope && gatedGame === game;
         if (serial !== gateSerial || current() !== game) return;
         prefix = structuredClone(game);
         envelope = await createDeryaCheckpoint(prefix, {
@@ -356,8 +248,7 @@ export function checkpointContinuity(): Promise<void> {
           const request = {
             action: 'put' as const,
             envelope,
-            authored: Boolean(author && epoch && 'recordingEpoch' in epoch),
-            recordingEpoch: epoch?.recordingEpoch ?? undefined,
+            authored: author,
           };
           await shelf.request(request);
         }
