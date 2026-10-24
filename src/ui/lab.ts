@@ -207,9 +207,10 @@ export function openFeedback(getRun: () => unknown, onClose?: () => void): HTMLD
     const choice = feedbackPersonaControl(lab);
     if (choice) preferences.append(choice);
     const notice = document.createElement('p');
-    notice.textContent = lab.telemetryOn
-      ? 'Send includes this run and continuing character state. Without linkage approval it is sent without a player id or recorded history linkage.'
-      : 'Recording is off or browser privacy is on. Send includes only your note and verdict.';
+    notice.textContent =
+      lab.telemetryOn && !(lab.privacySignalOn && !lab.privacyOverride)
+        ? 'An available run may also be included with continuing character state. Without linkage approval it is sent without a player id or recorded history linkage.'
+        : 'Recording is off or browser privacy is on. Send includes only your note and verdict.';
     preferences.append(notice);
     send.disabled = !queued && sending;
   };
