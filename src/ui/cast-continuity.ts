@@ -589,7 +589,12 @@ export function continuityPanel(): HTMLElement {
       if (!g) return;
       act(g, { kind: 'cast-pause', who: selected });
       store();
-      line.textContent = 'Close the menu and continue play. Work and sleep boundaries still apply.';
+      line.textContent =
+        g.castPauses?.[selected] === 'requested'
+          ? 'Close the menu and continue play. Work and sleep boundaries still apply.'
+          : g.castPauses?.[selected] === 'paused'
+            ? 'This person has reached the played pause.'
+            : (g.said.at(-1)?.text ?? 'This duty does not support a chapter pause.');
     }),
   );
   section.append(

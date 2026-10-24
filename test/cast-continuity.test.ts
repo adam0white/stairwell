@@ -235,3 +235,18 @@ it('retains a late accepted source receipt and raw capture without changing a re
     vi.unstubAllGlobals();
   }
 });
+
+it('keeps the paused source Person unchanged across later days and observed building events', async () => {
+  current = await arrive(7);
+  act(current, { kind: 'cast-pause', who: 'hacer' });
+  while (current.castPauses?.hacer !== 'paused' && current.minute < 1200) step(current);
+  const paused = JSON.stringify(personOf(current, 'hacer'));
+  for (let guard = 0; guard < 6000 && current.minute < 6 * 1440; guard++) {
+    if (current.phase === 'night') act(current, { kind: 'next' });
+    else step(current);
+  }
+  current.k.at = 'door:hacer';
+  current.k.walk = null;
+  expect(faceToFace(current)).not.toContain('hacer');
+  expect(JSON.stringify(personOf(current, 'hacer'))).toBe(paused);
+});

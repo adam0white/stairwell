@@ -386,6 +386,7 @@ export function planDay(s: GameState, day: number) {
   const r = (kind: number, i: number) => hashUnit(s.seed, kind, day, i);
   // Bread and newspapers: everyone wants them early. Derya's hangs on her door while she sleeps.
   for (const [i, id] of RIDS.entries()) {
+    if (s.castPauses?.[id] === 'paused') continue;
     if (id === 'burak' && day === 6) continue;
     const loaves = 1 + Math.floor(r(DRAW.bread, i) * 2);
     const by = d + 7 * 60 + 55 + Math.floor(r(DRAW.bread, i + 20) * 35);
@@ -433,7 +434,7 @@ export function planDay(s: GameState, day: number) {
     const j = Math.floor(r(DRAW.job, i + 1) * JOBS.length);
     if (used.has(j) || (s.jobsUsed.includes(j) && s.jobsUsed.length < JOBS.length - 2)) continue;
     const job = JOBS[j];
-    if (!job) continue;
+    if (!job || s.castPauses?.[job.for] === 'paused') continue;
     if (job.for === 'burak' && day === 6) continue;
     used.add(j);
     s.jobsUsed.push(j);
@@ -586,7 +587,7 @@ export function newGame(seed: number, edition = GAME_VERSION, chapter?: CastChap
         addTask(s, {
           kind: 'job',
           for: id,
-          label: `${life.assignment}: bring ${id === 'hacer' ? (input.life.assignment === 0 ? 'packaging for a paper room' : 'a folded shop notice') : id === 'burak' ? 'a blank account sheet' : id === 'sevim' ? 'a clear notice draft' : id === 'tarik' ? 'a recorder battery' : 'quiet supplies to the door hook'}`,
+          label: `${life.assignment}: bring ${id === 'hacer' ? (input.life.assignment === 0 ? 'clean packaging' : 'a folded shop notice') : id === 'burak' ? 'a blank account sheet' : id === 'sevim' ? 'a clear notice draft' : id === 'tarik' ? 'a recorder battery' : 'quiet supplies to the door hook'}`,
           place: `door:${id}`,
           from: 16 * 60,
           by: 19 * 60,
@@ -818,6 +819,7 @@ function residentMinute(s: GameState, r: RState) {
     if (!working && !nurseDuty && !p.activity) {
       s.castPauses[r.id] = 'paused';
       r.where = 'paused';
+      r.stairsUntil = 0;
       r.until = s.minute;
       say(
         s,
@@ -1238,7 +1240,7 @@ export function faceToFace(s: GameState): Rid[] {
   if (at.startsWith('door:')) {
     const id = at.slice(5) as Rid;
     const r = rOf(s, id);
-    return r.where === 'home' ? [id] : [];
+    return s.castPauses?.[id] !== 'paused' && r.where === 'home' ? [id] : [];
   }
   if (at === 'step') return atStep(s);
   return [];
@@ -1342,6 +1344,7 @@ function complete(s: GameState, t: Task, hook: boolean) {
         'journal',
       );
     for (const r of s.residents) {
+      if (s.castPauses?.[r.id] === 'paused') continue;
       socialEvent(personOf(s, r.id), {
         at: s.minute,
         kind: late ? 'harm' : 'help',
@@ -1350,6 +1353,17 @@ function complete(s: GameState, t: Task, hook: boolean) {
         magnitude: late ? 0.06 : 0.06,
       });
     }
+    return;
+  }
+  if (s.castPauses?.[t.for] === 'paused') {
+    if (late) report(s).late++;
+    else report(s).done++;
+    say(
+      s,
+      'narrator',
+      `${nameOf(t.for)}’s chapter is paused. You left the delivery at the door; there was no reply.`,
+      'journal',
+    );
     return;
   }
   const p = personOf(s, t.for);
@@ -1507,6 +1521,17 @@ function pauseDeryaRota(s: GameState) {
 function applyInput(s: GameState, inp: Input) {
   switch (inp.kind) {
     case 'cast-pause':
+      if (inp.who === 'burak' || inp.who === 'tarik') {
+        say(
+          s,
+          inp.who,
+          inp.who === 'burak'
+            ? 'The building book still needs me. There is no agreed ledger handover in this chapter.'
+            : 'My source dues are still unresolved. A chapter pause cannot discharge them.',
+          'voice',
+        );
+        return;
+      }
       s.castPauses ??= {};
       if (!s.castPauses[inp.who]) {
         s.castPauses[inp.who] = 'requested';
@@ -2007,13 +2032,14 @@ function misdeliver(s: GameState, who: Rid, taskId: number) {
   }
   // It reaches its owner in the evening, through the neighbour, with a word about where it came from.
   const owner = personOf(s, t.for);
-  socialEvent(owner, {
-    at: s.minute,
-    kind: 'harm',
-    otherId: KAPICI,
-    byMe: false,
-    magnitude: rec.chosenAffordanceId === 'peek' ? 0.3 : 0.1,
-  });
+  if (s.castPauses?.[t.for] !== 'paused')
+    socialEvent(owner, {
+      at: s.minute,
+      kind: 'harm',
+      otherId: KAPICI,
+      byMe: false,
+      magnitude: rec.chosenAffordanceId === 'peek' ? 0.3 : 0.1,
+    });
   t.done = s.minute + 60;
 }
 
@@ -2092,6 +2118,7 @@ function prank(s: GameState, what: 'swap' | 'gate') {
       ['hacer', 'sevim'],
       ['sevim', 'hacer'],
     ] as const) {
+      if (s.castPauses?.[a] === 'paused') continue;
       const p = personOf(s, a);
       perceive(p, [
         {
@@ -2194,7 +2221,15 @@ function storyNews(s: GameState, who: Rid): boolean {
 function storyEvents(s: GameState) {
   if (!s.stories) return;
   const { feud, fund } = s.stories;
-  if (!feud.reconciled && feud.hacerPassed && feud.sevimPassed && today(s) === 6 && tod(s) >= 17 * 60) {
+  if (
+    s.castPauses?.hacer !== 'paused' &&
+    s.castPauses?.sevim !== 'paused' &&
+    !feud.reconciled &&
+    feud.hacerPassed &&
+    feud.sevimPassed &&
+    today(s) === 6 &&
+    tod(s) >= 17 * 60
+  ) {
     feud.reconciled = true;
     for (const [a, b] of [
       ['hacer', 'sevim'],
@@ -2232,19 +2267,22 @@ function boilerFound(s: GameState) {
   ]);
   learn(s, FACTS.fund);
   say(s, 'burak', 'The fund is thin. Some flats are behind. I won’t say who.', 'voice');
-  for (const r of RIDS) if (r !== 'burak') believeSelf(personOf(s, r), FACTS.fund, true, 0.6, s.minute);
+  for (const r of RIDS)
+    if (r !== 'burak' && s.castPauses?.[r] !== 'paused')
+      believeSelf(personOf(s, r), FACTS.fund, true, 0.6, s.minute);
   // Hacer wonders where the money went.
   const n = personOf(s, 'hacer');
-  perceive(n, [
-    {
-      at: s.minute,
-      channel: 'saw',
-      kind: 'fact',
-      salience: 0.5,
-      summary: 'no hot water again',
-      claims: [{ prop: 'burak:dishonest', value: true, confidence: 0.62 }],
-    },
-  ]);
+  if (s.castPauses?.hacer !== 'paused')
+    perceive(n, [
+      {
+        at: s.minute,
+        channel: 'saw',
+        kind: 'fact',
+        salience: 0.5,
+        summary: 'no hot water again',
+        claims: [{ prop: 'burak:dishonest', value: true, confidence: 0.62 }],
+      },
+    ]);
   void p;
 }
 
@@ -2272,7 +2310,12 @@ function tarikEnvelope(s: GameState) {
 
 function nightEvents(s: GameState, day: number) {
   // Tuesday to Thursday: a man rings flat 5 near midnight. From your window you see him; so does Hacer.
-  if (day >= 2 && day <= 4 && !(s.oneCast?.departure && !s.oneCast.admission)) {
+  if (
+    s.castPauses?.derya !== 'paused' &&
+    day >= 2 &&
+    day <= 4 &&
+    !(s.oneCast?.departure && !s.oneCast.admission)
+  ) {
     perceive(s.kapici, [
       {
         at: s.minute,
@@ -2286,21 +2329,22 @@ function nightEvents(s: GameState, day: number) {
     learn(s, FACTS.visitor);
     const lines: Record<number, string> = {
       2: 'Near midnight a man rang flat 5. Derya let him in, and looked down the stairs before she shut the door.',
-      3: 'The same man at flat 5 again, late. He carried a bag this time. Hacer’s curtain moved.',
+      3: 'The same man at flat 5 again, late. He carried a bag this time. The curtain on the landing moved.',
       4: 'Flat 5 again after eleven. You heard him laugh on the landing, and Derya say “shh”.',
     };
     say(s, 'narrator', lines[day] ?? '', 'event');
     const n = personOf(s, 'hacer');
-    perceive(n, [
-      {
-        at: s.minute,
-        channel: 'saw',
-        kind: 'fact',
-        salience: 0.8,
-        summary: 'a man at Derya’s',
-        claims: [{ prop: FACTS.visitor, value: true, confidence: 0.9 }],
-      },
-    ]);
+    if (s.castPauses?.hacer !== 'paused')
+      perceive(n, [
+        {
+          at: s.minute,
+          channel: 'saw',
+          kind: 'fact',
+          salience: 0.8,
+          summary: 'a man at Derya’s',
+          claims: [{ prop: FACTS.visitor, value: true, confidence: 0.9 }],
+        },
+      ]);
   }
 }
 
@@ -2331,6 +2375,10 @@ function meeting(s: GameState) {
   s.minute = dayStart(7) + MEETING;
   say(s, 'narrator', 'Sunday. The residents’ meeting in Burak Bey’s flat. Tea, the good glasses.', 'journal');
   for (const id of RIDS) {
+    if (s.castPauses?.[id] === 'paused') {
+      rOf(s, id).vote = 'away';
+      continue;
+    }
     const p = personOf(s, id);
     if (id === 'derya' && s.oneCast?.departure && !s.oneCast.admission) continue;
     tick(p, Math.max(p.now, s.minute));
@@ -2357,6 +2405,10 @@ function meeting(s: GameState) {
   let yes = 0;
   let no = 0;
   for (const id of RIDS) {
+    if (s.castPauses?.[id] === 'paused') {
+      rOf(s, id).vote = 'away';
+      continue;
+    }
     const r = rOf(s, id);
     const p = personOf(s, id);
     if (
@@ -2432,6 +2484,7 @@ function turnPage(s: GameState) {
 
 function morning(s: GameState, day: number) {
   for (const r of s.residents) {
+    if (s.castPauses?.[r.id] === 'paused') continue;
     const info = RESIDENTS[r.id];
     r.where = info.nights && day <= 6 ? 'work' : 'home';
     r.until = s.minute + 15 + ((RIDS.indexOf(r.id) * 11 + day * 5) % 40);
@@ -2443,6 +2496,7 @@ function morning(s: GameState, day: number) {
   s.k.busyTask = null;
   // Sleep on it: everyone (and the kapıcı's legs) through the night.
   for (const p of [...s.people, s.kapici]) {
+    if (s.castPauses?.[p.id as Rid] === 'paused') continue;
     if (s.version === GAME_VERSION && p.id === 'derya') {
       if (s.oneCast?.departure && !s.oneCast.admission) continue;
       tick(p, Math.max(p.now, s.minute));
@@ -2481,7 +2535,8 @@ function morning(s: GameState, day: number) {
   say(s, 'narrator', lines[day] ?? DAY_NAMES[day - 1] ?? '', 'journal');
   if (day === 3)
     say(s, 'riza', 'If the boiler goes, look at the pump first. Then look at Burak’s face.', 'margin');
-  if (day === 4) say(s, 'riza', 'What Hacer sees at night, the step hears by noon.', 'margin');
+  if (day === 4 && s.castPauses?.hacer !== 'paused')
+    say(s, 'riza', 'What Hacer sees at night, the step hears by noon.', 'margin');
 }
 
 /** Dinner, breakfast: the host feeds everyone at home (no choice offered). */
@@ -2518,7 +2573,7 @@ function endDay(s: GameState) {
       t.done = s.minute;
       rep.missed++;
       say(s, 'narrator', 'Nobody took the bins down. The landing smelled of it all night.', 'journal');
-      for (const r of s.residents)
+      for (const r of s.residents.filter((r) => s.castPauses?.[r.id] !== 'paused'))
         socialEvent(personOf(s, r.id), {
           at: s.minute,
           kind: 'harm',
@@ -2529,6 +2584,16 @@ function endDay(s: GameState) {
     }
   for (const t of s.tasks)
     if (!t.done && dayOf(t.from) === day && t.kind !== 'bins') {
+      if (s.castPauses?.[t.for] === 'paused') {
+        t.done = s.minute;
+        say(
+          s,
+          'narrator',
+          `${nameOf(t.for)}’s request remained unfulfilled at their chapter pause.`,
+          'journal',
+        );
+        continue;
+      }
       rep.missed++;
       const p = personOf(s, t.for);
       socialEvent(p, { at: s.minute, kind: 'harm', otherId: KAPICI, byMe: false, magnitude: 0.15 });
@@ -2552,17 +2617,20 @@ function endDay(s: GameState) {
       s,
       'narrator',
       s.catDays === 1
-        ? 'The ginger stray came in through the gate. Hacer fed it. Sevim sneezed at it.'
+        ? s.castPauses?.hacer === 'paused'
+          ? 'The ginger stray explored the entrance. Sevim sneezed at it.'
+          : 'The ginger stray came in through the gate. Hacer fed it. Sevim sneezed at it.'
         : 'The ginger cat again. Burak has started calling it Pamuk.',
       'event',
     );
-    socialEvent(personOf(s, 'sevim'), {
-      at: s.minute,
-      kind: 'harm',
-      otherId: KAPICI,
-      byMe: false,
-      magnitude: 0.08,
-    });
+    if (s.castPauses?.sevim !== 'paused')
+      socialEvent(personOf(s, 'sevim'), {
+        at: s.minute,
+        kind: 'harm',
+        otherId: KAPICI,
+        byMe: false,
+        magnitude: 0.08,
+      });
     socialEvent(personOf(s, 'burak'), {
       at: s.minute,
       kind: 'gift',
@@ -2570,13 +2638,14 @@ function endDay(s: GameState) {
       byMe: false,
       magnitude: 0.2,
     });
-    socialEvent(personOf(s, 'hacer'), {
-      at: s.minute,
-      kind: 'gift',
-      otherId: KAPICI,
-      byMe: false,
-      magnitude: 0.1,
-    });
+    if (s.castPauses?.hacer !== 'paused')
+      socialEvent(personOf(s, 'hacer'), {
+        at: s.minute,
+        kind: 'gift',
+        otherId: KAPICI,
+        byMe: false,
+        magnitude: 0.1,
+      });
     if (s.catDays >= 2 && !s.catHome) {
       s.catHome = true;
       say(s, 'narrator', 'Burak bought a bowl. Pamuk is the building’s cat now.', 'event');
@@ -2585,6 +2654,7 @@ function endDay(s: GameState) {
   }
   // A promise made to a man you now think a liar: it shows on the stairs before Sunday.
   for (const r of s.residents) {
+    if (s.castPauses?.[r.id] === 'paused') continue;
     if (r.word !== 'yes') continue;
     if (credence(personOf(s, r.id), 'kapici:dishonest') < 0.65) continue;
     r.word = 'no';
@@ -2638,6 +2708,7 @@ export function step(s: GameState): void {
 function waterOff(s: GameState) {
   // The water notice on the board came true: anyone the kapıcı told sees his word was good.
   for (const r of s.residents) {
+    if (s.castPauses?.[r.id] === 'paused') continue;
     const p = personOf(s, r.id);
     const toldIt = r.told.some((x) => x.prop === 'notice:water' && x.value);
     confirm(p, 'notice:water', true, s.minute);
