@@ -31,12 +31,16 @@ import {
   promise,
   readBody,
   relationshipWith,
+  restore,
   type Suggestion,
   seedSourceTrust,
+  snapshot,
   socialEvent,
   tick,
   trustOf,
 } from '@adam0white/human-framework';
+import { lifeAdmission } from '@adam0white/lab-client';
+import { CALENDAR_ACTIONS, type CastChapter } from './cast-life.ts';
 import { applyDeryaReturn, type DeryaContinuity, type DeryaReturnAdmission } from './one-cast.ts';
 import {
   FACTS,
@@ -63,7 +67,7 @@ import {
 
 export const LEGACY_GAME_VERSION = 'stairwell@3';
 export const PREVIOUS_GAME_VERSION = 'stairwell@4';
-export const GAME_VERSION = 'stairwell@6';
+export const GAME_VERSION = 'stairwell@7';
 export const DAY_START = 7 * 60;
 export const DAY_END = 21 * 60;
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -134,7 +138,7 @@ export interface Task {
   hook?: boolean;
 }
 
-export type Where = 'home' | 'asleep' | 'step' | 'shop' | 'work' | 'roof' | `visit:${Rid}`;
+export type Where = 'paused' | 'home' | 'asleep' | 'step' | 'shop' | 'work' | 'roof' | `visit:${Rid}`;
 
 export interface RState {
   id: Rid;
@@ -208,6 +212,9 @@ export interface Kapici {
 }
 
 export interface GameState {
+  castChapter?: CastChapter;
+  castPauses?: Partial<Record<Rid, 'requested' | 'paused'>>;
+  lifeNotes?: Partial<Record<Rid, string>>;
   oneCast?: DeryaContinuity;
   /** Present only in v4. Legacy notebooks retain their exact serialized state. */
   stories?: StoryState;
@@ -256,6 +263,7 @@ export type Input =
   | { at: number; kind: 'tell'; who: Rid; prop: string; value: boolean; sure: boolean }
   | { at: number; kind: 'invent'; who: Rid; about: Rid; trait: string }
   | { at: number; kind: 'word'; who: Rid }
+  | { at: number; kind: 'cast-pause'; who: Rid }
   | { at: number; kind: 'sit'; who: Rid; topic?: 'boundaries' }
   | { at: number; kind: 'misdeliver'; who: Rid; task: number }
   | { at: number; kind: 'knock'; who: Rid }
@@ -465,7 +473,7 @@ export function planDay(s: GameState, day: number) {
 
 // ---------- new game ----------
 
-export function newGame(seed: number, edition = GAME_VERSION): GameState {
+export function newGame(seed: number, edition = GAME_VERSION, chapter?: CastChapter): GameState {
   if (!canReplay(edition))
     throw new Error(`This notebook belongs to an older edition. Start fresh. (${edition})`);
   const now = DAY_START;
@@ -541,7 +549,8 @@ export function newGame(seed: number, edition = GAME_VERSION): GameState {
   const d = rOf(s, 'derya');
   d.where = 'work';
   d.until = now + 60;
-  for (const sp of SECRET_PROPS.slice(0, 3)) learn(s, sp.prop);
+  for (const sp of SECRET_PROPS.filter((sp) => ['hacer:nosy', 'tarik:kind'].includes(sp.prop)))
+    learn(s, sp.prop);
   planDay(s, 1);
   say(
     s,
@@ -555,6 +564,37 @@ export function newGame(seed: number, edition = GAME_VERSION): GameState {
     'Monday. Your first day at Lale Apartmanı. The bread order is on the board, and a notice from Burak Bey: water off Wednesday, ten to twelve.',
     'journal',
   );
+  if (chapter) {
+    s.castChapter = structuredClone(chapter);
+    s.lifeNotes = {};
+    for (const input of chapter.inputs) {
+      const id = Object.keys(chapter.initial).find(
+        (id) => RESIDENTS[id as Rid].castId === input.parent.castId,
+      ) as Rid | undefined;
+      if (!id || !chapter.initial[id]) throw new Error('Incomplete admitted cast.');
+      const index = s.people.findIndex((p) => p.id === id);
+      s.people[index] = restore(snapshot(chapter.initial[id]!));
+      const life = lifeAdmission(input, 'stairwell');
+      s.lifeNotes[id] = life.line;
+      const resident = rOf(s, id);
+      if (!RESIDENTS[id].nights && !RESIDENTS[id].work) {
+        resident.where = life.life.place === 'public-garden' ? 'step' : life.startsAtHome ? 'home' : 'shop';
+        resident.until = 480;
+      }
+      // Coarse assignment changes a real, optional afternoon errand, within the resident's role.
+      if (life.availableForExtraWork || life.life.work === 'local-help')
+        addTask(s, {
+          kind: 'job',
+          for: id,
+          label: `${life.assignment}: bring ${id === 'hacer' ? (input.life.assignment === 0 ? 'packaging for a paper room' : 'a folded shop notice') : id === 'burak' ? 'a blank account sheet' : id === 'sevim' ? 'a clear notice draft' : id === 'tarik' ? 'a recorder battery' : 'quiet supplies to the door hook'}`,
+          place: `door:${id}`,
+          from: 16 * 60,
+          by: 19 * 60,
+          work: 8,
+        });
+    }
+  }
+
   return s;
 }
 
@@ -691,6 +731,23 @@ function freeOffers(s: GameState, r: RState): Affordance[] {
         advertises: { leisure: 0.2, beauty: 0.15 } as never,
       }),
     );
+  if (s.castChapter?.initial[r.id]) {
+    const p = personOf(s, r.id);
+    for (const c of p.agenda.commitments)
+      if (c.status === 'pending' && c.kind !== 'abstain' && c.from <= s.minute && c.until > s.minute) {
+        const action = c.actions.find((a) => CALENDAR_ACTIONS.has(a));
+        if (action)
+          list.push(
+            offer(`calendar:${c.id}`, {
+              action,
+              label: c.label ?? 'keep a quiet personal duty',
+              duration: Math.min(10, c.until - s.minute),
+              tags: action.startsWith('pray') ? ['worship'] : [],
+              advertises: { meaning: 0.2 },
+            }),
+          );
+      }
+  }
   return list;
 }
 
@@ -723,6 +780,7 @@ function moveTo(s: GameState, r: RState, w: Where, doing: string, minutes: numbe
 }
 
 function residentMinute(s: GameState, r: RState) {
+  if (s.castPauses?.[r.id] === 'paused') return;
   if (r.id === 'derya' && s.oneCast?.departure && !s.oneCast.admission) return;
   const t = tod(s);
   if (s.minute < r.until) return;
@@ -753,6 +811,22 @@ function residentMinute(s: GameState, r: RState) {
         },
       ];
     finish(p, out);
+  }
+  if (s.castPauses?.[r.id] === 'requested') {
+    const working = info.work && weekday(s) <= 5 && t >= info.work[0] && t < info.work[1];
+    const nurseDuty = info.nights && (t < 15 * 60 + 30 || t >= 19 * 60 + 30);
+    if (!working && !nurseDuty && !p.activity) {
+      s.castPauses[r.id] = 'paused';
+      r.where = 'paused';
+      r.until = s.minute;
+      say(
+        s,
+        r.id,
+        'I am pausing this chapter here. My unfinished duties and private account stay with me.',
+        'voice',
+      );
+      return;
+    }
   }
   // Work and sleep are the host's: the timetable of a working life.
   const wd = weekday(s);
@@ -827,7 +901,7 @@ function residentMinute(s: GameState, r: RState) {
   if (!aff) return;
   begin(p, aff, rec);
   const mins = aff.duration;
-  if (aff.id === 'home' || aff.id === 'meal') {
+  if (aff.id === 'home' || aff.id === 'meal' || aff.id.startsWith('calendar:')) {
     if (r.where !== 'home') moveTo(s, r, 'home', aff.id, mins);
     else r.until = s.minute + mins;
   } else if (aff.id === 'step') moveTo(s, r, 'step', 'step', mins);
@@ -870,6 +944,7 @@ function nearTalk(s: GameState, where: string, a: Rid, b: Rid): boolean {
 
 /** Two residents talk: each tells the other what they are sure of, through HF `converse`. */
 export function talk(s: GameState, a: Rid, b: Rid, where: string, maxClaims?: number) {
+  if (s.castPauses?.[a] === 'paused' || s.castPauses?.[b] === 'paused') return;
   const pa = personOf(s, a);
   const pb = personOf(s, b);
   const ra = relationshipWith(pa, b).affection;
@@ -1431,6 +1506,18 @@ function pauseDeryaRota(s: GameState) {
 
 function applyInput(s: GameState, inp: Input) {
   switch (inp.kind) {
+    case 'cast-pause':
+      s.castPauses ??= {};
+      if (!s.castPauses[inp.who]) {
+        s.castPauses[inp.who] = 'requested';
+        say(
+          s,
+          inp.who,
+          'I will pause after my current activity and real work or sleep duties. Close the menu and continue the day.',
+          'voice',
+        );
+      }
+      return;
     case 'one-cast-depart': {
       if (s.version !== GAME_VERSION || s.oneCast?.departure || s.minute > 480) return;
       s.oneCast = { ...s.oneCast, rows: s.oneCast?.rows ?? [], departureRequested: true };
@@ -1563,6 +1650,7 @@ function askNews(s: GameState, who: Rid) {
   tick(s.kapici, Math.max(s.kapici.now, s.minute));
   const aff = relationshipWith(p, KAPICI).affection;
   if (storyNews(s, who)) return;
+  if (s.lifeNotes?.[who]) say(s, who, s.lifeNotes[who]!, 'voice');
   if (aff < -0.2) {
     say(s, who, 'Nothing for you today.', 'voice');
     return;
@@ -2586,8 +2674,9 @@ export function replay(
   until?: number,
   edition = GAME_VERSION,
   admission?: DeryaReturnAdmission,
+  chapter?: CastChapter,
 ): GameState {
-  let s = newGame(seed, edition);
+  let s = newGame(seed, edition, chapter);
   let suffix = inputs;
   if (admission) {
     const prefix = admission.prefix;

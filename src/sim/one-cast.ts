@@ -92,7 +92,7 @@ export async function createDeryaCheckpoint(
     castRevision: '2',
     branchId: options.branchId,
     parentRevision: options.parentRevision,
-    source: { game: 'stairwell', build: options.build, engine: person.engine, rules: '6' },
+    source: { game: 'stairwell', build: options.build, engine: person.engine, rules: '7' },
     transfer: {
       person: projection,
       history: [
@@ -121,7 +121,7 @@ export async function prepareDeryaReturn(
     envelope.castId !== DERYA_CAST ||
     envelope.castRevision !== '2' ||
     envelope.source.game !== 'hearsay' ||
-    envelope.source.engine !== '2.14.1' ||
+    envelope.source.engine !== '2.17.0' ||
     !['4', '5'].includes(envelope.source.rules)
   )
     return fail('unsupported returning source');
@@ -296,7 +296,7 @@ export async function validateDeryaContinuity(s: GameState): Promise<void> {
     const head = await validatePersona(s.oneCast.head);
     if (head.castId !== DERYA_CAST || head.castRevision !== '2') return fail('saved head cast conflict');
     if (!s.oneCast.admission) {
-      if (head.source.game !== 'stairwell' || head.source.rules !== '6')
+      if (head.source.game !== 'stairwell' || head.source.rules !== '7')
         return fail('saved source head conflict');
       const checkpoint = s.oneCast.lastCheckpoint ?? personOf(s, 'derya');
       const stamp = head.transfer.checkpoint as ReturnTypeShape;

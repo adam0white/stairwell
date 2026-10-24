@@ -268,7 +268,7 @@ it.each([
       (inputs) =>
         localStorage.setItem(
           'stairwell:notebook',
-          JSON.stringify({ game: 'stairwell@6', seed: 7, inputs, minute: 440 }),
+          JSON.stringify({ game: 'stairwell@7', seed: 7, inputs, minute: 440 }),
         ),
       inputs,
     );
@@ -628,7 +628,7 @@ it('preserves the current notebook edition through continue, export and morning 
       localStorage.setItem(
         'stairwell:notebook',
         JSON.stringify({
-          game: 'stairwell@6',
+          game: 'stairwell@7',
           seed: 7,
           inputs: [{ at: 1260, kind: 'next' }],
           minute: 1860,
@@ -637,11 +637,11 @@ it('preserves the current notebook edition through continue, export and morning 
     );
     await page.reload();
     await page.locator('[data-a=continue]').click();
-    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@6');
+    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@7');
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     expect(
       await page.evaluate(() => JSON.parse(localStorage.getItem('stairwell:notebook') ?? '{}').game),
-    ).toBe('stairwell@6');
+    ).toBe('stairwell@7');
     await page.getByRole('button', { name: 'Send word', exact: true }).click();
     const [download] = await Promise.all([
       page.waitForEvent('download'),
@@ -651,13 +651,13 @@ it('preserves the current notebook edition through continue, export and morning 
     let text = '';
     if (!stream) throw new Error('Missing download stream');
     for await (const chunk of stream) text += chunk.toString();
-    expect(JSON.parse(text).game).toBe('stairwell@6');
+    expect(JSON.parse(text).game).toBe('stairwell@7');
     await page.getByRole('button', { name: 'Close send word', exact: true }).click();
     await page.getByRole('button', { name: 'To the title page', exact: true }).click();
     await page.locator('[data-a=other]').click();
     await page.getByRole('button', { name: 'Turn back to Monday morning', exact: true }).click();
     await page.getByRole('button', { name: 'Yes, turn back', exact: true }).click();
-    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@6');
+    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@7');
   } finally {
     await page.close();
   }

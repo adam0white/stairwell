@@ -63,7 +63,7 @@ async function pinned(scope: 'shared' | 'file' = 'shared'): Promise<GameState> {
     castRevision: '2',
     branchId: 'branch',
     parentRevision: null,
-    source: { game: 'stairwell', build: 'test', engine: person.engine, rules: '6' },
+    source: { game: 'stairwell', build: 'test', engine: person.engine, rules: '7' },
     transfer: { person: projection },
     limitations: projection.limitations,
   });

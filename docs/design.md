@@ -1,4 +1,4 @@
-> Current edition: see [canonical adoption](cast-adoption.md). The historical consults, measurements and earlier-edition receipts below retain their original cast and are not current cast evidence. Edition6 has five occupied flats.
+> Current edition: see [canonical adoption](cast-adoption.md). The historical consults, measurements and earlier-edition receipts below retain their original cast and are not current cast evidence. Edition7 has five occupied flats.
 
 # The Stairwell: design
 
@@ -113,7 +113,7 @@ Three concepts were written (kept below) and sent with the engine summary and th
 - The day: 07:00 to 21:00. Bread and newspapers in the morning, parcels and small jobs, the evening on the stairs, bins at 20:00. Requests are pre-rolled from the seed per day.
 - Residents decide their own free time through HF (stay in, sit on the step, go to the shop, visit a neighbour). Two residents on the step, on the stairs at the same time, or visiting talk through `converse`.
 
-## The people (canonical edition 6)
+## The people (canonical edition 7)
 
 Five maintained residents: Hacer58, temporary entrance-side resident and retired shop assistant; Sevim69, widowed retired teacher; Burak31, single accountant and keeper of the building account; Derya44, single night nurse; Tarık81, widowed retired ferry captain. Flats4 and6 are unoccupied. See [the exhaustive census and playable discoveries](cast-adoption.md). Original identities and old romance/recipe history are retired, not transferred by renaming.
 
@@ -241,6 +241,6 @@ Continuity uses the shared opt-in browser shelf. It carries the approved HF proj
 
 The return is a new chapter beginning at the locally saved source boundary. Replay pins the returned initial Person and both envelopes before simulating the suffix. Clinical health and circadian mismatch block admission. Only compatible approved fitness can be copied into the detached opening; no healing is claimed. Missing local source prefix or unsupported obligations/goals refuse continuation and leave fresh play available. Hearsay target dependencies and actual browser receipts are recorded in the scratch delivery report. Old-save work is waived; existing old loaders remain without additional compatibility machinery.
 
-## Canonical edition 6 (2026-10-23)
+## Canonical edition 7 (2026-10-23)
 
-The canonical adoption document supersedes earlier current-state claims about editions3–5, seven occupied households, old cast biographies, frozen-save compatibility, the engagement and the recipe feud. The original goal, errands, source trust, gossip exposure, fatigue, Sunday vote, dated boiler repair and private repayment permission remain. Current-version replay remains exact; old notebooks explicitly require Start fresh. Platform integration and deployment remain pending the released guide.
+The canonical adoption document supersedes earlier current-state claims about editions3–5, seven occupied households, old cast biographies, frozen-save compatibility, the engagement and the recipe feud. The original goal, errands, source trust, gossip exposure, fatigue, Sunday vote, dated boiler repair and private repayment permission remain. Current-version replay remains exact; old notebooks explicitly require Start fresh. The released whole-cast integration and its explicit supported/unsupported carry are documented in cast-adoption.md. Deployment/journey receipts remain in the coordinator report.

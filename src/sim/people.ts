@@ -6,6 +6,7 @@
  * Source trust (how much a person believes what someone tells them) is authored through HF's `seedSourceTrust`.
  * Legacy self-source beliefs remain for stairwell@3 replay compatibility (docs/hf-requests.md, 7).
  */
+
 import {
   createPerson,
   MINUTES_PER_YEAR,
@@ -15,6 +16,7 @@ import {
   seedTie,
   type TraitEffect,
 } from '@adam0white/human-framework';
+import { canonicalCast } from '@adam0white/lab-client';
 
 export type Rid = 'hacer' | 'sevim' | 'burak' | 'derya' | 'tarik';
 export const KAPICI = 'kapici';
@@ -243,18 +245,8 @@ export function makeResident(id: Rid, seed: number, now: number): Person {
       });
   }
 
-  p.values = {
-    selfDirection: 0.5,
-    stimulation: 0.5,
-    hedonism: 0.5,
-    achievement: 0.5,
-    power: 0.5,
-    security: 0.5,
-    conformity: 0.5,
-    tradition: 0.5,
-    benevolence: 0.5,
-    universalism: 0.5,
-  };
+  p.traits = structuredClone(canonicalCast(r.castId).traits);
+  p.values = structuredClone(canonicalCast(r.castId).values);
   seedNeighbours(p, now);
   return p;
 }

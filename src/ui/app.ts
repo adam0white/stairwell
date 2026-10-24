@@ -41,14 +41,16 @@ import { PRIVATE_SECRETS, STORY_SECRETS } from '../sim/stories.ts';
 import {
   acknowledgeContinuity,
   arrive,
+  castReceipts,
   checkpointContinuity,
   continuityPanel,
   gateContinuity,
   installContinuity,
   invalidateContinuity,
+  restoreCastReceipts,
   shelf,
   validateContinuity,
-} from './continuity.ts';
+} from './cast-continuity.ts';
 import { downloadRun, gameMenu, lab, labScreen, openFeedback } from './lab.ts';
 import { canWait, playback, untilSomethingHappens } from './playback.ts';
 import { isSaved, type Saved } from './save.ts';
@@ -114,6 +116,8 @@ function save(): boolean {
       inputs: s.inputs,
       minute: s.minute,
       oneCast: s.oneCast,
+      castChapter: s.castChapter,
+      castReceipts: castReceipts(s),
     });
     localStorage.setItem(SAVE_KEY, text);
     lab.captureSave(JSON.parse(text));
@@ -123,9 +127,10 @@ function save(): boolean {
   }
 }
 
-function restoreNotebook(x: Saved): GameState {
-  const s = replay(x.seed, x.inputs, x.minute, x.game, x.oneCast?.admission);
+function restoreNotebook(x: Saved, file = false): GameState {
+  const s = replay(x.seed, x.inputs, x.minute, x.game, x.oneCast?.admission, x.castChapter);
   if (x.oneCast) s.oneCast = structuredClone(x.oneCast);
+  restoreCastReceipts(s, x.castReceipts, file);
   return s;
 }
 
@@ -173,6 +178,8 @@ function runOf(s = ui.s) {
     minute: s.minute,
     oneCast: s.oneCast?.rows ?? [],
     continuity: s.oneCast,
+    castChapter: s.castChapter,
+    castReceipts: castReceipts(s),
     state: {
       day: dayOf(s.minute),
       clock: clockOf(s.minute),
@@ -203,7 +210,7 @@ function importRun(file: File) {
         alert('Could not read that notebook. Check its inputs or choose another file.');
         return;
       }
-      void begin(restoreNotebook(x), true).catch(() =>
+      void begin(restoreNotebook(x, true), true).catch(() =>
         alert('Could not validate that notebook’s pinned history.'),
       );
     } catch {
@@ -232,7 +239,15 @@ let loadSerial = 0;
 async function startFresh(authored = false) {
   const serial = ++loadSerial;
   invalidateContinuity();
-  const s = await arrive((Date.now() % 1_000_000) + 1, authored);
+  let s: GameState;
+  try {
+    s = await arrive((Date.now() % 1_000_000) + 1, authored);
+  } catch (error) {
+    alert(
+      `${error instanceof Error ? error.message : 'Continuity unavailable.'} No new chapter started. Other ways in offers explicit fresh local play.`,
+    );
+    return;
+  }
   if (serial !== loadSerial) return;
   await begin(s);
 }
@@ -508,7 +523,7 @@ function titlePage() {
       const unlinked =
         !saved?.oneCast ||
         (Object.keys(saved.oneCast).every((key) => key === 'rows') && saved.oneCast.rows.length === 0);
-      const ms = saved && unlinked ? mornings(saved) : [];
+      const ms = saved && unlinked && !saved.castChapter ? mornings(saved) : [];
       dialog.innerHTML = `<div class="who"><b>Other ways in</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body">${ms.length > 1 ? ms.map((m, i) => `<div><button data-morning="${i}">Turn back to ${DAY_NAMES[m.day - 1]} morning</button><div data-confirm="${i}" hidden>Everything after that morning is torn out.<div class="row"><button data-yes="${i}">Yes, turn back</button><button data-no="${i}">No</button></div></div></div>`).join('') : ''}<label class="file-button">Load a playtest run<input type="file" accept="application/json"></label></div>`;
       document.body.append(dialog);
       dialog.showModal();

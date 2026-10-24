@@ -1,6 +1,6 @@
-# Canonical Stairwell edition 6
+# Canonical Stairwell edition 7
 
-Technical delivery ends with released whole-cast integration, exact green CI, live deployment and both-size genuine peer journeys. The owner reviews afterwards. This content checkpoint does not complete delivery. The published platform-ready guide was absent during content implementation; no cast-life API or package pin is guessed.
+Technical delivery ends with released whole-cast integration, exact green CI, live deployment and both-size genuine peer journeys. The owner reviews afterwards. This content checkpoint does not complete delivery. Content checkpoint3ab8526 preceded publication. Integration uses released HF2.18.0 (engine2.17.0), client0.4.0 and kit0.5.0 from the exact immutable published artifacts.
 
 ## Exhaustive foreground census
 
@@ -22,7 +22,7 @@ The original source is origin/main b8fcedc, `src/sim/people.ts` RESIDENTS/makeRe
 | Grocer, courier, bakery, supplier, engineer, relatives, former pupil/colleague | Incidental unnamed roles | No live personal arcs, actors, branches or name pools. |
 | Pamuk | Building cat | Existing host outcome, no HF person or human identity. |
 
-Five maintained residents are actual HF Persons, plus the player's body actor. No generated crowd/name-pool rule was added or changed. Exact six-trait profiles and ten values are explicit and stable across seeds. Values use canonical0.5 baseline; no per-host profile lottery. The released shared canonical factory remains an integration dependency.
+Five maintained residents are actual HF Persons, plus the player's body actor. No generated crowd/name-pool rule was added or changed. Exact six-trait profiles and ten values are explicit and stable across seeds. Values use canonical0.5 baseline; no per-host profile lottery. Fresh actor traits and values use canonicalCast() from the released generated artifact; continuing supported traits/values are admitted unchanged.
 
 ## Actually playable discoveries
 
@@ -42,8 +42,20 @@ Hacer/Sevim's new notice misunderstanding replaces Nermin's old recipe feud. Tru
 
 ## Replay and integration limits
 
-Edition6 deliberately refuses editions3–5 with Start fresh. Frozen artifacts remain historical provenance. Current seed/input export-import compares complete state, RNG and future continuation, including admitted state in the existing Derya adapter tests. Derya envelopes now stamp revision2/rules6; revision1 is refused rather than migrated. The prior single-person prototype is not the required whole-cast release integration. Its batch admission, away-life, released shared profiles, opaque recording epoch and accepted-head/terminal rules must be reconciled against platform-ready before any push/deploy or claim of full adoption.
+Edition7 deliberately refuses editions3–6 with Start fresh. Frozen artifacts remain historical provenance. Current seed/input exports pin the collection’s exact source envelopes, prepared coarse life clock/seed/results, full initial admitted Persons, claims and expected heads/absence. Replay restores these snapshots without wall time or shelf reads. Latest accepted ownership receipts and full raw source snapshots stay outside simulation state in local saves/exports.
+
+Fresh startup awaits the shelf and preflights all five cast ids before one atomic expected-head CAS, including absent people. A stale, closed, old or semantically unsupported head refuses the entire new chapter; no silent fresh fallback occurs. Explicit fresh local play remains available. Valid life assignments change actual optional afternoon errands and initial home/shop/step positions for compatible non-working residents. News gives the one-sided public-note account without reciprocal familiarity or trust. Native current-edition and current Voice Hacer calendar dialects are declared explicitly. All other dialects refuse.
+
+Voice Hacer carries her actual Person/calendar/body/RNG through the supported site-cast/1 and site-cast-calendar/1 dialect, engine2.17.0/rulescast-1. Known source norm definitions must match exactly. Supported quiet prayer/meal/sleep calendar actions remain actual HF offers; unmatched local work/family obligations refuse. Unknown skills remain in the full source archive and do not certify a trade.
+
+Derya’s actual opening night duty refuses automatic fresh admission. The earlier exact local-prefix source-bound return helper and regression controls remain; its old Hearsay dialect does not establish support for an undeclared new peer. Burak’s source building account/supplier balance and Tarık’s dues remain explicit outgoing hostObligations. No ledger handover or debt discharge is implemented, so those passports cannot silently enter a fresh opening. This is bounded supported carry, not a claim that all five whole lives or all host fields are transferable. Source-world gossip, account, relationships and private discoveries remain in the complete local notebook/archive, not portable facts.
+
+A chosen pause waits for actual activity completion plus real work/sleep boundaries. Paused actors leave door/step conversation and visit routes. Individually eligible checkpoints preserve their exact accepted parent and a full source schema/minute/RNG/SHA256 receipt; unchanged source snapshots are idempotent and do not advance absence time. Stale writes refuse. Explicit alternate branch is a new branch from the actual played pause, never a relabelled old edition. Actual owned death publishes terminal closure.
+
+Local reload validates/restores only that local notebook’s exact accepted ownership. File imports remain file-origin on save/reload and gain no ownership from embedded receipts. They remain recording-gated before hooks. They cannot upload raw linked history before an explicit played first alternate head and current whole-group permission. Recording identity/preference/load/reset/selection changes invalidate positive permission; central acknowledgements use the opaque current epoch and all pinned envelopes. Denial permits local play/export. Analysis permission is independent.
+
+CAS drafts retain bounded local recovery copies before requesting acceptance and mark successful receipts accepted before generation checks. A late response does not start or mutate a replacement run. The menu can explicitly resume/download an accepted copy. Eight recovery entries and a2MiB entry bound refuse further capture rather than discard another chapter; removal is an explicit player control after keeping an export. Full per-run raw source snapshots are bounded to1MiB; no raw Person is stored on the shelf.
 
 No browser/source-unread human play, recognition, actual cross-origin transfer, final release or owner acceptance is claimed by this content checkpoint. Private source histories and identities remain local.
 
-Independent content review: stairwell-review.md (coordinator scratch report), one Codex reviewer with Priya Menon lens. Two substantive findings were reproduced RED and fixed: scoped private Tell wording and Derya’s chosen topic condition. The current-version browser rewind now permits an empty, unlinked continuity journal while refusing any meaningful history; no source-bound chapter is rewound.
+Independent review (same one reviewer, final integrated scope): stairwell-review.md (coordinator scratch report), one Codex reviewer with Priya Menon lens. Content findings were reproduced RED and fixed: scoped private Tell wording and Derya’s chosen topic condition. The integrated review’s four findings also have RED→GREEN controls: biography-only reset, late accepted receipt/raw-source loss, interactive paused residents and unbound native edition. No extra panel was launched. The current-version browser rewind now permits an empty, unlinked continuity journal while refusing any meaningful history; no source-bound chapter is rewound.

@@ -197,3 +197,18 @@ dialog.sw-feedback::backdrop {
     display: none;
   }
 }
+
+.sw-cast-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.sw-cast-controls button,
+.sw-cast-controls select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  white-space: normal;
+  box-sizing: border-box;
+}

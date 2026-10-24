@@ -148,7 +148,7 @@ export function chooseContinuityRecording(value: boolean): Promise<void> {
           castId: head.castId,
           envelope: head,
           allowRecording: value,
-          recordingEpoch: epoch.recordingEpoch,
+          recordingEpoch: epoch.recordingEpoch ?? undefined,
         };
         const reply = await shelf.request<RecordingReply>(request);
         if (!valid()) return;
@@ -263,7 +263,7 @@ async function claimArrival(
   const claim = await createPersona({
     ...body,
     parentRevision: revision,
-    source: { game: 'stairwell', build: build(), engine: '2.14.1', rules: '6' },
+    source: { game: 'stairwell', build: build(), engine: '2.17.0', rules: '7' },
     transfer: {
       ...body.transfer,
       admission: { adapter: 'stairwell-one-cast/1', claimId: crypto.randomUUID() },
@@ -357,7 +357,7 @@ export function checkpointContinuity(): Promise<void> {
             action: 'put' as const,
             envelope,
             authored: Boolean(author && epoch && 'recordingEpoch' in epoch),
-            recordingEpoch: epoch?.recordingEpoch,
+            recordingEpoch: epoch?.recordingEpoch ?? undefined,
           };
           await shelf.request(request);
         }

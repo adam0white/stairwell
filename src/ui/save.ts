@@ -1,6 +1,8 @@
+import type { CastChapter } from '../sim/cast-life.ts';
 import { canReplay, DAY_START, type Input, type Place, TOP_FLOOR } from '../sim/game.ts';
 import type { DeryaContinuity } from '../sim/one-cast.ts';
 import { RIDS, type Rid } from '../sim/people.ts';
+import type { CastReceipts } from './cast-continuity.ts';
 
 export interface Saved {
   game: string;
@@ -8,6 +10,8 @@ export interface Saved {
   inputs: Input[];
   minute?: number;
   oneCast?: DeryaContinuity;
+  castChapter?: CastChapter;
+  castReceipts?: CastReceipts;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -32,6 +36,7 @@ function isInput(value: unknown): value is Input {
       return isPlace(value.to);
     case 'news':
     case 'word':
+    case 'cast-pause':
     case 'knock':
       return isResident(value.who);
     case 'sit':
