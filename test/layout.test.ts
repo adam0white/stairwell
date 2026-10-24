@@ -33,6 +33,17 @@ async function testPage(options: Parameters<Browser['newPage']>[0] = {}) {
   return page;
 }
 
+async function gotoGame(page: Page) {
+  await page.goto(`${url}?lab=1`);
+  // Explicit empty local fixture, never proof of real shared admission.
+  await page.evaluate(`import('/src/ui/cast-continuity.ts').then(({shelf}) => {
+    shelf.request = async (request) => request.action === 'prepareBatch' ? {
+      inputs: [], blocked: [],
+      expectedHeads: Object.fromEntries((request.castIds ?? []).map(id => [id, null])),
+    } : undefined;
+  })`);
+}
+
 async function visibleInViewport(page: Page, selector: string) {
   const viewport = page.viewportSize();
   for (const element of await page.locator(selector).all()) {
@@ -62,7 +73,7 @@ async function importNotebook(
 ) {
   page.setDefaultTimeout(5000);
   await page.clock.install();
-  await page.goto(url);
+  await gotoGame(page);
   await page.evaluate((save) => localStorage.setItem('stairwell:notebook', JSON.stringify(save)), {
     game: GAME_VERSION,
     seed,
@@ -263,7 +274,7 @@ it.each([
 ])('does not offer Continue for malformed inputs $inputs', async ({ inputs }) => {
   const page = await testPage();
   try {
-    await page.goto(url);
+    await gotoGame(page);
     await page.evaluate(
       (inputs) =>
         localStorage.setItem(
@@ -323,7 +334,7 @@ it.each([
     await page.clock.runFor(3100);
     expect(await page.evaluate('window.__st.s.minute')).toBe(before);
     expect(await page.locator('.clock-rate').textContent()).toContain('Reading · time waits');
-    await page.locator('.resident-list button').first().click();
+    await page.locator('.resident-list button').nth(1).click();
     expect(await page.evaluate('window.__st.s.minute')).toBe(before);
     expect(await page.locator('.action-bar').textContent()).toContain('min');
   } finally {
@@ -395,7 +406,7 @@ it('keeps the optional tally outside replay state', async () => {
     expect(await tally.isVisible()).toBe(true);
     expect(await page.evaluate('JSON.stringify(window.__st.s)')).toBe(before);
     await visibleInViewport(page, '.action-bar button');
-    expect(await page.getByRole('button', { name: 'Send word', exact: true }).count()).toBe(1);
+    expect(await page.getByRole('button', { name: 'Feedback', exact: true }).count()).toBe(1);
     expect(await page.getByRole('button', { name: 'Download this run', exact: true }).count()).toBe(1);
     expect(fingerprint(replay(s.seed, s.inputs, s.minute))).toBe(fingerprint(s));
   } finally {
@@ -498,14 +509,8 @@ it.each([
     const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
     expect(await menu.locator('input[type=file]').count()).toBe(0);
     expect(await menu.getByText('Download this run', { exact: true }).count()).toBe(0);
-    expect(await menu.getByRole('button').last().textContent()).toBe('Back to the stairs');
-    expect(
-      await menu.getByRole('button', { name: 'Automatic', exact: true }).getAttribute('aria-pressed'),
-    ).toBe('true');
-    await menu.getByRole('button', { name: 'Fast', exact: true }).click();
-    expect(await menu.getByRole('button', { name: 'Fast', exact: true }).getAttribute('aria-pressed')).toBe(
-      'true',
-    );
+    expect(await menu.getByRole('button').last().textContent()).toBe('Resume');
+    expect(await menu.getByRole('button', { name: 'Fast', exact: true }).count()).toBe(0);
     await menu.getByRole('button', { name: 'To the title page', exact: true }).click();
     await page.locator('[data-a=new]').click();
     expect(await page.getByText('The old notebook will be replaced.', { exact: false }).isVisible()).toBe(
@@ -609,9 +614,10 @@ it('shows the rate when the order slowdown ends', async () => {
       debug.render();
     });
     expect(await page.locator('.clock-rate').textContent()).toBe('6 game min/s');
-    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    await page.getByRole('button', { name: 'Information', exact: true }).click();
+    await page.getByText('Clock speed', { exact: true }).click();
     await page.getByRole('button', { name: 'Fast', exact: true }).click();
-    await page.getByRole('button', { name: 'Back to the stairs', exact: true }).click();
+    await page.getByRole('button', { name: 'Close information', exact: true }).click();
     await page.clock.runFor(32);
     expect(await page.locator('.clock-rate').textContent()).toBe('12 game min/s');
   } finally {
@@ -623,7 +629,7 @@ it('preserves the current notebook edition through continue, export and morning 
   const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await page.clock.install();
-    await page.goto(url);
+    await gotoGame(page);
     await page.evaluate(() =>
       localStorage.setItem(
         'stairwell:notebook',
@@ -642,7 +648,7 @@ it('preserves the current notebook edition through continue, export and morning 
     expect(
       await page.evaluate(() => JSON.parse(localStorage.getItem('stairwell:notebook') ?? '{}').game),
     ).toBe('stairwell@7');
-    await page.getByRole('button', { name: 'Send word', exact: true }).click();
+    await page.getByRole('button', { name: 'Feedback', exact: true }).click();
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('button', { name: /Keep a copy of this run/ }).click(),
@@ -652,7 +658,7 @@ it('preserves the current notebook edition through continue, export and morning 
     if (!stream) throw new Error('Missing download stream');
     for await (const chunk of stream) text += chunk.toString();
     expect(JSON.parse(text).game).toBe('stairwell@7');
-    await page.getByRole('button', { name: 'Close send word', exact: true }).click();
+    await page.getByRole('button', { name: 'Close feedback', exact: true }).click();
     await page.getByRole('button', { name: 'To the title page', exact: true }).click();
     await page.locator('[data-a=other]').click();
     await page.getByRole('button', { name: 'Turn back to Monday morning', exact: true }).click();
@@ -667,7 +673,6 @@ it('records completed hidden outcomes without exposing them in an untouched note
   const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await importNotebook(page, 420, []);
-    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     await page.getByRole('button', { name: 'Read the residents’ notebook', exact: true }).click();
     expect(await page.locator('.nb').textContent()).not.toContain('Two cups');
     expect(await page.locator('.nb').textContent()).not.toContain('Warm stairs');
@@ -739,17 +744,14 @@ it.each([
   const page = await testPage({ viewport: { width, height } });
   try {
     await page.clock.install();
-    await page.goto(url);
+    await gotoGame(page);
     await page.getByRole('button', { name: 'Begin on Monday', exact: true }).click();
     await page.evaluate(() => document.fonts.ready);
     const journal = page.locator('.journal');
     if (process.env.STAIRWELL_RECEIPTS)
       await page.screenshot({ path: `${process.env.STAIRWELL_RECEIPTS}/bread-${width}.png` });
     expect(await journal.evaluate((el) => el.scrollTop)).toBe(0);
-    expect(await journal.locator(':scope > div').first().textContent()).toContain(
-      'Bread first, before anything.',
-    );
-    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    expect(await journal.locator(':scope > div').first().textContent()).toContain('Deliver the bread first.');
     await page.getByRole('button', { name: 'Read the residents’ notebook', exact: true }).click();
     await page.locator('.sheet [data-a=close]').click();
     expect(await journal.evaluate((el) => el.scrollTop)).toBe(0);
@@ -771,7 +773,7 @@ it.each([
 it('explains that an older cast notebook requires Start fresh', async () => {
   const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
-    await page.goto(url);
+    await gotoGame(page);
     await page.evaluate(() =>
       localStorage.setItem(
         'stairwell:notebook',
@@ -781,6 +783,135 @@ it('explains that an older cast notebook requires Start fresh', async () => {
     await page.reload();
     expect(await page.locator('[data-a=continue]').count()).toBe(0);
     expect(await page.getByRole('status').textContent()).toContain('Start fresh');
+  } finally {
+    await page.close();
+  }
+});
+
+it.each(['', '?lab=true', '?lab=0', '?lab=1'])(
+  'shows diagnostic controls only with exact lab=1 (%s)',
+  async (query) => {
+    const page = await testPage({ viewport: { width: 820, height: 1180 } });
+    try {
+      await page.goto(`${url}${query}`);
+      expect(await page.locator('[data-a=other]').count()).toBe(query === '?lab=1' ? 1 : 0);
+      await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+      const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
+      expect(await menu.locator('.sw-cast-controls').count()).toBe(query === '?lab=1' ? 1 : 0);
+      if (query !== '?lab=1') {
+        expect(await menu.getByRole('button').allTextContents()).toEqual([
+          '×',
+          'Feedback',
+          'Full screen',
+          'New game',
+          'Resume',
+        ]);
+        expect(await menu.getByRole('link', { name: 'All games', exact: true }).getAttribute('href')).toBe(
+          'https://human.adamwhite.work/games/',
+        );
+        expect(await menu.getByRole('switch').count()).toBe(1);
+      }
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+it('keeps the old notebook and receipts when ordinary New game admission fails', async () => {
+  const page = await testPage();
+  try {
+    await page.goto(url);
+    const saved = JSON.stringify({
+      game: GAME_VERSION,
+      seed: 7,
+      inputs: [],
+      minute: 420,
+      castReceipts: { owned: {}, fileOrigin: false, authored: true, sources: {} },
+    });
+    await page.evaluate((text) => localStorage.setItem('stairwell:notebook', text), saved);
+    await page.reload();
+    await page.evaluate(`import('/src/ui/cast-continuity.ts').then(({shelf}) => {
+      shelf.request = async () => { throw new Error('Shelf unavailable. Use a local file.'); };
+    })`);
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
+    await menu.getByRole('button', { name: 'New game', exact: true }).click();
+    expect(await page.evaluate(() => localStorage.getItem('stairwell:notebook'))).toBe(saved);
+    await menu.getByRole('button', { name: 'Yes, begin', exact: true }).click();
+    const failure = page.getByRole('dialog', { name: 'The new game could not start.', exact: true });
+    await failure.waitFor();
+    const message = await failure.textContent();
+    expect(message).toContain('Your saved notebook has not been replaced.');
+    expect(message).not.toContain('Shelf unavailable');
+    expect(message).not.toContain('local file');
+    expect(await failure.getByRole('button', { name: 'Continue saved game', exact: true }).count()).toBe(1);
+    expect(await failure.getByRole('button', { name: 'Try again', exact: true }).count()).toBe(1);
+    expect(await page.evaluate(() => localStorage.getItem('stairwell:notebook'))).toBe(saved);
+    expect(await page.evaluate('window.__st.s')).toBeNull();
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([
+  ['unsupported', 'This history cannot continue in this version'],
+  ['uncertain', 'no confirmation reached this page'],
+] as const)('gives an actionable ordinary %s history failure without a retry loop', async (kind, reason) => {
+  const page = await testPage();
+  try {
+    await page.goto(url);
+    const saved = JSON.stringify({ game: GAME_VERSION, seed: 7, inputs: [], minute: 420 });
+    await page.evaluate((text) => localStorage.setItem('stairwell:notebook', text), saved);
+    await page.reload();
+    await page.evaluate(`import('/src/ui/cast-continuity.ts').then(({shelf}) => {
+      shelf.request = async request => {
+        if (${JSON.stringify(kind)} === 'unsupported') throw new Error('Unsupported source role/dialect. Keep that chapter or export it; no silent fresh replacement.');
+        if (request.action === 'prepareBatch') return {
+          inputs: [], blocked: [], expectedHeads: Object.fromEntries(request.castIds.map(id => [id,null])),
+        };
+        throw new Error('Shelf unavailable. Use a local file.');
+      };
+    })`);
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
+    await menu.getByRole('button', { name: 'New game', exact: true }).click();
+    await menu.getByRole('button', { name: 'Yes, begin', exact: true }).click();
+    const failure = page.getByRole('dialog', { name: 'The new game could not start.', exact: true });
+    await failure.waitFor();
+    expect(await failure.textContent()).toContain(reason);
+    expect(await failure.getByRole('button', { name: 'Try again', exact: true }).count()).toBe(0);
+    expect(await failure.getByRole('button', { name: 'Open recovered game', exact: true }).count()).toBe(0);
+    expect(await failure.getByRole('button', { name: 'Continue saved game', exact: true }).count()).toBe(1);
+    expect(await failure.getByRole('link', { name: 'All games', exact: true }).count()).toBe(1);
+    expect(await failure.getByRole('button', { name: 'Feedback', exact: true }).count()).toBe(1);
+    expect(await page.evaluate(() => localStorage.getItem('stairwell:notebook'))).toBe(saved);
+    expect(await page.evaluate('window.__st.s')).toBeNull();
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([768, 820, 1180, 1366])('uses readable Tell and Invent choices at tablet width %i', async (width) => {
+  const page = await testPage({ viewport: { width, height: 1024 } });
+  try {
+    await importNotebook(page);
+    await page.locator('[data-a=tell]').click();
+    for (const element of await page.locator('.tell, .row button').all())
+      expect(
+        await element.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+      ).toBeGreaterThanOrEqual(18);
+    await page.locator('[data-a=invent]').click();
+    await page.locator('[data-about=burak]').click();
+    for (const element of await page.locator('.chips button').all())
+      expect(
+        await element.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+      ).toBeGreaterThanOrEqual(18);
+    const choices = page.locator('.chips button');
+    expect(await choices.count()).toBeGreaterThan(0);
+    for (const choice of await choices.all()) {
+      await choice.scrollIntoViewIfNeeded();
+      expect(await choice.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
+    }
   } finally {
     await page.close();
   }

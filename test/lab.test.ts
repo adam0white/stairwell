@@ -32,6 +32,13 @@ async function feedbackPage(privacy = false): Promise<Page> {
   });
   if (privacy) await page.addInitScript(() => Object.defineProperty(navigator, 'doNotTrack', { value: '1' }));
   await page.goto(url);
+  // Explicit empty local fixture. This is not evidence of shared admission.
+  await page.evaluate(`import('/src/ui/cast-continuity.ts').then(({shelf}) => {
+    shelf.request = async (request) => request.action === 'prepareBatch' ? {
+      inputs: [], blocked: [],
+      expectedHeads: Object.fromEntries((request.castIds ?? []).map(id => [id, null])),
+    } : undefined;
+  })`);
   await page.getByRole('button', { name: 'Begin on Monday', exact: true }).click();
   await page.locator('.day').waitFor();
   await page.evaluate(
@@ -99,7 +106,9 @@ it('keeps a failed send and its note on the original sheet', async () => {
       dialog.querySelector<HTMLTextAreaElement>('textarea')!.value = 'Retained note';
       dialog.querySelector('form')!.requestSubmit();
     });
-    await expect.poll(() => page.locator('[role=status]').innerText()).toContain('Test send failure');
+    await expect
+      .poll(() => page.locator('dialog [role=status]').innerText())
+      .toContain('Your note could not be queued.');
     expect(await page.locator('.hflab-veil').count()).toBe(0);
     expect(await page.locator('textarea').inputValue()).toBe('Retained note');
   } finally {
@@ -107,46 +116,20 @@ it('keeps a failed send and its note on the original sheet', async () => {
   }
 });
 
-it('explains clock rates and when protected time ends beside the speed choices', async () => {
+it('keeps clock choices in the play information panel, outside the menu', async () => {
   const page = await feedbackPage();
   try {
-    const result = await page.evaluate(() => {
-      const { gameMenu } = (window as unknown as { testLab: typeof import('../src/ui/lab.ts') }).testLab;
-      let speed: number | null = null;
-      gameMenu({
-        getRun: () => ({}),
-        beforeOpen: () => {},
-        hasRun: true,
-        speed: () => speed,
-        setSpeed: (value) => {
-          speed = value;
-        },
-      }).click();
-      const controls = document.querySelector('.sw-menu-speeds')!;
-      const fast = Array.from(controls.querySelectorAll('button')).find(
-        (button) => button.textContent === 'Fast',
-      )!;
-      fast.click();
-      return {
-        text: controls.textContent,
-        speed,
-        pressed: fast.getAttribute('aria-pressed'),
-      };
-    });
-    expect(result.text).toContain('Game minutes per real second: Automatic 6 · Slow 3 · Steady 6 · Fast 12.');
-    expect(result.text).toContain('Your choice applies during travel, work and quiet time.');
-    expect(result.text).toContain(
-      'While you are idle, open orders slow time to 0.6. Your chosen rate resumes when no orders remain or you start travel or work.',
+    await page.getByRole('button', { name: 'Information', exact: true }).click();
+    await page.getByText('Clock speed', { exact: true }).click();
+    const fast = page.getByRole('button', { name: 'Fast', exact: true });
+    await fast.click();
+    expect(await fast.getAttribute('aria-pressed')).toBe('true');
+    expect(await page.locator('.clock-controls').textContent()).toContain(
+      'Reading and conversation pause time.',
     );
-    expect(result.text).toContain('Conversation and reading pause time until you close them.');
-    expect(result.speed).toBe(12);
-    expect(result.pressed).toBe('true');
-    const explanationWidths = await page.locator('.sw-menu-speeds').evaluate((fieldset) => {
-      const width = fieldset.getBoundingClientRect().width;
-      return Array.from(fieldset.querySelectorAll('p'), (p) => p.getBoundingClientRect().width / width);
-    });
-    expect(explanationWidths).toHaveLength(2);
-    for (const fraction of explanationWidths) expect(fraction).toBeGreaterThan(0.9);
+    await page.getByRole('button', { name: 'Close information', exact: true }).click();
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    expect(await page.locator('dialog .sw-menu-speeds').count()).toBe(0);
   } finally {
     await page.close();
   }
@@ -173,14 +156,14 @@ it('keeps title-menu feedback available without a run', async () => {
         setSpeed: () => {},
       }).click();
       const button = Array.from(document.querySelectorAll('button')).find(
-        (button) => button.textContent === 'Send word',
+        (button) => button.textContent === 'Feedback',
       )!;
       const enabled = !button.disabled;
       button.click();
       document.querySelector<HTMLTextAreaElement>('textarea')!.value = 'Title feedback';
       document.querySelector<HTMLFormElement>('form')!.requestSubmit();
       await new Promise((resolve) => setTimeout(resolve, 10));
-      return { enabled, sent, status: document.querySelector('[role=status]')?.textContent };
+      return { enabled, sent, status: document.querySelector('dialog [role=status]')?.textContent };
     });
     expect(result.enabled).toBe(true);
     expect(result.sent).toBe(true);

@@ -7,3 +7,5 @@ The owner-authorized canonical adoption supersedes the earlier wave-1-only scope
 Use the shared managed worktree tool. Prefix Node commands with PATH=/opt/homebrew/bin:$PATH (Node>=24). Hold HF scripts/suite-lock.ts once across every full local lane and deploy; Stairwell scripts do not acquire it. Read cast coordinator notes at phase boundaries. Stop new launches below5GB free. Do not duplicate game workers. Serialize shared-profile browser journeys with the cast/browser-journey.lock contract; preserve other people's heads and saves.
 
 Use exact released HF/vendor pins. Keep signing enabled and include Co-Authored-By: Codex <noreply@openai.com>. Fetch/rebase origin/main before push. Exact pushed CI must pass before normal deployment; verify live /release.json commit/framework/dirty:false. Write receipts and proposed ledger rows in the cast scratch reports, not the central HF ledger.
+
+Plain-English and simplify policy: [docs/lab/plain-english.md](docs/lab/plain-english.md). Preserve replay text through display projections and retain all Turkish words and names.

@@ -1001,3 +1001,145 @@ dialog.other-ways::backdrop {
 .action-bar .verbs button {
   height: 56px;
 }
+
+/* Width-based reading scale applies to fixed-size descendants as well as body text. */
+html,
+body {
+  font-size: clamp(16px, 1.2vw + 11px, 22px);
+}
+.small,
+.soft.small,
+.state-strip,
+.clock-rate,
+.next-due,
+.sheet-tabs button,
+.task,
+.task .hand,
+.trip-line,
+.action-bar .trip-line,
+.verbs button,
+.verbs .h,
+.resident-list button,
+.flatline,
+.heardbox,
+.journal,
+.info-popover,
+.share,
+.travel-status {
+  font-size: clamp(15px, 1.1vw + 10px, 22px);
+  line-height: 1.4;
+}
+.hand,
+.sheet .said,
+.journal .hand {
+  font-size: clamp(20px, 1vw + 14px, 26px);
+  line-height: 1.4;
+}
+h1 {
+  font-size: clamp(34px, 4vw, 48px);
+}
+.game {
+  grid-template-rows: 44px auto max(288px, 30dvh) minmax(0, 1fr) auto;
+}
+.state-strip {
+  height: auto;
+  min-height: 32px;
+  flex-wrap: wrap;
+}
+.action-bar .verbs {
+  grid-auto-rows: auto;
+}
+.action-bar .verbs button {
+  height: auto;
+  min-height: 56px;
+}
+.action-bar {
+  max-height: 44dvh;
+  overflow-y: auto;
+}
+.sheet-tabs {
+  height: auto;
+  flex-basis: auto;
+  min-height: 44px;
+  flex-wrap: wrap;
+}
+.sheet-tabs button {
+  flex-basis: 24%;
+}
+.sheet .who b {
+  font-size: inherit;
+}
+.game.has-conversation .sheet {
+  min-height: 0;
+}
+.clock-controls {
+  border-top: 1px solid var(--ink-soft);
+  margin-top: 12px;
+}
+.clock-controls summary {
+  cursor: pointer;
+  min-height: 44px;
+}
+body {
+  display: flex;
+  flex-direction: column;
+}
+#app {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+#app .page,
+#app .game {
+  height: 100%;
+}
+#telemetry-footer {
+  flex: none;
+  width: 100%;
+  font-size: 12px;
+}
+#telemetry-footer:empty {
+  display: none;
+}
+.game.has-conversation .sheet {
+  overflow-y: auto;
+}
+@media (min-width: 900px) {
+  .game,
+  .game.decision {
+    grid-template-columns: minmax(0, 1fr) minmax(440px, 48%);
+    grid-template-rows: 64px minmax(0, 1fr) auto;
+  }
+  .game > .topbar {
+    height: 64px;
+  }
+  .game > .state-strip {
+    max-width: calc(100% - 310px);
+  }
+}
+
+@media (min-width: 900px) {
+  .info-popover {
+    top: calc(64px + var(--safe-t));
+  }
+}
+
+/* Tell and Invent are decisions too; every choice follows the reading scale. */
+.tell,
+.row button,
+.chips button,
+.faces button,
+.prank {
+  font-size: clamp(15px, 1.1vw + 10px, 22px);
+  line-height: 1.4;
+}
+.load-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.load-actions a {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}

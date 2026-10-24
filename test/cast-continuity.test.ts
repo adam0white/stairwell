@@ -250,3 +250,21 @@ it('keeps the paused source Person unchanged across later days and observed buil
   expect(faceToFace(current)).not.toContain('hacer');
   expect(JSON.stringify(personOf(current, 'hacer'))).toBe(paused);
 });
+
+it('keeps the current receipts after an accepted startup reply becomes uncertain', async () => {
+  current = await arrive(7);
+  const previous = JSON.stringify(current);
+  const receipts = castReceipts(current);
+  const handler = mocks.handler!;
+  mocks.handler = async (q) => {
+    const result = await handler(q);
+    if ((q as PersonaRequest).action === 'putBatch') throw new Error('Reply lost after acceptance');
+    return result;
+  };
+  const attempted = arrive(8);
+  await expect(attempted).rejects.toThrow('Reply lost after acceptance');
+  await expect(attempted).rejects.toMatchObject({ submitted: true, accepted: false });
+  expect(mocks.batch).toHaveLength(2);
+  expect(JSON.stringify(current)).toBe(previous);
+  expect(castReceipts(current)).toEqual(receipts);
+});

@@ -3,6 +3,7 @@ import { feedbackPersonaControl, feedbackSharePlay } from '@adam0white/lab-kit';
 import './lab.css';
 
 export const lab = createLab({ game: 'stairwell' });
+export const labTools = new URLSearchParams(location.search).get('lab') === '1';
 
 interface MenuOptions {
   getRun: () => unknown;
@@ -10,6 +11,7 @@ interface MenuOptions {
   onClose?: () => void;
   readNotebook?: () => void;
   title?: () => void;
+  newGame?: () => void;
   speed?: () => number | null;
   setSpeed?: (speed: number | null) => void;
   mornings?: { label: string; action: () => void }[];
@@ -92,7 +94,7 @@ function recordingSwitch(changed: () => void = () => {}): HTMLLabelElement {
         once: true,
       }),
   );
-  label.append(input, 'Record play for the lab');
+  label.append(input, 'Recording');
   return label;
 }
 function dialogShell(kind: 'menu' | 'feedback', title: string): HTMLDialogElement {
@@ -146,7 +148,7 @@ export function openFeedback(
   onClose?: () => void,
   _chooseRecording?: (allow: boolean) => Promise<void>,
 ): HTMLDialogElement {
-  const dialog = dialogShell('feedback', 'Send word');
+  const dialog = dialogShell('feedback', 'Feedback');
   const form = document.createElement('form');
   form.className = 'sw-feedback-form';
   const body = document.createElement('div');
@@ -172,7 +174,7 @@ export function openFeedback(
     verdicts.append(choice);
   }
   const noteLabel = document.createElement('label');
-  noteLabel.textContent = 'What happened on the stairs, what you wanted, what got in the way.';
+  noteLabel.textContent = 'What happened? What did you want to do?';
   const note = document.createElement('textarea');
   note.rows = 4;
   noteLabel.append(note);
@@ -211,7 +213,16 @@ export function openFeedback(
   send.className = 'primary';
   send.textContent = 'Submit';
   const copy = button('Keep a copy of this run', () => downloadRun(getRun()));
-  body.append(lead, verdicts, noteLabel, nameDetails, details, preferences, copy, status);
+  body.append(
+    lead,
+    verdicts,
+    noteLabel,
+    nameDetails,
+    details,
+    preferences,
+    ...(labTools ? [copy] : []),
+    status,
+  );
   actions.append(send);
   form.append(body, actions);
   dialog.append(form);
@@ -249,8 +260,8 @@ export function openFeedback(
         : 'Note queued without a run or history linkage. This is not a delivery receipt.';
       send.textContent = 'Back to the game';
     } catch (error) {
-      status.textContent =
-        error instanceof Error ? error.message : 'Your note could not be queued. Please try again.';
+      console.error('Feedback failed', error);
+      status.textContent = 'Your note could not be queued. Please try again.';
     } finally {
       sending = false;
       update();
@@ -286,37 +297,7 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
         dialog.close();
         action();
       };
-      const readNotebook = options.readNotebook;
-      if (readNotebook) body.append(button('Read the residents’ notebook', () => leave(readNotebook)));
-      if (options.setSpeed) {
-        const speeds = document.createElement('fieldset');
-        speeds.className = 'sw-menu-speeds';
-        const legend = document.createElement('legend');
-        legend.textContent = 'Clock';
-        speeds.append(legend);
-        for (const [label, value] of [
-          ['Automatic', null],
-          ['Slow', 3],
-          ['Steady', 6],
-          ['Fast', 12],
-        ] as const) {
-          const choice = button(label, () => {
-            options.setSpeed?.(value);
-            for (const other of speeds.querySelectorAll('button'))
-              other.setAttribute('aria-pressed', String(other === choice));
-          });
-          choice.setAttribute('aria-pressed', String((options.speed?.() ?? null) === value));
-          speeds.append(choice);
-        }
-        const rates = document.createElement('p');
-        rates.textContent = 'Game minutes per real second: Automatic 6 · Slow 3 · Steady 6 · Fast 12.';
-        const protection = document.createElement('p');
-        protection.textContent =
-          'Your choice applies during travel, work and quiet time. While you are idle, open orders slow time to 0.6. Your chosen rate resumes when no orders remain or you start travel or work. Conversation and reading pause time until you close them.';
-        speeds.append(rates, protection);
-        body.append(speeds);
-      }
-      const feedback = button('Send word', () =>
+      const feedback = button('Feedback', () =>
         leave(() => openFeedback(options.getRun, () => entry.click(), options.chooseRecording)),
       );
       body.append(feedback);
@@ -334,25 +315,36 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
       });
       full.className = 'sw-fullscreen';
       body.append(full);
-      const toTitle = options.title;
-      if (toTitle) body.append(button('To the title page', () => leave(toTitle)));
-      else {
-        const title = button('To the title page', () => dialog.close());
-        title.disabled = true;
-        body.append(title);
+      if (options.newGame) {
+        const confirm = document.createElement('div');
+        confirm.hidden = true;
+        confirm.textContent = 'Replace the saved notebook and begin on Monday?';
+        confirm.append(
+          button('Yes, begin', () => leave(options.newGame!)),
+          button('Cancel', () => {
+            confirm.hidden = true;
+          }),
+        );
+        body.append(
+          button('New game', () => {
+            confirm.hidden = false;
+          }),
+          confirm,
+        );
       }
+      if (labTools && options.title) body.append(button('To the title page', () => leave(options.title!)));
       const games = document.createElement('a');
       games.href = 'https://human.adamwhite.work/games/';
       games.textContent = 'All games';
       body.append(games);
-      if (options.continuityPanel) body.append(options.continuityPanel());
+      if (labTools && options.continuityPanel) body.append(options.continuityPanel());
       const footer = document.createElement('footer');
       footer.className = 'sw-menu-footer';
       footer.append(recordingSwitch(), privacyLink());
       body.append(footer);
       const actions = document.createElement('div');
       actions.className = 'sw-dialog-actions';
-      const resume = button('Back to the stairs', () => dialog.close());
+      const resume = button('Resume', () => dialog.close());
       resume.className = 'primary';
       actions.append(resume);
       dialog.append(body, actions);

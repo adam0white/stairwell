@@ -212,3 +212,21 @@ dialog.sw-feedback::backdrop {
   white-space: normal;
   box-sizing: border-box;
 }
+
+.sw-menu-speeds p,
+.sw-feedback-body .soft,
+.sw-feedback-verdict legend,
+.sw-feedback-verdict label,
+.sw-feedback-status {
+  font-size: clamp(15px, 1.1vw + 10px, 22px);
+  line-height: 1.4;
+}
+.sw-fullscreen {
+  display: block;
+}
+.sw-menu-footer a {
+  font-size: inherit;
+}
+dialog.sw-feedback {
+  max-height: calc(100dvh - 24px);
+}

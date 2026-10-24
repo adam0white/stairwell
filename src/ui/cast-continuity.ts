@@ -161,6 +161,18 @@ if (typeof window !== 'undefined') {
 function requireCurrent(serial: number) {
   if (serial !== generation) throw new Error('Run or identity changed. Choose again.');
 }
+/** Distinguish a refused preparation from a submitted claim with a lost reply. */
+export class AdmissionFailure extends Error {
+  constructor(
+    cause: unknown,
+    readonly submitted: boolean,
+    readonly accepted: boolean,
+    readonly recoveryKey?: string,
+  ) {
+    super(cause instanceof Error ? cause.message : 'History could not be checked.', { cause });
+    this.name = 'AdmissionFailure';
+  }
+}
 export async function arrive(seed: number, fresh = false): Promise<GameState> {
   const serial = generation;
   lab.setPersonaRecording('pending-cast-group');
@@ -172,6 +184,8 @@ export async function arrive(seed: number, fresh = false): Promise<GameState> {
   let draftInputs: CastChapter['inputs'] = [];
   let draftInitial: CastChapter['initial'] = {};
   const recoveryKey = `stairwell-cast-recovery:${seed}:admission`;
+  let submitted = false;
+  let accepted = false;
   const transport: typeof shelf = {
     ...shelf,
     request: async <T>(request: Parameters<typeof shelf.request>[0]): Promise<T> => {
@@ -187,7 +201,9 @@ export async function arrive(seed: number, fresh = false): Promise<GameState> {
       const owned = Object.fromEntries(chapter.claims.map((h) => [h.castId, h]));
       const notebook = recoveryNotebook(draft, owned);
       persistRecovery(recoveryKey, notebook, false);
+      submitted = true;
       const result = await shelf.request<T>(request);
+      accepted = true;
       persistRecovery(recoveryKey, notebook, true);
       return result;
     },
@@ -212,7 +228,9 @@ export async function arrive(seed: number, fresh = false): Promise<GameState> {
       return initial;
     },
     { isCurrent: () => serial === generation },
-  );
+  ).catch((cause) => {
+    throw new AdmissionFailure(cause, submitted, accepted, recoveryKey);
+  });
   requireCurrent(serial);
   const chapter: CastChapter = {
     version: 'stairwell-cast/1',
