@@ -151,3 +151,41 @@ it('explains clock rates and when protected time ends beside the speed choices',
     await page.close();
   }
 });
+
+it('keeps title-menu feedback available without a run', async () => {
+  const page = await feedbackPage();
+  try {
+    const result = await page.evaluate(async () => {
+      const { gameMenu, lab } = (window as unknown as { testLab: typeof import('../src/ui/lab.ts') }).testLab;
+      let sent = false;
+      lab.sendFeedback = async (_note, options) => {
+        sent = true;
+        if (options?.run !== undefined) throw new Error('Unexpected run');
+        return 'queued';
+      };
+      gameMenu({
+        getRun: () => {
+          throw new Error('No active run');
+        },
+        beforeOpen: () => {},
+        hasRun: false,
+        speed: () => null,
+        setSpeed: () => {},
+      }).click();
+      const button = Array.from(document.querySelectorAll('button')).find(
+        (button) => button.textContent === 'Send word',
+      )!;
+      const enabled = !button.disabled;
+      button.click();
+      document.querySelector<HTMLTextAreaElement>('textarea')!.value = 'Title feedback';
+      document.querySelector<HTMLFormElement>('form')!.requestSubmit();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return { enabled, sent, status: document.querySelector('[role=status]')?.textContent };
+    });
+    expect(result.enabled).toBe(true);
+    expect(result.sent).toBe(true);
+    expect(result.status).toContain('Note queued');
+  } finally {
+    await page.close();
+  }
+});

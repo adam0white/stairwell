@@ -226,14 +226,15 @@ export function openFeedback(getRun: () => unknown, onClose?: () => void): HTMLD
     const text = [chosen ? `Verdict: ${chosen.value}` : '', note.value.trim()].filter(Boolean).join('\n\n');
     const submittedName = name.value.trim().slice(0, 60);
     try {
+      const noteOnly = !lab.telemetryOn || (lab.privacySignalOn && !lab.privacyOverride);
       await lab.sendFeedback(text, {
         name: submittedName,
         run: feedbackRun(getRun),
       });
       rememberName(submittedName);
       queued = true;
-      status.textContent = lab.telemetryOn
-        ? 'Run and note queued. This is not a delivery receipt.'
+      status.textContent = !noteOnly
+        ? 'Note queued. An available run may also be included. This is not a delivery receipt.'
         : 'Note queued without a run or history linkage. This is not a delivery receipt.';
       send.textContent = 'Back to the game';
     } catch (error) {
@@ -307,7 +308,6 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
       const feedback = button('Send word', () =>
         leave(() => openFeedback(options.getRun, () => entry.click())),
       );
-      feedback.disabled = !options.hasRun;
       body.append(feedback);
       const full = button(document.fullscreenElement ? 'Leave full screen' : 'Full screen', () => {
         const result = document.fullscreenElement
