@@ -8,7 +8,7 @@
  * body on the stairs (an HF person with the fatigue store), what he says at each door (HF `told` testimony with his
  * source trust), what residents tell him (`converse`), residents' own free time (HF `decide`: stay in, the front
  * step, the shop, a visit), their talk on the step, the stairs and in each other's flats (`converse`), being caught
- * telling two stories, truths coming out (`confirm` recalibrates every source), three arcs (the ring, the boiler
+ * telling two stories, truths coming out (`confirm` recalibrates every source), three arcs (the paper model, the boiler
  * fund, the late visitor), small pranks (the newspapers, the cat, a parcel at the wrong door), and the Sunday vote
  * on the kapıcı's tea money (each resident's own `decide`).
  * Does not cover: weeks after the first, the residents' meeting seating, weather, residents' families outside.
@@ -50,11 +50,20 @@ import {
   TRAITS,
 } from './people.ts';
 import { DRAW, hashUnit } from './rng.ts';
-import { newStories, STORY_FACTS, STORY_LINES, STORY_WORDS, type StoryState } from './stories.ts';
+import {
+  newStories,
+  PRIVATE_FACTS,
+  PRIVATE_LINES,
+  PRIVATE_WORDS,
+  STORY_FACTS,
+  STORY_LINES,
+  STORY_WORDS,
+  type StoryState,
+} from './stories.ts';
 
 export const LEGACY_GAME_VERSION = 'stairwell@3';
 export const PREVIOUS_GAME_VERSION = 'stairwell@4';
-export const GAME_VERSION = 'stairwell@5';
+export const GAME_VERSION = 'stairwell@6';
 export const DAY_START = 7 * 60;
 export const DAY_END = 21 * 60;
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -247,7 +256,7 @@ export type Input =
   | { at: number; kind: 'tell'; who: Rid; prop: string; value: boolean; sure: boolean }
   | { at: number; kind: 'invent'; who: Rid; about: Rid; trait: string }
   | { at: number; kind: 'word'; who: Rid }
-  | { at: number; kind: 'sit'; who: Rid }
+  | { at: number; kind: 'sit'; who: Rid; topic?: 'boundaries' }
   | { at: number; kind: 'misdeliver'; who: Rid; task: number }
   | { at: number; kind: 'knock'; who: Rid }
   | { at: number; kind: 'prank'; what: 'swap' | 'gate' }
@@ -285,18 +294,16 @@ function learn(s: GameState, prop: string) {
 
 /** A belief prop in the kapıcı's notebook that counts as one of the building's secrets. */
 export const SECRET_PROPS: { prop: string; value: boolean; title: string }[] = [
-  { prop: 'nermin:nosy', value: true, title: 'Nermin Hanım sees everyone who passes the door.' },
-  { prop: 'huseyin:stingy', value: true, title: 'Hüseyin Bey counts every kuruş.' },
+  { prop: 'hacer:nosy', value: true, title: 'Hacer Hanım sees everyone who passes the door.' },
+
   { prop: 'tarik:kind', value: true, title: 'Tarık Bey would give you his last lemon candy.' },
-  { prop: 'sevim:stingy', value: true, title: 'Nermin says Sevim is tight with money.' },
-  { prop: 'nermin:sevim', value: true, title: 'Nermin and Sevim have not spoken since 1998.' },
-  { prop: FACTS.ring, value: true, title: 'A parcel from a jeweller came for Burak.' },
-  { prop: 'burak:sweet:elif', value: true, title: 'Burak is sweet on Elif.' },
+
+  { prop: FACTS.ring, value: true, title: 'A parcel of paper-making supplies came for Burak.' },
+
   { prop: FACTS.fund, value: true, title: 'The boiler fund is short.' },
   { prop: FACTS.dues, value: true, title: 'Tarık Bey is behind with his dues.' },
   { prop: FACTS.visitor, value: true, title: 'A man comes to Derya’s door late at night.' },
   { prop: 'derya:brother', value: true, title: 'The man is Derya’s brother.' },
-  { prop: 'elif:hardworking', value: true, title: 'Elif draws for a living. She works all day.' },
 ];
 
 // ---------- the day plan (pre-rolled from the seed) ----------
@@ -332,18 +339,18 @@ const JOBS: {
     kind: 'shopping',
     window: [9 * 60 + 30, 12 * 60 + 30],
   },
-  { for: 'huseyin', label: 'sweep the entrance', place: 'landing:0', work: 15, window: [9 * 60, 12 * 60] },
+  { for: 'burak', label: 'sweep the entrance', place: 'landing:0', work: 15, window: [9 * 60, 12 * 60] },
   {
-    for: 'nermin',
+    for: 'hacer',
     label: 'beat her carpet on the balcony',
-    place: 'door:nermin',
+    place: 'door:hacer',
     work: 15,
     window: [10 * 60, 16 * 60],
   },
   {
-    for: 'elif',
-    label: 'help carry a drawing desk up',
-    place: 'door:elif',
+    for: 'hacer',
+    label: 'help carry a folding work table',
+    place: 'door:hacer',
     work: 12,
     window: [13 * 60, 17 * 60],
   },
@@ -399,17 +406,17 @@ export function planDay(s: GameState, day: number) {
       by: d + 20 * 60,
     });
   }
-  // The jeweller's parcel, Tuesday.
+  // The paper supplier's parcel, Tuesday.
   if (day === 2)
     addTask(s, {
       kind: 'parcel',
       for: 'burak',
-      label: 'a small, heavy parcel',
+      label: 'a flat, carefully wrapped parcel',
       pickup: 'room',
       place: 'door:burak',
       from: d + 11 * 60 + 10,
       by: d + 20 * 60,
-      label2: { prop: FACTS.ring, text: 'The sender’s label says: Kuyumcu Aras, Kapalıçarşı. A jeweller.' },
+      label2: { prop: FACTS.ring, text: 'The sender’s label says: paper, hinges and card-making supplies.' },
     });
   // Small jobs: two or three, drawn from the list without repeats.
   const n = 2 + (r(DRAW.job, 0) < 0.4 ? 1 : 0);
@@ -437,7 +444,7 @@ export function planDay(s: GameState, day: number) {
   // The bins, every evening: collect from the top landing, out to the street by 20:45.
   addTask(s, {
     kind: 'bins',
-    for: 'huseyin',
+    for: 'burak',
     label: 'the bins: down from the top, out by 20:45',
     pickup: `landing:${TOP_FLOOR}`,
     place: 'step',
@@ -447,7 +454,7 @@ export function planDay(s: GameState, day: number) {
   if (day === 3)
     addTask(s, {
       kind: 'job',
-      for: 'huseyin',
+      for: 'burak',
       label: 'look at the boiler: no hot water',
       place: 'room',
       work: 20,
@@ -459,7 +466,8 @@ export function planDay(s: GameState, day: number) {
 // ---------- new game ----------
 
 export function newGame(seed: number, edition = GAME_VERSION): GameState {
-  if (!canReplay(edition)) throw new Error(`Unsupported rules edition: ${edition}`);
+  if (!canReplay(edition))
+    throw new Error(`This notebook belongs to an older edition. Start fresh. (${edition})`);
   const now = DAY_START;
   // Everyone wakes at 06:20 and has breakfast before the day starts.
   const people = RIDS.map((id) => makeResident(id, seed, now - 40));
@@ -544,7 +552,7 @@ export function newGame(seed: number, edition = GAME_VERSION): GameState {
   say(
     s,
     'narrator',
-    'Monday. Your first day at Lale Apartmanı. The bread order is on the board, and a notice from Hüseyin Bey: water off Wednesday, ten to twelve.',
+    'Monday. Your first day at Lale Apartmanı. The bread order is on the board, and a notice from Burak Bey: water off Wednesday, ten to twelve.',
     'journal',
   );
   return s;
@@ -674,7 +682,7 @@ function freeOffers(s: GameState, r: RState): Affordance[] {
         }),
       );
     }
-  if ((r.id === 'elif' || r.id === 'burak') && t >= 16 * 60 && t <= 20 * 60)
+  if ((r.id === 'hacer' || r.id === 'burak') && t >= 16 * 60 && t <= 20 * 60)
     list.push(
       offer('roof', {
         action: 'sit',
@@ -844,7 +852,7 @@ function stairsMeet(s: GameState, r: RState) {
 function nearTalk(s: GameState, where: string, a: Rid, b: Rid): boolean {
   if (s.k.walk) return false;
   const at = s.k.at;
-  if (where === 'step') return at === 'step' || at === 'room' || at === 'landing:0' || at === 'door:nermin';
+  if (where === 'step') return at === 'step' || at === 'room' || at === 'landing:0' || at === 'door:hacer';
   if (where === 'the stairs') {
     const f = floorOf(at);
     const ra = rOf(s, a);
@@ -1076,6 +1084,8 @@ const TRAIT_WORDS: Record<string, [string, string]> = {
 };
 
 export function claimWords(prop: string, value: boolean, edition = LEGACY_GAME_VERSION): string {
+  const privateWords = Object.hasOwn(PRIVATE_WORDS, prop) ? PRIVATE_WORDS[prop] : undefined;
+  if (privateWords) return privateWords[value ? 0 : 1];
   const story =
     (edition === GAME_VERSION || edition === PREVIOUS_GAME_VERSION) && Object.hasOwn(STORY_WORDS, prop)
       ? STORY_WORDS[prop]
@@ -1083,7 +1093,7 @@ export function claimWords(prop: string, value: boolean, edition = LEGACY_GAME_V
   if (story) return story[value ? 0 : 1];
   const [who, trait, other] = prop.split(':');
   if (prop === FACTS.ring)
-    return value ? 'Burak had a parcel from a jeweller.' : 'Burak’s parcel was nothing special.';
+    return value ? 'Burak had a parcel of paper-making supplies.' : 'Burak’s parcel was nothing special.';
   if (prop === FACTS.visitor)
     return value ? 'A man comes to Derya’s door late at night.' : 'Nobody comes to Derya’s at night.';
   if (prop === 'derya:brother')
@@ -1091,7 +1101,7 @@ export function claimWords(prop: string, value: boolean, edition = LEGACY_GAME_V
   if (prop === FACTS.fund) return value ? 'The boiler fund is short.' : 'The boiler fund is fine.';
   if (prop === 'notice:water')
     return value ? 'The water is off on Wednesday, ten to twelve.' : 'The water is not going off.';
-  if (prop === 'nermin:sevim') return 'Nermin and Sevim have not spoken in years.';
+  if (prop === 'hacer:sevim') return 'Hacer and Sevim disagree about a notice.';
   if (who === 'kapici') {
     const w = TRAIT_WORDS[trait ?? '']?.[value ? 0 : 1] ?? trait;
     return `The new kapıcı ${w}.`;
@@ -1132,7 +1142,7 @@ export function tellables(s: GameState, to: Rid): Tellable[] {
     if (b.prop.startsWith('kapici:')) continue;
     // Not back to the person you had it from, nor again to someone you already told.
     if (b.sources.some((x) => x.id === to && x.value === value)) continue;
-    if (b.prop === 'notice:water' && to === 'huseyin') continue;
+    if (b.prop === 'notice:water' && to === 'burak') continue;
     if (rOf(s, to).told.some((x) => x.prop === b.prop && x.value === value)) continue;
     out.push({
       prop: b.prop,
@@ -1194,7 +1204,7 @@ function pickupAt(s: GameState, pl: Place) {
       say(
         s,
         'riza',
-        'A jeweller. Well, well. Not a word, my son. Or one word, to the right person.',
+        'Paper supplies. That label tells you what arrived, not what he is making. Let him choose whether to show you.',
         'margin',
       );
     }
@@ -1204,7 +1214,7 @@ function pickupAt(s: GameState, pl: Place) {
 /** A task is done: the resident's thanks (HF social event) and their tip, which depends on how they feel about you. */
 /** What each resident says at the door when the job is done: their own words, varied, so no line repeats often. */
 const THANKS: Record<Rid, string[]> = {
-  nermin: [
+  hacer: [
     'Ah, there you are. Sit a minute. No? Always running.',
     'Good boy. Rıza was never this quick.',
     'Leave it on the stool. Mind the cat, if there is a cat.',
@@ -1215,9 +1225,7 @@ const THANKS: Record<Rid, string[]> = {
     'On time. I noticed.',
   ],
   burak: ['Thanks, abi. Really.', 'Perfect, thank you.', 'You’re a lifesaver.'],
-  huseyin: ['Thank you. I’ll note it.', 'Good. Good.', 'Thank you, son.'],
   derya: ['You’re kind. Thank you.', 'Oh, thank you. I’m dead on my feet.', 'Thanks, really.'],
-  elif: ['Oh! Thank you so much.', 'Thank you! Do you want a biscuit?', 'You’re a star.'],
   tarik: [
     'Thank you, son. These stairs.',
     'Bless your legs. Thank you.',
@@ -1225,24 +1233,20 @@ const THANKS: Record<Rid, string[]> = {
   ],
 };
 const JOB_THANKS: Record<Rid, string[]> = {
-  nermin: ['Look at that. Like new. Rıza used to grumble the whole time.', 'Good. Now I can breathe.'],
+  hacer: ['Look at that. Like new. Rıza used to grumble the whole time.', 'Good. Now I can breathe.'],
   sevim: ['Done properly. Thank you.', 'That’s been bothering me for a week.'],
   burak: ['You’re a lifesaver, honestly.', 'I owe you a coffee.'],
-  huseyin: ['Good work. I’ll put it in the book.', 'Every lira counts in this building. Thank you.'],
   derya: ['Thank you. One less thing.', 'You didn’t have to do that so well.'],
-  elif: ['It fits! Thank you!', 'I couldn’t have done that alone.'],
   tarik: ['My hands used to do that. Thank you, son.', 'Sit, have a tea. Five minutes.'],
 };
 const LATE_LINES: Record<Rid, string[]> = {
-  nermin: [
+  hacer: [
     'Finally. I nearly sent someone down for you.',
     'Late. Rıza would have been late too, but he would have had a story.',
   ],
   sevim: ['It’s gone cold. Never mind.', 'I had given up on you.'],
   burak: ['No problem, I managed. Thanks anyway.', 'Ah, I’d already gone without. Thanks.'],
-  huseyin: ['Late. I’ll mention it.', 'Hm. Next time on time, please.'],
   derya: ['It’s fine. Everyone’s late today.', 'Thanks. I nearly went myself.'],
-  elif: ['Oh, it’s fine! Thank you.', 'No worries. Thank you.'],
   tarik: [
     'I waited. It doesn’t matter. Thank you.',
     'There you are. I thought you had forgotten the old man.',
@@ -1300,12 +1304,10 @@ function complete(s: GameState, t: Task, hook: boolean) {
   }
   const aff = relationshipWith(p, KAPICI).affection;
   const GIVE: Record<Rid, number> = {
-    nermin: 1,
+    hacer: 1,
     sevim: 0.6,
     burak: 1.3,
-    huseyin: 0.4,
     derya: 1,
-    elif: 1,
     tarik: 0.3,
   };
   const base = t.kind === 'bread' ? 5 : t.kind === 'parcel' ? 10 : 20;
@@ -1475,7 +1477,7 @@ function applyInput(s: GameState, inp: Input) {
         say(s, 'narrator', `${nameOf(inp.who)} is not in front of you.`, 'journal');
         return;
       }
-      return sit(s, inp.who);
+      return sit(s, inp.who, inp.topic);
     case 'misdeliver':
       return misdeliver(s, inp.who, inp.task);
     case 'knock':
@@ -1489,46 +1491,36 @@ function applyInput(s: GameState, inp: Input) {
 
 /** Each resident's stories, told one a sitting, in order: what they say when the kapıcı sits with them. */
 const SIT_LINES: Record<Rid, string[]> = {
-  nermin: [
-    'My husband built half this staircase’s railing himself. Badly. Look at the third floor.',
-    'When we came in ’79 there were nine children in this building. Now there is Pamuk the cat, if Elif has her way.',
-    'Sevim and I were friends once. A pot of dolma and one word too many. Thirty years.',
+  hacer: [
+    'I used to work behind a shop counter. Now my niece has family paperwork for us in Istanbul.',
+    'The plane tree outside this window drops leaves shaped like little boats. I keep some between catalogues.',
+    'Sevim corrected my notice. She thought I wanted every visitor to explain themselves. I meant a quiet entrance.',
   ],
   sevim: [
     'Forty years of children reading aloud. I still hear them in the evenings.',
-    'Nermin will tell you I started it. I did not start it. I finished it.',
-    'My son sends money and no visits. I would trade.',
+    'Hacer heard a correction as a command. Perhaps I could have asked what she meant first.',
+    'My child writes from abroad. I answer too formally, then wonder why the conversation feels distant.',
   ],
   burak: [
-    'Can I ask you something? How did you know, with your wife? No, forget it.',
-    'I’ve been carrying something around for a week. Literally. Don’t ask.',
-    'Saturday. If I’m strange on Saturday, that’s why.',
-  ],
-  huseyin: [
-    'People think a manager likes money. I like the book balancing. It never balances.',
-    'Rıza and I did this building together for eleven years. He never once wrote a thing down. He remembered.',
-    'If the boiler goes, I go to every door with my hat in my hand. I hate that more than the cold.',
+    'An account can be complete. A conversation rarely tells you when you have done enough.',
+    'Could you hold this fold a moment? No, another evening. It is not quite ready.',
+    'I like accounting. I also like making something that does not have to be useful.',
   ],
   derya: [
     'Four in the morning is the honest hour. Everybody says what they mean at four.',
     'I sleep with the pillow over my head. Your bell goes through it anyway.',
     'People on the step count my visitors. Let them count.',
   ],
-  elif: [
-    'I moved here because of the light on the top landing at five o’clock. That’s the whole reason.',
-    'I draw everyone in this building. Don’t tell them. You’re in it too, with the bins.',
-    'Burak is sweet. He looks at his shoes when he says good morning.',
-  ],
   tarik: [
     'In ’74 the ferry froze in the harbour. Did I tell you? We walked to Karaköy on the ice. Nobody believes me.',
-    'My son rings on Sundays from Köln. He says, Baba, come. What would I do in Köln? Count the trams?',
+    'My family visits when they can. A cancelled visit still takes up a space in the day.',
     'Forty years on the Kadıköy run. I could do it with my eyes shut. Some mornings I did.',
     'You climb those stairs for me every day. My legs thank you. The rest of me too.',
   ],
 };
 
 /** Sit a minute: ten minutes off your legs and a story; once a day each. */
-function sit(s: GameState, who: Rid) {
+function sit(s: GameState, who: Rid, topic?: 'boundaries') {
   const r = rOf(s, who);
   if (r.sitDay === today(s)) {
     say(s, who, 'Another time. You have work, and so do I.', 'voice');
@@ -1536,12 +1528,19 @@ function sit(s: GameState, who: Rid) {
   }
   r.sitDay = today(s);
   const lines = SIT_LINES[who];
-  say(s, who, lines[r.sits % lines.length] as string, 'voice');
+  say(
+    s,
+    who,
+    who === 'derya' && topic === 'boundaries'
+      ? 'Work boundaries and training? I want to choose what I tell you. Nursing does not make me available to the whole building.'
+      : (lines[r.sits % lines.length] as string),
+    'voice',
+  );
   r.sits++;
-  storySitting(s, who);
   const p = personOf(s, who);
   tick(p, Math.max(p.now, s.minute));
   socialEvent(p, { at: s.minute, kind: 'chat', otherId: KAPICI, byMe: false, magnitude: 0.3 });
+  storySitting(s, who, topic);
   kapiciDoes(s, 'rest', 10, 0.02);
   s.k.walk = { from: s.k.at, to: s.k.at, at0: s.minute, at1: s.minute + 10 };
 }
@@ -1618,14 +1617,14 @@ function askNews(s: GameState, who: Rid) {
 
 /** When a resident has nothing about anyone to pass on, they talk about their own life: each in their own words. */
 const SMALL_NEWS: Record<Rid, string[]> = {
-  nermin: [
+  hacer: [
     'My knee again. Rain coming, you’ll see.',
     'The grocer gave me short change. Twice this month.',
     'Nothing. I sat by the window all morning and nothing.',
   ],
   sevim: [
     'The notice board is a disgrace. Somebody spelled “boiler” wrong.',
-    'My son rang. He is too busy, as usual.',
+    'My child rang from abroad. Too busy, as usual.',
     'Nothing worth repeating.',
   ],
   burak: [
@@ -1636,34 +1635,22 @@ const SMALL_NEWS: Record<Rid, string[]> = {
     'My mother rang. She asks when I will settle down. Every call.',
     'Do you think people can tell when you are nervous?',
   ],
-  huseyin: [
-    'The accounts, the accounts.',
-    'The roof needs looking at before winter.',
-    'Nothing. Which is how I like it.',
-  ],
   derya: [
     'Long night. Two admissions at four.',
     'Nothing, I slept through it all.',
     'I’m off Saturday. That’s my news.',
   ],
-  elif: [
-    'I sold a drawing! A small one.',
-    'Still unpacking boxes. Don’t look.',
-    'The light up here in the afternoon, honestly.',
-  ],
   tarik: [
-    'My son may ring on Sunday. May.',
+    'My family may ring on Sunday. May.',
     'In ’74 the ferry froze in the harbour. Did I tell you?',
     'The gulls woke me at five. Same as always.',
   ],
 };
 const NO_STORIES: Record<Rid, string[]> = {
-  nermin: ['Nothing for you today.'],
+  hacer: ['Nothing for you today.'],
   sevim: ['I don’t repeat things.'],
   burak: ['I don’t really do gossip.', 'I stay out of all that.'],
-  huseyin: ['I don’t carry stories about people.', 'People’s business is their own.'],
   derya: ['I hear enough at the hospital. Not here.'],
-  elif: ['I don’t know anyone well enough yet.'],
   tarik: ['Let’s not talk about people.', 'At my age you stop carrying stories.'],
 };
 
@@ -1693,7 +1680,7 @@ function invent(s: GameState, who: Rid, about: Rid, trait: string) {
       say(
         s,
         'narrator',
-        'Nobody would believe that of a married person. Only the single ones: Burak, Derya, Elif.',
+        'Nobody would believe that of a married person. Only people who are single.',
         'journal',
       );
       return;
@@ -1779,7 +1766,7 @@ function deliverClaim(s: GameState, who: Rid, prop: string, value: boolean, conf
       r.treatDay = today(s);
       const treat = TREAT[who];
       report(s).treats.push(treat);
-      if (who !== 'tarik' && who !== 'huseyin') {
+      if (who !== 'tarik' && who !== 'burak') {
         s.k.money += 10;
         report(s).tips += 10;
       }
@@ -1787,16 +1774,14 @@ function deliverClaim(s: GameState, who: Rid, prop: string, value: boolean, conf
       stamp(s, 'treat');
     }
   }
-  if (prop === FACTS.ring && who === 'elif') s.ring.spoiled = credence(p, FACTS.ring) >= 0.7;
+  if (prop === FACTS.ring && who === 'hacer') s.ring.spoiled = credence(p, FACTS.ring) >= 0.7;
 }
 
 const TREAT: Record<Rid, string> = {
-  nermin: 'a slice of börek from Nermin Hanım',
+  hacer: 'a slice of börek from Hacer Hanım',
   sevim: 'two biscuits from Sevim Hanım',
   burak: 'a coffee from Burak',
-  huseyin: 'a nod from Hüseyin Bey',
   derya: 'a bag of oranges from Derya',
-  elif: 'a little drawing of you from Elif',
   tarik: 'a lemon candy from Tarık Bey',
 };
 
@@ -1965,11 +1950,11 @@ function knock(s: GameState, who: Rid) {
       say(s, 'riza', 'Derya sleeps till three. Bread on the hook, never the bell.', 'margin');
     } else if (s.knocks === 2) {
       say(s, who, 'Again? Do you know what time I got in?', 'voice');
-      say(s, 'narrator', 'Across the landing, Hüseyin’s door opened an inch and closed again.', 'event');
-      believeSelf(personOf(s, 'huseyin'), 'kapici:kind', false, 0.65, s.minute);
+      say(s, 'narrator', 'Across the landing, Burak’s door opened an inch and closed again.', 'event');
+      believeSelf(personOf(s, 'burak'), 'kapici:kind', false, 0.65, s.minute);
     } else {
-      say(s, who, 'That’s it. I’m telling Hüseyin Bey.', 'voice');
-      for (const o of ['huseyin', 'nermin'] as const)
+      say(s, who, 'That’s it. I’m telling Burak Bey.', 'voice');
+      for (const o of ['burak', 'hacer'] as const)
         believeSelf(personOf(s, o), 'kapici:kind', false, 0.7, s.minute);
     }
     deliverAt(s, s.k.at);
@@ -1982,7 +1967,7 @@ function knock(s: GameState, who: Rid) {
 function prank(s: GameState, what: 'swap' | 'gate') {
   if (s.phase !== 'day') return;
   const witnesses = s.residents.filter(
-    (r) => r.where === 'step' || (r.id === 'nermin' && r.where === 'home') || r.stairsUntil >= s.minute,
+    (r) => r.where === 'step' || (r.id === 'hacer' && r.where === 'home') || r.stairsUntil >= s.minute,
   );
   if (what === 'gate') {
     if (s.k.at !== 'step' && s.k.at !== 'room' && s.k.at !== 'landing:0') {
@@ -1993,8 +1978,8 @@ function prank(s: GameState, what: 'swap' | 'gate') {
     say(s, 'narrator', 'You left the courtyard gate on the latch.', 'journal');
     stamp(s, 'gate');
   } else {
-    // Swap Nermin's and Sevim's newspapers: only while both papers are in the basket.
-    const n = s.tasks.find((t) => t.kind === 'bread' && t.for === 'nermin' && t.carried && !t.done);
+    // Swap Hacer's and Sevim's newspapers: only while both papers are in the basket.
+    const n = s.tasks.find((t) => t.kind === 'bread' && t.for === 'hacer' && t.carried && !t.done);
     const v = s.tasks.find((t) => t.kind === 'bread' && t.for === 'sevim' && t.carried && !t.done);
     if (!n || !v || s.swappedDay === today(s)) {
       say(
@@ -2002,7 +1987,7 @@ function prank(s: GameState, what: 'swap' | 'gate') {
         'narrator',
         s.swappedDay === today(s)
           ? 'Once a day is plenty.'
-          : 'You need both Nermin’s and Sevim’s papers in the basket.',
+          : 'You need both Hacer’s and Sevim’s papers in the basket.',
         'journal',
       );
       return;
@@ -2011,13 +1996,13 @@ function prank(s: GameState, what: 'swap' | 'gate') {
     say(
       s,
       'narrator',
-      'You swapped Nermin’s and Sevim’s newspapers. Each has the other’s crossword.',
+      'You swapped Hacer’s and Sevim’s newspapers. Each has the other’s crossword.',
       'journal',
     );
     stamp(s, 'swap');
     for (const [a, b] of [
-      ['nermin', 'sevim'],
-      ['sevim', 'nermin'],
+      ['hacer', 'sevim'],
+      ['sevim', 'hacer'],
     ] as const) {
       const p = personOf(s, a);
       perceive(p, [
@@ -2045,7 +2030,9 @@ function prank(s: GameState, what: 'swap' | 'gate') {
 
 function trustedStoryListener(s: GameState, who: Rid): boolean {
   const p = personOf(s, who);
-  return trustOf(p, KAPICI) >= 0.58 && relationshipWith(p, KAPICI).affection >= 0.12;
+  // Confidence follows experienced social trust. Source trust still weights testimony separately.
+  const relationship = relationshipWith(p, KAPICI);
+  return relationship.trust >= 0.58 && relationship.affection >= 0.12;
 }
 
 function storyClue(s: GameState, who: Rid, prop: string, words: string) {
@@ -2066,11 +2053,12 @@ function storyClue(s: GameState, who: Rid, prop: string, words: string) {
   say(s, 'narrator', 'A new line in the notebook.', 'event');
 }
 
-function storySitting(s: GameState, who: Rid) {
+function storySitting(s: GameState, who: Rid, topic?: 'boundaries') {
   if (!s.stories || rOf(s, who).sits < 3 || !trustedStoryListener(s, who)) return;
-  if (who === 'nermin' || who === 'sevim') storyClue(s, who, STORY_FACTS[who], STORY_LINES[who]);
+  if (who === 'hacer' || who === 'sevim') storyClue(s, who, STORY_FACTS[who], STORY_LINES[who]);
+  if (who !== 'derya' || topic === 'boundaries') storyClue(s, who, PRIVATE_FACTS[who], PRIVATE_LINES[who]);
   if (who === 'tarik') storyClue(s, who, STORY_FACTS.instalments, STORY_LINES.instalments);
-  if (who === 'huseyin' && s.boilerBroken && !s.stories.fund.bookRead) {
+  if (who === 'burak' && s.boilerBroken && !s.stories.fund.bookRead) {
     s.stories.fund.bookRead = true;
     storyClue(s, who, STORY_FACTS.book, STORY_LINES.book);
   }
@@ -2081,16 +2069,16 @@ function storyTell(s: GameState, who: Rid, prop: string, value: boolean): boolea
   if (!s.stories || !Object.values(STORY_FACTS).some((fact) => fact === prop)) return false;
   if (!value || s.secrets[prop] === undefined) return false;
   const f = s.stories.feud;
-  if (who === 'sevim' && prop === STORY_FACTS.nermin) f.nerminPassed = true;
-  else if (who === 'nermin' && prop === STORY_FACTS.sevim) f.sevimPassed = true;
-  else if (who === 'huseyin' && prop === STORY_FACTS.instalments) s.stories.fund.consentPassed = true;
+  if (who === 'sevim' && prop === STORY_FACTS.hacer) f.hacerPassed = true;
+  else if (who === 'hacer' && prop === STORY_FACTS.sevim) f.sevimPassed = true;
+  else if (who === 'burak' && prop === STORY_FACTS.instalments) s.stories.fund.consentPassed = true;
   else return false;
   // Keep the testimony in HF and the ordinary ledger, so it remains ordinary gossip too.
   deliverClaim(s, who, prop, true, 0.95, false);
   say(
     s,
     who,
-    who === 'huseyin'
+    who === 'burak'
       ? 'He asked you to tell me? Ask me about the fund again. I’ll have the book ready.'
       : 'That is not how I remember it. Let me think. Perhaps we should speak ourselves.',
     'voice',
@@ -2100,7 +2088,7 @@ function storyTell(s: GameState, who: Rid, prop: string, value: boolean): boolea
 
 function storyNews(s: GameState, who: Rid): boolean {
   const fund = s.stories?.fund;
-  if (who !== 'huseyin' || !fund || !s.boilerBroken || !trustedStoryListener(s, who)) return false;
+  if (who !== 'burak' || !fund || !s.boilerBroken || !trustedStoryListener(s, who)) return false;
   if (rOf(s, who).sits >= 2 && !fund.bookRead) {
     fund.bookRead = true;
     storyClue(s, who, STORY_FACTS.book, STORY_LINES.book);
@@ -2118,11 +2106,11 @@ function storyNews(s: GameState, who: Rid): boolean {
 function storyEvents(s: GameState) {
   if (!s.stories) return;
   const { feud, fund } = s.stories;
-  if (!feud.reconciled && feud.nerminPassed && feud.sevimPassed && today(s) === 6 && tod(s) >= 17 * 60) {
+  if (!feud.reconciled && feud.hacerPassed && feud.sevimPassed && today(s) === 6 && tod(s) >= 17 * 60) {
     feud.reconciled = true;
     for (const [a, b] of [
-      ['nermin', 'sevim'],
-      ['sevim', 'nermin'],
+      ['hacer', 'sevim'],
+      ['sevim', 'hacer'],
     ] as const) {
       socialEvent(personOf(s, a), { at: s.minute, kind: 'gift', otherId: b, byMe: false, magnitude: 0.8 });
     }
@@ -2141,24 +2129,24 @@ function storyEvents(s: GameState) {
 
 function boilerFound(s: GameState) {
   s.boilerBroken = true;
-  say(s, 'narrator', 'The boiler’s pump has gone. A new one is ₺2,400. Hüseyin Bey went pale.', 'event');
-  const p = personOf(s, 'huseyin');
+  say(s, 'narrator', 'The boiler’s pump has gone. A new one is ₺2,400. Burak Bey went pale.', 'event');
+  const p = personOf(s, 'burak');
   perceive(s.kapici, [
     {
       at: s.minute,
       channel: 'told',
       kind: 'fact',
-      actorId: 'huseyin',
+      actorId: 'burak',
       salience: 0.8,
       summary: 'the fund is thin',
       claims: [{ prop: FACTS.fund, value: true, confidence: 0.9 }],
     },
   ]);
   learn(s, FACTS.fund);
-  say(s, 'huseyin', 'The fund is thin. Some flats are behind. I won’t say who.', 'voice');
-  for (const r of RIDS) if (r !== 'huseyin') believeSelf(personOf(s, r), FACTS.fund, true, 0.6, s.minute);
-  // Nermin wonders where the money went.
-  const n = personOf(s, 'nermin');
+  say(s, 'burak', 'The fund is thin. Some flats are behind. I won’t say who.', 'voice');
+  for (const r of RIDS) if (r !== 'burak') believeSelf(personOf(s, r), FACTS.fund, true, 0.6, s.minute);
+  // Hacer wonders where the money went.
+  const n = personOf(s, 'hacer');
   perceive(n, [
     {
       at: s.minute,
@@ -2166,7 +2154,7 @@ function boilerFound(s: GameState) {
       kind: 'fact',
       salience: 0.5,
       summary: 'no hot water again',
-      claims: [{ prop: 'huseyin:dishonest', value: true, confidence: 0.62 }],
+      claims: [{ prop: 'burak:dishonest', value: true, confidence: 0.62 }],
     },
   ]);
   void p;
@@ -2188,14 +2176,14 @@ function tarikEnvelope(s: GameState) {
   say(
     s,
     'tarik',
-    'Take this down to Hüseyin for me. Part of my dues. Don’t say anything to anyone, evladım. My pension is late again.',
+    'Take this down to Burak for me. Part of my dues. Don’t say anything to anyone, evladım. My pension is late again.',
     'voice',
   );
   stamp(s, 'envelope');
 }
 
 function nightEvents(s: GameState, day: number) {
-  // Tuesday to Thursday: a man rings flat 5 near midnight. From your window you see him; so does Nermin.
+  // Tuesday to Thursday: a man rings flat 5 near midnight. From your window you see him; so does Hacer.
   if (day >= 2 && day <= 4 && !(s.oneCast?.departure && !s.oneCast.admission)) {
     perceive(s.kapici, [
       {
@@ -2210,11 +2198,11 @@ function nightEvents(s: GameState, day: number) {
     learn(s, FACTS.visitor);
     const lines: Record<number, string> = {
       2: 'Near midnight a man rang flat 5. Derya let him in, and looked down the stairs before she shut the door.',
-      3: 'The same man at flat 5 again, late. He carried a bag this time. Nermin’s curtain moved.',
+      3: 'The same man at flat 5 again, late. He carried a bag this time. Hacer’s curtain moved.',
       4: 'Flat 5 again after eleven. You heard him laugh on the landing, and Derya say “shh”.',
     };
     say(s, 'narrator', lines[day] ?? '', 'event');
-    const n = personOf(s, 'nermin');
+    const n = personOf(s, 'hacer');
     perceive(n, [
       {
         at: s.minute,
@@ -2226,143 +2214,51 @@ function nightEvents(s: GameState, day: number) {
       },
     ]);
   }
-  // The street paper on Friday ran one of Elif's drawings, with her name. Those who got their paper saw it.
-  if (day === 5) {
-    for (const t of s.tasks) {
-      if (t.kind !== 'bread' || dayOf(t.from) !== 5 || !RESIDENTS[t.for].paper || !t.done) continue;
-      const p = personOf(s, t.for);
-      confirm(p, 'elif:hardworking', true, s.minute);
-      confirm(p, 'elif:lazy', false, s.minute);
-    }
-    say(s, 'narrator', 'Friday’s paper had a drawing by Elif in it, with her name under it.', 'event');
-    learn(s, 'elif:hardworking');
-  }
 }
 
 function ringEvening(s: GameState) {
-  // Saturday 18:30: Burak asks Elif up to the roof. Her choice; then her answer.
-  const e = personOf(s, 'elif');
-  const b = personOf(s, 'burak');
-  const re = rOf(s, 'elif');
   s.ring.asked = true;
-  // Where you are decides whether you see it or hear it later.
-  const near =
-    ['roof', 'door:elif', 'door:burak', 'door:tarik', 'landing:3', 'landing:4'].includes(s.k.at) && !s.k.walk;
-  say(
-    s,
-    'narrator',
-    near
-      ? 'Half past six. Burak came up the stairs in his ironed shirt, and you stood very still.'
-      : 'Half past six. Burak went up the stairs in his ironed shirt. (From the roof, you would have seen it.)',
-    'event',
-  );
-  if (re.where === 'shop' || re.where === 'work') {
-    s.ring.answer = 'no roof';
-    say(s, 'narrator', 'Elif was out. Burak sat on the roof alone until dark.', 'event');
-    return;
-  }
-  tick(e, Math.max(e.now, s.minute));
-  s.ring.asked = true;
-  s.ring.spoiled = credence(e, FACTS.ring) >= 0.7;
-  const offers = [
-    offer('roof', {
-      action: 'sit',
-      label: 'go up to the roof with Burak',
-      duration: 40,
-      tags: ['social'],
-      with: ['burak'],
-      targetId: 'burak',
-      advertises: { belonging: 0.2, leisure: 0.15 },
-    }),
-    offer('home', {
-      action: 'rest',
-      label: 'stay in',
-      duration: 40,
-      advertises: { leisure: 0.12, rest: 0.1 },
-    }),
-  ];
-  const up = decide(e, offers, {
-    suggestion: { voiceId: 'burak', affordanceId: 'roof', strength: 0.7 },
-    now: s.minute,
-  });
-  if (up.chosenAffordanceId !== 'roof') {
-    s.ring.answer = 'no roof';
-    say(s, 'elif', up.suggestion?.says || 'Not tonight, Burak.', 'voice');
-    say(s, 'narrator', 'Burak went up to the roof alone and came down an hour later.', 'event');
-    return;
-  }
-  const ans = [
-    offer('accept', {
-      action: 'accept',
-      label: 'say yes',
-      duration: 5,
-      tags: ['social'],
-      with: ['burak'],
-      targetId: 'burak',
-      advertises: { belonging: 0.4, meaning: 0.2 },
-    }),
-    offer('wait', {
-      action: 'wait',
-      label: 'ask for time',
-      duration: 5,
-      advertises: { autonomy: 0.15, safety: 0.1 } as never,
-    }),
-  ];
-  const rec = decide(e, ans, { now: s.minute + 20 });
-  const yes = rec.chosenAffordanceId === 'accept';
-  s.ring.answer = yes ? 'yes' : 'not yet';
-  say(s, 'narrator', 'On the roof, Burak took a small box out of his pocket.', 'event');
-  if (s.ring.spoiled) say(s, 'elif', 'I knew. Half the building knew before you did.', 'voice');
-  say(s, 'elif', yes ? 'Yes. Yes, you fool.' : 'Burak… give me time. I’ve only just moved in.', 'voice');
-  // The whole building hears by morning; every rumour about them is settled.
-  for (const id of RIDS) {
-    const p = personOf(s, id);
-    confirm(p, FACTS.ring, true, s.minute);
-    if (yes && id !== 'burak') confirm(p, 'burak:sweet:elif', true, s.minute);
-  }
-  confirm(s.kapici, FACTS.ring, true, s.minute);
-  learn(s, 'burak:sweet:elif');
-  const told =
-    s.residents.some((r) => r.told.some((x) => x.prop === FACTS.ring)) ||
-    s.tasks.some((t) => t.label2 && t.wrongDoor);
-  if (yes && !told) {
-    s.k.money += 200;
-    report(s).tips += 200;
-    report(s).treats.push('₺200 from Burak, for keeping quiet');
-    say(s, 'burak', 'You knew, didn’t you. From the parcel. And you said nothing. Thank you.', 'voice');
-    stamp(s, 'kept_ring');
-  } else if (told) {
-    socialEvent(b, { at: s.minute, kind: 'harm', otherId: KAPICI, byMe: false, magnitude: 0.3 });
-    say(s, 'narrator', 'Burak did not look at you on the stairs.', 'journal');
+  const discovered = s.secrets['burak:paper_mechanisms'] !== undefined;
+  s.ring.answer = discovered ? 'yes' : 'not yet';
+  if (discovered) {
+    say(
+      s,
+      'burak',
+      'The little ferry moves when you pull this tab. Hold the harbour fold for me? I would rather show one person than announce it to the building.',
+      'voice',
+    );
+    stamp(s, 'paper_ferry');
+  } else {
+    say(
+      s,
+      'narrator',
+      'Burak spent Saturday evening at his own table. You did not learn what he was making.',
+      'event',
+    );
   }
 }
 
 function meeting(s: GameState) {
-  // Sunday 11:00 in flat 4. Hüseyin opens the fund book: the money is all there, and short, and he will not say why.
+  // Sunday 11:00 in flat 3. Burak opens the fund book: the money is all there, and short, and he will not say why.
   s.minute = dayStart(7) + MEETING;
-  say(
-    s,
-    'narrator',
-    'Sunday. The residents’ meeting in Hüseyin Bey’s flat. Tea, the good glasses.',
-    'journal',
-  );
+  say(s, 'narrator', 'Sunday. The residents’ meeting in Burak Bey’s flat. Tea, the good glasses.', 'journal');
   for (const id of RIDS) {
     const p = personOf(s, id);
     if (id === 'derya' && s.oneCast?.departure && !s.oneCast.admission) continue;
     tick(p, Math.max(p.now, s.minute));
-    confirm(p, 'huseyin:dishonest', false, s.minute);
+    confirm(p, 'burak:dishonest', false, s.minute);
     confirm(p, FACTS.fund, true, s.minute);
   }
   say(
     s,
-    'huseyin',
+    'burak',
     s.stories?.fund.repaired
       ? 'Here is the pump invoice and the deposit. The balance is due next week. The private repayment arrangement is in hand.'
       : 'Here is the book. Every kuruş. One flat is behind, and that is their business.',
     'voice',
   );
   const duesOut = RIDS.filter(
-    (id) => id !== 'huseyin' && id !== 'tarik' && credence(personOf(s, id), FACTS.dues) >= 0.7,
+    (id) => id !== 'burak' && id !== 'tarik' && credence(personOf(s, id), FACTS.dues) >= 0.7,
   );
   if (duesOut.length >= 2) {
     say(s, 'narrator', 'Everyone looked at Tarık Bey. He looked at his tea.', 'event');
@@ -2422,7 +2318,7 @@ function meeting(s: GameState) {
     s,
     'narrator',
     raise
-      ? `The tea money goes up: ${yes} hands. Hüseyin Bey counts ₺300 into your tin.`
+      ? `The tea money goes up: ${yes} hands. Burak Bey counts ₺300 into your tin.`
       : `The tea money stays as it is: ${yes} hands for, ${no} against.`,
     'event',
   );
@@ -2496,8 +2392,8 @@ function morning(s: GameState, day: number) {
   };
   say(s, 'narrator', lines[day] ?? DAY_NAMES[day - 1] ?? '', 'journal');
   if (day === 3)
-    say(s, 'riza', 'If the boiler goes, look at the pump first. Then look at Hüseyin’s face.', 'margin');
-  if (day === 4) say(s, 'riza', 'What Nermin sees at night, the step hears by noon.', 'margin');
+    say(s, 'riza', 'If the boiler goes, look at the pump first. Then look at Burak’s face.', 'margin');
+  if (day === 4) say(s, 'riza', 'What Hacer sees at night, the step hears by noon.', 'margin');
 }
 
 /** Dinner, breakfast: the host feeds everyone at home (no choice offered). */
@@ -2561,15 +2457,15 @@ function endDay(s: GameState) {
   rep.caught = [
     ...new Set(s.residents.filter((r) => r.caught.some((m) => dayOf(m) === day)).map((r) => r.id)),
   ];
-  // The cat: if the gate was open today, the stray came in. Nermin feeds it; Elif names it; Sevim sneezes.
+  // The cat: if the gate was open today, the stray came in. Hacer feeds it; Burak names it; Sevim sneezes.
   if (s.gateUntil > dayStart(day)) {
     s.catDays++;
     say(
       s,
       'narrator',
       s.catDays === 1
-        ? 'The ginger stray came in through the gate. Nermin fed it. Sevim sneezed at it.'
-        : 'The ginger cat again. Elif has started calling it Pamuk.',
+        ? 'The ginger stray came in through the gate. Hacer fed it. Sevim sneezed at it.'
+        : 'The ginger cat again. Burak has started calling it Pamuk.',
       'event',
     );
     socialEvent(personOf(s, 'sevim'), {
@@ -2579,14 +2475,14 @@ function endDay(s: GameState) {
       byMe: false,
       magnitude: 0.08,
     });
-    socialEvent(personOf(s, 'elif'), {
+    socialEvent(personOf(s, 'burak'), {
       at: s.minute,
       kind: 'gift',
       otherId: KAPICI,
       byMe: false,
       magnitude: 0.2,
     });
-    socialEvent(personOf(s, 'nermin'), {
+    socialEvent(personOf(s, 'hacer'), {
       at: s.minute,
       kind: 'gift',
       otherId: KAPICI,
@@ -2595,7 +2491,7 @@ function endDay(s: GameState) {
     });
     if (s.catDays >= 2 && !s.catHome) {
       s.catHome = true;
-      say(s, 'narrator', 'Elif bought a bowl. Pamuk is the building’s cat now.', 'event');
+      say(s, 'narrator', 'Burak bought a bowl. Pamuk is the building’s cat now.', 'event');
       stamp(s, 'cat');
     }
   }
@@ -2714,8 +2610,7 @@ export function replay(
   return s;
 }
 
-export const canReplay = (game: string | undefined): boolean =>
-  game === GAME_VERSION || game === PREVIOUS_GAME_VERSION || game === LEGACY_GAME_VERSION;
+export const canReplay = (game: string | undefined): boolean => game === GAME_VERSION;
 
 export function fingerprint(s: GameState): string {
   const people = s.people.map((p) => ({

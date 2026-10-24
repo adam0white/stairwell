@@ -32,9 +32,13 @@ function isInput(value: unknown): value is Input {
       return isPlace(value.to);
     case 'news':
     case 'word':
-    case 'sit':
     case 'knock':
       return isResident(value.who);
+    case 'sit':
+      return (
+        isResident(value.who) &&
+        (value.topic === undefined || (value.who === 'derya' && value.topic === 'boundaries'))
+      );
     case 'tell':
       return (
         isResident(value.who) &&

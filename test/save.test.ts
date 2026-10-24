@@ -12,10 +12,10 @@ const notebook = (inputs: unknown = [], minute: unknown = 440) => ({
 
 describe('saved notebook validation', () => {
   it('accepts each supported rules edition and rejects unknown editions', () => {
-    expect(isSaved({ ...notebook(), game: 'stairwell@3' })).toBe(true);
-    expect(isSaved({ ...notebook(), game: 'stairwell@4' })).toBe(true);
-    expect(isSaved({ ...notebook(), game: 'stairwell@5' })).toBe(true);
-    expect(isSaved({ ...notebook(), game: 'stairwell@6' })).toBe(false);
+    expect(isSaved({ ...notebook(), game: 'stairwell@3' })).toBe(false);
+    expect(isSaved({ ...notebook(), game: 'stairwell@4' })).toBe(false);
+    expect(isSaved({ ...notebook(), game: 'stairwell@5' })).toBe(false);
+    expect(isSaved({ ...notebook(), game: 'stairwell@6' })).toBe(true);
   });
   it('accepts exported weeks and notebooks without a saved minute', () => {
     for (const policy of ['quiet', 'honest', 'gossip', 'liar'] as const) {
@@ -31,15 +31,15 @@ describe('saved notebook validation', () => {
     expect(
       isSaved(
         notebook([
-          { kind: 'go', to: 'door:nermin', at: 420 },
+          { kind: 'go', to: 'door:hacer', at: 420 },
           { kind: 'go', to: 'landing:4', at: 420 },
-          { kind: 'news', who: 'nermin', at: 421 },
+          { kind: 'news', who: 'hacer', at: 421 },
           { kind: 'tell', who: 'sevim', prop: 'kapici:kind', value: false, sure: true, at: 421 },
-          { kind: 'invent', who: 'burak', about: 'elif', trait: 'kind', at: 422 },
-          { kind: 'word', who: 'huseyin', at: 423 },
+          { kind: 'invent', who: 'burak', about: 'hacer', trait: 'kind', at: 422 },
+          { kind: 'word', who: 'burak', at: 423 },
           { kind: 'sit', who: 'derya', at: 424 },
           { kind: 'misdeliver', who: 'tarik', task: 3, at: 425 },
-          { kind: 'knock', who: 'elif', at: 426 },
+          { kind: 'knock', who: 'hacer', at: 426 },
           { kind: 'prank', what: 'swap', at: 427 },
           { kind: 'prank', what: 'gate', at: 428 },
           { kind: 'next', at: 440 },
@@ -78,16 +78,16 @@ describe('saved notebook validation', () => {
     { kind: 'go', to: {}, at: 420 },
     { kind: 'news', at: 420 },
     { kind: 'news', who: 'unknown', at: 420 },
-    { kind: 'tell', who: 'nermin', prop: 'kapici:kind', value: true, at: 420 },
-    { kind: 'tell', who: 'nermin', prop: 4, value: true, sure: false, at: 420 },
-    { kind: 'tell', who: 'nermin', prop: 'kapici:kind', value: 'false', sure: false, at: 420 },
-    { kind: 'invent', who: 'nermin', about: 'unknown', trait: 'kind', at: 420 },
-    { kind: 'invent', who: 'nermin', about: 'sevim', at: 420 },
+    { kind: 'tell', who: 'hacer', prop: 'kapici:kind', value: true, at: 420 },
+    { kind: 'tell', who: 'hacer', prop: 4, value: true, sure: false, at: 420 },
+    { kind: 'tell', who: 'hacer', prop: 'kapici:kind', value: 'false', sure: false, at: 420 },
+    { kind: 'invent', who: 'hacer', about: 'unknown', trait: 'kind', at: 420 },
+    { kind: 'invent', who: 'hacer', about: 'sevim', at: 420 },
     { kind: 'word', at: 420 },
     { kind: 'sit', at: 420 },
     { kind: 'knock', at: 420 },
-    { kind: 'misdeliver', who: 'nermin', task: 1.5, at: 420 },
-    { kind: 'misdeliver', who: 'nermin', task: Number.NaN, at: 420 },
+    { kind: 'misdeliver', who: 'hacer', task: 1.5, at: 420 },
+    { kind: 'misdeliver', who: 'hacer', task: Number.NaN, at: 420 },
     { kind: 'prank', what: 'unknown', at: 420 },
   ])('rejects malformed input fields: %j', (input) => {
     expect(isSaved(notebook([input]))).toBe(false);

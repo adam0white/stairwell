@@ -65,8 +65,8 @@ function speak(s: GameState, who: Rid, style: Style) {
     const others = RIDS.filter((r) => r !== who);
     const about = others[(day + RESIDENTS[who].flat) % others.length] as Rid;
     act(s, { kind: 'invent', who, about, trait: day % 2 ? 'stingy' : 'nosy' });
-    if (who === 'nermin') act(s, { kind: 'invent', who, about: 'sevim', trait: 'lazy' });
-    if (who === 'sevim') act(s, { kind: 'invent', who, about: 'nermin', trait: 'lazy' });
+    if (who === 'hacer') act(s, { kind: 'invent', who, about: 'sevim', trait: 'lazy' });
+    if (who === 'sevim') act(s, { kind: 'invent', who, about: 'hacer', trait: 'lazy' });
   }
 }
 

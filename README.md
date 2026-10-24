@@ -1,6 +1,6 @@
 # The Stairwell
 
-You are the new kapıcı (live-in caretaker) of Lale Apartmanı, a seven-flat block in Istanbul. Bread, bins, parcels and five flights of stairs. The residents tell you things, and you decide what to pass on. On Sunday they vote on your tea money.
+You are the new kapıcı (live-in caretaker) of Lale Apartmanı, a seven-flat block with five occupied flats in Istanbul. Bread, bins, parcels and five flights of stairs. The residents tell you things, and you decide what to pass on. On Sunday they vote on your tea money.
 
 Play: https://stairwell.adamwhite.work
 
@@ -12,3 +12,5 @@ Built on [Human Framework](https://github.com/adam0white/human-framework) (`@ada
 - Browser layout tests run with `npm run check`; install their browser once with `npx playwright install chromium`.
 
 MIT licence.
+
+Canonical edition and delivery limits: [cast adoption](docs/cast-adoption.md).

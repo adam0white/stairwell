@@ -37,7 +37,7 @@ import {
   wordHint,
 } from '../sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
-import { STORY_SECRETS } from '../sim/stories.ts';
+import { PRIVATE_SECRETS, STORY_SECRETS } from '../sim/stories.ts';
 import {
   acknowledgeContinuity,
   arrive,
@@ -129,6 +129,15 @@ function restoreNotebook(x: Saved): GameState {
   return s;
 }
 
+function olderNotebook(): boolean {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null');
+    return typeof saved?.game === 'string' && !canReplay(saved.game);
+  } catch {
+    return false;
+  }
+}
+
 function loadSaved(): Saved | null {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
@@ -187,7 +196,7 @@ function importRun(file: File) {
         oneCast: raw.continuity ?? (Array.isArray(raw.oneCast) ? undefined : raw.oneCast),
       } as Saved;
       if (!canReplay(x.game)) {
-        alert('This notebook is from another edition of the game.');
+        alert('This notebook is from another edition of the game. Start fresh.');
         return;
       }
       if (!isSaved(x)) {
@@ -465,7 +474,7 @@ function titlePage() {
   infoOpen = false;
   const saved = loadSaved();
   const savedState = saved ? restoreNotebook(saved) : null;
-  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1><p>Keep seven flats supplied through Saturday. On Sunday, the residents vote on your tea money.</p><p>Rıza left you his caretaker’s notebook. The job is yours.</p><p class="soft small">Six days and a Sunday. Nothing happens while you are away.</p></div><button data-a="other">Other ways in ▸</button><div class="title-spacer"></div></main><div class="action-bar">
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${olderNotebook() ? '<p role="status">This notebook belongs to an older edition. Start fresh.</p>' : ''}<p>Keep five occupied flats supplied through Saturday. On Sunday, the residents vote on your tea money.</p><p>Rıza left you his caretaker’s notebook. The job is yours.</p><p class="soft small">Six days and a Sunday. Nothing happens while you are away.</p></div><button data-a="other">Other ways in ▸</button><div class="title-spacer"></div></main><div class="action-bar">
     ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${DAY_NAMES[dayOf(savedState.minute) - 1]} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
     <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'A new notebook' : 'Begin on Monday'}</button><div class="new-confirm" hidden>The old notebook will be replaced.<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
   if (notice && !notice.dataset.shown) {
@@ -496,7 +505,10 @@ function titlePage() {
     ?.addEventListener('click', () => {
       const dialog = document.createElement('dialog');
       dialog.className = 'other-ways';
-      const ms = saved && !saved.oneCast ? mornings(saved) : [];
+      const unlinked =
+        !saved?.oneCast ||
+        (Object.keys(saved.oneCast).every((key) => key === 'rows') && saved.oneCast.rows.length === 0);
+      const ms = saved && unlinked ? mornings(saved) : [];
       dialog.innerHTML = `<div class="who"><b>Other ways in</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body">${ms.length > 1 ? ms.map((m, i) => `<div><button data-morning="${i}">Turn back to ${DAY_NAMES[m.day - 1]} morning</button><div data-confirm="${i}" hidden>Everything after that morning is torn out.<div class="row"><button data-yes="${i}">Yes, turn back</button><button data-no="${i}">No</button></div></div></div>`).join('') : ''}<label class="file-button">Load a playtest run<input type="file" accept="application/json"></label></div>`;
       document.body.append(dialog);
       dialog.showModal();
@@ -1015,7 +1027,7 @@ function sheet(s: GameState, el: HTMLElement) {
       const b = document.createElement('button');
       b.className = 'prank';
       b.dataset.a = 'swap';
-      b.textContent = 'Swap Nermin’s and Sevim’s papers';
+      b.textContent = 'Swap Hacer’s and Sevim’s papers';
       b.addEventListener('click', () => send({ kind: 'prank', what: 'swap' }));
       el.insertBefore(b, items);
     }
@@ -1177,14 +1189,14 @@ function canSwap(s: GameState) {
   const open = openTasks(s);
   return (
     s.swappedDay !== dayOf(s.minute) &&
-    ['nermin', 'sevim'].every((id) => open.some((t) => t.carried && t.kind === 'bread' && t.for === id))
+    ['hacer', 'sevim'].every((id) => open.some((t) => t.carried && t.kind === 'bread' && t.for === id))
   );
 }
 
 function placeHtml(s: GameState, _small = false): string {
   const at = s.k.at;
   const bits: string[] = [];
-  if (canSwap(s)) bits.push('<button class="prank" data-a="swap">Swap Nermin’s and Sevim’s papers</button>');
+  if (canSwap(s)) bits.push('<button class="prank" data-a="swap">Swap Hacer’s and Sevim’s papers</button>');
 
   if (at.startsWith('door:')) {
     const id = at.slice(5) as Rid;
@@ -1268,6 +1280,7 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
       <button data-a="news" ${asked || !present ? 'disabled' : ''}>Anything new?${asked ? '<span class="h">Already asked · ask tomorrow</span>' : ''}</button>
       <button data-a="tell" ${!present ? 'disabled' : ''}>Tell…</button>
       <button data-a="sit" ${sat || !present ? 'disabled' : ''}>Sit a minute${sat ? '<span class="h">Sat together today · return tomorrow</span>' : ''}</button>
+      ${who === 'derya' ? `<button data-a="sit-boundaries" ${sat || !present ? 'disabled' : ''}>Sit: ask about work boundaries and training${sat ? '<span class="h">Sat together today · return tomorrow</span>' : ''}</button>` : ''}
       <button data-a="word" ${r.word || !present ? 'disabled' : ''}>A word for me on Sunday<span class="h">${r.word ? (r.word === 'yes' ? 'promised' : 'said no') : dayOf(s.minute) < 4 ? 'too early' : wordHint(s, who)}</span></button>
     </div>`;
 }
@@ -1307,6 +1320,7 @@ function wireDoor(s: GameState, el: HTMLElement, who: Rid) {
   on('[data-a="news"]', () => send({ kind: 'news', who }));
   on('[data-a="word"]', () => send({ kind: 'word', who }));
   on('[data-a="sit"]', () => send({ kind: 'sit', who }));
+  on('[data-a="sit-boundaries"]', () => send({ kind: 'sit', who, topic: 'boundaries' }));
   on('[data-a="tell"]', () => {
     ui.sheet = 'tell';
     ui.sheetFor = who;
@@ -1346,7 +1360,7 @@ function wireDoor(s: GameState, el: HTMLElement, who: Rid) {
 // ---------- the notebook ----------
 
 function secretProps(s: GameState) {
-  return s.stories ? [...SECRET_PROPS, ...STORY_SECRETS] : SECRET_PROPS;
+  return s.stories ? [...SECRET_PROPS, ...STORY_SECRETS, ...PRIVATE_SECRETS] : SECRET_PROPS;
 }
 
 function notebookHtml(s: GameState): string {
@@ -1375,7 +1389,7 @@ const STAMPS: Record<string, string> = {
   swap: 'Crossed crosswords',
   confided: 'Derya trusted you',
   envelope: 'Tarık’s envelope',
-  kept_ring: 'Kept the ring quiet',
+  paper_ferry: 'Held the harbour fold',
   raise: 'Tea money up',
   cat: 'Pamuk',
   word_back: 'It got back to them',
@@ -1434,11 +1448,11 @@ function nightMargin(s: GameState, d: number): string {
     (r) => r.caught.some((m) => dayOf(m) === d) || r.grudges.some((g) => dayOf(g.at) === d),
   );
   if (caught) return 'It came back to you. It always does, in a building. Lie low a day.';
-  if (told.includes('nermin')) return 'Whatever you tell Nermin, the step hears by six.';
+  if (told.includes('hacer')) return 'Whatever you tell Hacer, the step hears by six.';
   if (told.length === 0 && d === 1)
     return 'You said nothing to anyone today. Wise, or dull. They will decide which.';
   if (d === 2) return 'I did the same with a parcel in 1994. Never again. Mostly.';
-  if (d === 3) return 'Hüseyin is careful, not crooked. The building forgets the difference when it is cold.';
+  if (d === 3) return 'Burak is careful, not crooked. The building forgets the difference when it is cold.';
   if (d === 4) return 'Derya is good to that building. Remember it when they talk.';
   if (d === 5) return 'Tarık Bey is proud. Carry his shopping and never mention the stairs.';
   return 'Sleep. Bread at seven.';
@@ -1464,7 +1478,7 @@ function sundayPage(s: GameState) {
   const total = s.reports.reduce((a, x) => a + x.tips, 0);
   const secrets = Object.keys(s.secrets).length;
   const caught = s.residents.reduce((a, r) => a + r.caught.length + r.grudges.length, 0);
-  const share = `The Stairwell, week 1: ₺${s.k.money} in the tin, ${secrets}/${secretProps(s).length} secrets, caught ${caught}×, tea money ${m?.raise ? 'up' : 'unchanged'} (${m?.yes ?? 0} hands).${s.ring.answer === 'yes' ? ' A ring on the roof.' : ''}${s.catHome ? ' A cat on the step.' : ''} ◇`;
+  const share = `The Stairwell, week 1: ₺${s.k.money} in the tin, ${secrets}/${secretProps(s).length} secrets, caught ${caught}×, tea money ${m?.raise ? 'up' : 'unchanged'} (${m?.yes ?? 0} hands).${s.ring.answer === 'yes' ? ' A paper ferry.' : ''}${s.catHome ? ' A cat on the step.' : ''} ◇`;
   app().innerHTML = `<div class="page sunday">${topbar('Sunday · the meeting')}<main class="page-body">
     ${lines.map(saidLine).join('')}
     <div class="votes">${RIDS.map((id) => {
@@ -1475,8 +1489,8 @@ function sundayPage(s: GameState) {
       return `<div class="flatline"><b>${RESIDENTS[id].name}</b> <span class="hand ${r.vote === 'yes' ? 'moss' : 'soft'}">${r.vote === 'yes' ? 'hand up' : r.vote === 'away' ? 'did not come' : 'hand down'}</span>${kept ? ' <span class="soft small">as promised</span>' : broke ? ' <span class="rope small">despite a promise</span>' : ''}${p ? '' : ''}</div>`;
     }).join('')}</div>
     <p>Six days: <span class="money">₺${total}</span> in tips${m?.raise ? ', and the tea money goes up' : ''}. The tin: <span class="money">₺${s.k.money}</span>.</p>
-    <p>${s.ring.answer === 'yes' ? 'Burak and Elif are engaged. ' : s.ring.answer === 'not yet' ? 'Elif asked Burak for time. ' : 'Burak still has the ring in his pocket. '}${s.catHome ? 'Pamuk sleeps on the step.' : ''}</p>
-    <p class="story-outcomes">${s.stories?.feud.reconciled ? 'Nermin and Sevim shared dolma and tea at the entrance. ' : ''}${s.stories?.fund.repaired ? 'The new pump is running; the repair is recorded in the fund book.' : ''}</p>
+    <p>${s.ring.answer === 'yes' ? 'Burak showed his moving paper ferry. ' : s.ring.answer === 'not yet' ? 'Burak kept his paper project private. ' : 'Burak has his own unfinished work. '}${s.catHome ? 'Pamuk sleeps on the step.' : ''}</p>
+    <p class="story-outcomes">${s.stories?.feud.reconciled ? 'Hacer and Sevim rewrote the notice over tea. ' : ''}${s.stories?.fund.repaired ? 'The new pump is running; the repair is recorded in the fund book.' : ''}</p>
     <div class="margin hand">${m?.raise ? 'Not bad for a first week. They will want more next week.' : 'A first week is a first week. Next week they will know you better.'} <span class="soft">— R.</span></div>
     <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>

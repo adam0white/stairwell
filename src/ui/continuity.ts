@@ -263,7 +263,7 @@ async function claimArrival(
   const claim = await createPersona({
     ...body,
     parentRevision: revision,
-    source: { game: 'stairwell', build: build(), engine: '2.14.1', rules: '5' },
+    source: { game: 'stairwell', build: build(), engine: '2.14.1', rules: '6' },
     transfer: {
       ...body.transfer,
       admission: { adapter: 'stairwell-one-cast/1', claimId: crypto.randomUUID() },

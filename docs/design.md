@@ -1,3 +1,5 @@
+> Current edition: see [canonical adoption](cast-adoption.md). The historical consults, measurements and earlier-edition receipts below retain their original cast and are not current cast evidence. Edition6 has five occupied flats.
+
 # The Stairwell: design
 
 **One line.** You are the new kapıcı (live-in caretaker) of Lale Apartmanı, a seven-flat block in Moda, Istanbul. Rıza Efendi, the old kapıcı, retired to his village and left you his notebook. The work is bread, bins, parcels and stairs. The residents also tell you things. On Sunday they vote on your tea money.
@@ -111,14 +113,9 @@ Three concepts were written (kept below) and sent with the engine summary and th
 - The day: 07:00 to 21:00. Bread and newspapers in the morning, parcels and small jobs, the evening on the stairs, bins at 20:00. Requests are pre-rolled from the seed per day.
 - Residents decide their own free time through HF (stay in, sit on the step, go to the shop, visit a neighbour). Two residents on the step, on the stairs at the same time, or visiting talk through `converse`.
 
-## The people (HF 2.10.0, pinned exactly)
-- **Nermin Hanım**, flat 1, 72, widow, watches the door. Talks. Old feud with Sevim.
-- **Sevim Hanım**, flat 2, 69, retired teacher. Feud with Nermin.
-- **Burak**, flat 3, 31, accountant, quiet, honest. Sweet on Elif.
-- **Hüseyin Bey**, flat 4, 63, the building manager. Careful with money, holds his tongue.
-- **Derya**, flat 5, 44, night nurse; asleep in the mornings. A man comes to her door late.
-- **Elif**, flat 6, 27, illustrator, new in the building; nobody's word on her yet.
-- **Tarık Bey**, flat 7, 81, retired ferry captain, top floor. His son is in Germany. Friday prayer is a quiet line in the journal.
+## The people (canonical edition 6)
+
+Five maintained residents: Hacer58, temporary entrance-side resident and retired shop assistant; Sevim69, widowed retired teacher; Burak31, single accountant and keeper of the building account; Derya44, single night nurse; Tarık81, widowed retired ferry captain. Flats4 and6 are unoccupied. See [the exhaustive census and playable discoveries](cast-adoption.md). Original identities and old romance/recipe history are retired, not transferred by renaming.
 
 ## Concepts not chosen
 - **B. Lost Property**, a ferry-terminal window where claimants describe what they lost and some lie. Rejected: a judgement puzzle at a window; one-off claimants give little relatedness; keeping things reads as theft.
@@ -243,3 +240,7 @@ Derya remains the single 44-year-old night nurse at flat 5. Edition 5 runs her l
 Continuity uses the shared opt-in browser shelf. It carries the approved HF projection, one bounded attended fact and SHA256 checkpoint stamps. The source notebook retains the full checkpoint and accepted input/world prefix. A receiving claim must advance the exact parent before loading. Competing continuations require an explicit fork. Recording needs its own selected-history permission when the recording identity changed or the history came from a file.
 
 The return is a new chapter beginning at the locally saved source boundary. Replay pins the returned initial Person and both envelopes before simulating the suffix. Clinical health and circadian mismatch block admission. Only compatible approved fitness can be copied into the detached opening; no healing is claimed. Missing local source prefix or unsupported obligations/goals refuse continuation and leave fresh play available. Hearsay target dependencies and actual browser receipts are recorded in the scratch delivery report. Old-save work is waived; existing old loaders remain without additional compatibility machinery.
+
+## Canonical edition 6 (2026-10-23)
+
+The canonical adoption document supersedes earlier current-state claims about editions3–5, seven occupied households, old cast biographies, frozen-save compatibility, the engagement and the recipe feud. The original goal, errands, source trust, gossip exposure, fatigue, Sunday vote, dated boiler repair and private repayment permission remain. Current-version replay remains exact; old notebooks explicitly require Start fresh. Platform integration and deployment remain pending the released guide.

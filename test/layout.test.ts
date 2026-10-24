@@ -57,7 +57,7 @@ async function visibleInViewport(page: Page, selector: string) {
 async function importNotebook(
   page: Page,
   minute = 440,
-  inputs: unknown[] = [{ kind: 'go', to: 'door:nermin', at: 420 }],
+  inputs: unknown[] = [{ kind: 'go', to: 'door:hacer', at: 420 }],
   seed = 7,
 ) {
   page.setDefaultTimeout(5000);
@@ -97,6 +97,7 @@ it.each([
       if (await page.locator('.who [data-a=close]').isVisible())
         await page.locator('.who [data-a=close]').click();
       await page.evaluate(() => document.fonts.ready);
+      await arrive(page, 40);
       const journal = page.locator('.journal');
       expect(await journal.locator(':scope > div').count()).toBe(40);
       const before = await journal.evaluate((el) => {
@@ -139,6 +140,7 @@ it('falls back to the oldest surviving entry when the entry being read is remove
     await importNotebook(page, 1254);
     if (await page.locator('.who [data-a=close]').isVisible())
       await page.locator('.who [data-a=close]').click();
+    await arrive(page, 40);
     const journal = page.locator('.journal');
     const oldestSurvivor = await journal.evaluate((el) => {
       el.scrollTop = 7;
@@ -254,8 +256,8 @@ it.each([
   { inputs: [{ kind: 'go', to: 'door:missing', at: 420 }] },
   {
     inputs: [
-      { kind: 'news', who: 'nermin', at: 440 },
-      { kind: 'news', who: 'nermin', at: 420 },
+      { kind: 'news', who: 'hacer', at: 440 },
+      { kind: 'news', who: 'hacer', at: 420 },
     ],
   },
 ])('does not offer Continue for malformed inputs $inputs', async ({ inputs }) => {
@@ -266,7 +268,7 @@ it.each([
       (inputs) =>
         localStorage.setItem(
           'stairwell:notebook',
-          JSON.stringify({ game: 'stairwell@3', seed: 7, inputs, minute: 440 }),
+          JSON.stringify({ game: 'stairwell@6', seed: 7, inputs, minute: 440 }),
         ),
       inputs,
     );
@@ -460,8 +462,8 @@ it.each([
     for (const text of ['A long answer. '.repeat(40), '']) {
       await page.evaluate((text) => {
         const s = (window as unknown as { __st: { s: GameState } }).__st.s;
-        s.said = s.said.filter((line) => line.who !== 'nermin');
-        if (text) s.said.push({ at: s.minute, who: 'nermin', kind: 'voice', text, n: s.lineNo++ });
+        s.said = s.said.filter((line) => line.who !== 'hacer');
+        if (text) s.said.push({ at: s.minute, who: 'hacer', kind: 'voice', text, n: s.lineNo++ });
       }, text);
       await page.evaluate('window.__st.render()');
       const after = await actionTarget(page, '[data-a=sit]');
@@ -617,7 +619,7 @@ it('shows the rate when the order slowdown ends', async () => {
   }
 });
 
-it('preserves a legacy notebook edition through continue, export and morning rewind', async () => {
+it('preserves the current notebook edition through continue, export and morning rewind', async () => {
   const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     await page.clock.install();
@@ -626,7 +628,7 @@ it('preserves a legacy notebook edition through continue, export and morning rew
       localStorage.setItem(
         'stairwell:notebook',
         JSON.stringify({
-          game: 'stairwell@3',
+          game: 'stairwell@6',
           seed: 7,
           inputs: [{ at: 1260, kind: 'next' }],
           minute: 1860,
@@ -635,11 +637,11 @@ it('preserves a legacy notebook edition through continue, export and morning rew
     );
     await page.reload();
     await page.locator('[data-a=continue]').click();
-    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@3');
+    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@6');
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     expect(
       await page.evaluate(() => JSON.parse(localStorage.getItem('stairwell:notebook') ?? '{}').game),
-    ).toBe('stairwell@3');
+    ).toBe('stairwell@6');
     await page.getByRole('button', { name: 'Send word', exact: true }).click();
     const [download] = await Promise.all([
       page.waitForEvent('download'),
@@ -649,13 +651,13 @@ it('preserves a legacy notebook edition through continue, export and morning rew
     let text = '';
     if (!stream) throw new Error('Missing download stream');
     for await (const chunk of stream) text += chunk.toString();
-    expect(JSON.parse(text).game).toBe('stairwell@3');
+    expect(JSON.parse(text).game).toBe('stairwell@6');
     await page.getByRole('button', { name: 'Close send word', exact: true }).click();
     await page.getByRole('button', { name: 'To the title page', exact: true }).click();
     await page.locator('[data-a=other]').click();
     await page.getByRole('button', { name: 'Turn back to Monday morning', exact: true }).click();
     await page.getByRole('button', { name: 'Yes, turn back', exact: true }).click();
-    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@3');
+    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@6');
   } finally {
     await page.close();
   }
@@ -700,10 +702,10 @@ it('shows the working rate while unfinished orders remain', async () => {
 });
 
 it.each([
-  [360, 690, 'elif'],
-  [360, 690, 'huseyin'],
-  [1280, 800, 'elif'],
-  [1280, 800, 'huseyin'],
+  [360, 690, 'hacer'],
+  [360, 690, 'burak'],
+  [1280, 800, 'hacer'],
+  [1280, 800, 'burak'],
 ] as const)('exposes every Tell choice at %ix%i for %s', async (width, height, who) => {
   const page = await testPage({ viewport: { width, height } });
   try {
@@ -761,6 +763,24 @@ it.each([
         return !!first && first.top >= el.getBoundingClientRect().top;
       }),
     ).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
+
+it('explains that an older cast notebook requires Start fresh', async () => {
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await page.goto(url);
+    await page.evaluate(() =>
+      localStorage.setItem(
+        'stairwell:notebook',
+        JSON.stringify({ game: 'stairwell@5', seed: 7, inputs: [], minute: 420 }),
+      ),
+    );
+    await page.reload();
+    expect(await page.locator('[data-a=continue]').count()).toBe(0);
+    expect(await page.getByRole('status').textContent()).toContain('Start fresh');
   } finally {
     await page.close();
   }

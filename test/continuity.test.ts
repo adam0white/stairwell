@@ -60,10 +60,10 @@ async function pinned(scope: 'shared' | 'file' = 'shared'): Promise<GameState> {
   const head = await createPersona({
     format: 'hf-persona/1',
     castId: 'hf.cast.derya.stairwell',
-    castRevision: '1',
+    castRevision: '2',
     branchId: 'branch',
     parentRevision: null,
-    source: { game: 'stairwell', build: 'test', engine: person.engine, rules: '5' },
+    source: { game: 'stairwell', build: 'test', engine: person.engine, rules: '6' },
     transfer: { person: projection },
     limitations: projection.limitations,
   });
@@ -263,7 +263,7 @@ async function returnArrivalFixture() {
   const envelope = await createPersona({
     format: 'hf-persona/1',
     castId: source.castId,
-    castRevision: '1',
+    castRevision: '2',
     branchId: source.branchId,
     parentRevision: source.revision,
     source: { game: 'hearsay', build: 'test', engine: p.engine, rules: '4' },

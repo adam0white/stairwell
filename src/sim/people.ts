@@ -16,13 +16,15 @@ import {
   type TraitEffect,
 } from '@adam0white/human-framework';
 
-export type Rid = 'nermin' | 'sevim' | 'burak' | 'huseyin' | 'derya' | 'elif' | 'tarik';
+export type Rid = 'hacer' | 'sevim' | 'burak' | 'derya' | 'tarik';
 export const KAPICI = 'kapici';
-export const RIDS: readonly Rid[] = ['nermin', 'sevim', 'burak', 'huseyin', 'derya', 'elif', 'tarik'];
+export const RIDS: readonly Rid[] = ['hacer', 'sevim', 'burak', 'derya', 'tarik'];
 
 export interface ResidentInfo {
   id: Rid;
   name: string;
+  castId: string;
+  castRevision: '1' | '2';
   /** How the kapıcı addresses them. */
   call: string;
   flat: number;
@@ -41,19 +43,23 @@ export interface ResidentInfo {
 }
 
 export const RESIDENTS: Record<Rid, ResidentInfo> = {
-  nermin: {
-    id: 'nermin',
-    name: 'Nermin',
-    call: 'Nermin Hanım',
+  hacer: {
+    id: 'hacer',
+    castId: 'hf.cast.hacer.voice',
+    castRevision: '1',
+    name: 'Hacer',
+    call: 'Hacer Hanım',
     flat: 1,
     floor: 0,
-    age: 72,
+    age: 58,
     paper: true,
     single: false,
-    blurb: 'Widow. Her window is next to the front door.',
+    blurb: 'Retired shop assistant. Staying by the entrance during family business.',
   },
   sevim: {
     id: 'sevim',
+    castId: 'hf.cast.sevim.stairwell',
+    castRevision: '1',
     name: 'Sevim',
     call: 'Sevim Hanım',
     flat: 2,
@@ -61,10 +67,12 @@ export const RESIDENTS: Record<Rid, ResidentInfo> = {
     age: 69,
     paper: true,
     single: false,
-    blurb: 'Retired teacher. Corrects the notices on the board.',
+    blurb: 'Widowed retired teacher and volunteer tutor. Corrects the notices on the board.',
   },
   burak: {
     id: 'burak',
+    castId: 'hf.cast.burak.stairwell',
+    castRevision: '1',
     name: 'Burak',
     call: 'Burak Bey',
     flat: 3,
@@ -72,22 +80,13 @@ export const RESIDENTS: Record<Rid, ResidentInfo> = {
     age: 31,
     paper: false,
     single: true,
-    blurb: 'Accountant. Polite, quiet, out all day.',
+    blurb: 'Single accountant. Keeps the shared building account separate from his work.',
     work: [8 * 60 + 30, 18 * 60 + 15],
-  },
-  huseyin: {
-    id: 'huseyin',
-    name: 'Hüseyin',
-    call: 'Hüseyin Bey',
-    flat: 4,
-    floor: 2,
-    age: 63,
-    paper: true,
-    single: false,
-    blurb: 'The building manager. Keeps the fund book.',
   },
   derya: {
     id: 'derya',
+    castId: 'hf.cast.derya.stairwell',
+    castRevision: '2',
     name: 'Derya',
     call: 'Derya Hanım',
     flat: 5,
@@ -98,19 +97,10 @@ export const RESIDENTS: Record<Rid, ResidentInfo> = {
     blurb: 'Night nurse. Sleeps in the mornings.',
     nights: true,
   },
-  elif: {
-    id: 'elif',
-    name: 'Elif',
-    call: 'Elif Hanım',
-    flat: 6,
-    floor: 3,
-    age: 27,
-    paper: false,
-    single: true,
-    blurb: 'Illustrator. Moved in last month.',
-  },
   tarik: {
     id: 'tarik',
+    castId: 'hf.cast.tarik.stairwell',
+    castRevision: '1',
     name: 'Tarık',
     call: 'Tarık Bey',
     flat: 7,
@@ -118,7 +108,7 @@ export const RESIDENTS: Record<Rid, ResidentInfo> = {
     age: 81,
     paper: true,
     single: false,
-    blurb: 'Retired ferry captain. Top floor.',
+    blurb: 'Widowed retired ferry captain. Top floor; the stairs take effort.',
   },
 };
 
@@ -144,7 +134,7 @@ export type Inventable = (typeof INVENTABLE)[number];
 
 /** The building's facts that are not character claims. */
 export const FACTS = {
-  ring: 'burak:ring',
+  ring: 'burak:paper_parcel',
   visitor: 'derya:visitor',
   fund: 'fund:short',
   dues: 'tarik:owes',
@@ -169,13 +159,20 @@ export function makeResident(id: Rid, seed: number, now: number): Person {
   };
   let p: Person;
   switch (id) {
-    case 'nermin':
+    case 'hacer':
       p = createPerson({
         ...base,
         seed: seed ^ 0x11,
         sex: 'female',
-        traits: { honesty: 0.45, extraversion: 0.85, agreeableness: 0.5, openness: 0.7, emotionality: 0.6 },
-        norms: [{ normId: 'backbiting', standing: 'disliked', conviction: 0.3 }],
+        traits: {
+          honesty: 0.5,
+          extraversion: 0.8,
+          agreeableness: 0.45,
+          emotionality: 0.6,
+          conscientiousness: 0.5,
+          openness: 0.5,
+        },
+        norms: [{ normId: 'backbiting', standing: 'disliked', conviction: 0.15 }],
       });
       break;
     case 'sevim':
@@ -189,6 +186,7 @@ export function makeResident(id: Rid, seed: number, now: number): Person {
           agreeableness: 0.35,
           conscientiousness: 0.85,
           openness: 0.4,
+          emotionality: 0.5,
         },
         norms: [{ normId: 'backbiting', standing: 'disliked', conviction: 0.4 }],
       });
@@ -204,28 +202,11 @@ export function makeResident(id: Rid, seed: number, now: number): Person {
           agreeableness: 0.7,
           conscientiousness: 0.8,
           openness: 0.5,
+          emotionality: 0.5,
         },
         norms: [
           { normId: 'backbiting', standing: 'forbidden', conviction: 0.6 },
           { normId: 'lying', standing: 'forbidden', conviction: 0.8 },
-        ],
-      });
-      break;
-    case 'huseyin':
-      p = createPerson({
-        ...base,
-        seed: seed ^ 0x44,
-        sex: 'male',
-        traits: {
-          honesty: 0.85,
-          extraversion: 0.45,
-          agreeableness: 0.35,
-          conscientiousness: 0.9,
-          openness: 0.3,
-        },
-        norms: [
-          { normId: 'backbiting', standing: 'forbidden', conviction: 0.9 },
-          { normId: 'lying', standing: 'forbidden', conviction: 0.85 },
         ],
       });
       break;
@@ -234,17 +215,15 @@ export function makeResident(id: Rid, seed: number, now: number): Person {
         ...base,
         seed: seed ^ 0x55,
         sex: 'female',
-        traits: { honesty: 0.7, extraversion: 0.35, agreeableness: 0.6, emotionality: 0.5, openness: 0.55 },
+        traits: {
+          honesty: 0.7,
+          extraversion: 0.35,
+          agreeableness: 0.6,
+          emotionality: 0.5,
+          openness: 0.55,
+          conscientiousness: 0.5,
+        },
         norms: [{ normId: 'backbiting', standing: 'forbidden', conviction: 0.5 }],
-      });
-      break;
-    case 'elif':
-      p = createPerson({
-        ...base,
-        seed: seed ^ 0x66,
-        sex: 'female',
-        traits: { honesty: 0.65, extraversion: 0.6, agreeableness: 0.65, openness: 0.85, emotionality: 0.55 },
-        norms: [{ normId: 'backbiting', standing: 'disliked', conviction: 0.4 }],
       });
       break;
     default:
@@ -258,10 +237,24 @@ export function makeResident(id: Rid, seed: number, now: number): Person {
           agreeableness: 0.7,
           conscientiousness: 0.6,
           emotionality: 0.4,
+          openness: 0.5,
         },
         norms: [{ normId: 'backbiting', standing: 'forbidden', conviction: 0.7 }],
       });
   }
+
+  p.values = {
+    selfDirection: 0.5,
+    stimulation: 0.5,
+    hedonism: 0.5,
+    achievement: 0.5,
+    power: 0.5,
+    security: 0.5,
+    conformity: 0.5,
+    tradition: 0.5,
+    benevolence: 0.5,
+    universalism: 0.5,
+  };
   seedNeighbours(p, now);
   return p;
 }
@@ -270,51 +263,34 @@ export function makeResident(id: Rid, seed: number, now: number): Person {
 function seedNeighbours(p: Person, now: number) {
   const id = p.id as Rid;
   const years: Record<Rid, number> = {
-    nermin: 40,
+    hacer: 0.1,
     sevim: 30,
     burak: 3,
-    huseyin: 22,
     derya: 8,
-    elif: 0.1,
     tarik: 45,
   };
   for (const o of RIDS) {
     if (o === id) continue;
     const known = Math.min(years[id], years[o]);
     const familiarity = Math.min(0.9, known / 30);
-    let affection = 0.15 + 0.2 * familiarity;
-    if ((id === 'nermin' && o === 'sevim') || (id === 'sevim' && o === 'nermin')) affection = -0.45;
-    if ((id === 'nermin' && o === 'tarik') || (id === 'tarik' && o === 'nermin')) affection = 0.6;
-    if (id === 'burak' && o === 'elif') affection = 0.45;
-    if (id === 'elif' && o === 'burak') affection = 0.25;
-    if (id === 'sevim' && o === 'elif') affection = -0.05;
+    const affection = 0.15 + 0.2 * familiarity;
     seedTie(p, { otherId: o, affection, familiarity, trust: 0.45 + 0.3 * familiarity });
     // Neighbours of many years believe each other more; the newcomer's word weighs little yet.
-    seedSourceTrust(p, o, o === 'elif' ? 0.45 : Math.min(0.8, 0.5 + 0.3 * familiarity));
+    seedSourceTrust(p, o, Math.min(0.8, 0.5 + 0.3 * familiarity));
   }
-  // The feud: each believes the other is nosy. Nermin thinks Hüseyin is stingy; everyone thinks Tarık is kind.
-  if (id === 'nermin') {
-    seedBelief(p, 'sevim:stingy', true, 0.78, now);
-    seedBelief(p, 'huseyin:stingy', true, 0.72, now);
-  }
-  if (id === 'sevim') {
-    seedBelief(p, 'nermin:nosy', true, 0.85, now);
-    seedBelief(p, 'elif:lazy', true, 0.62, now);
-  }
-  if (id === 'huseyin') {
+  // Burak holds the private building account. Shared observations do not reveal hobbies.
+
+  if (id === 'burak') {
     seedBelief(p, FACTS.dues, true, 0.97, now);
     seedBelief(p, 'notice:water', true, 0.97, now);
   }
-  if (id === 'derya') seedBelief(p, 'huseyin:kind', true, 0.7, now);
   if (id !== 'tarik') seedBelief(p, 'tarik:kind', true, 0.8, now);
-  // The new kapıcı: a stranger whose word weighs little. Nermin likes a new face; Sevim reserves judgement.
+  // The new kapıcı: a stranger whose word weighs little. Hacer likes a new face; Sevim reserves judgement.
   const word: Record<Rid, number> = {
-    nermin: 0.73,
+    hacer: 0.73,
     sevim: 0.48,
     burak: 0.55,
-    huseyin: 0.5,
     derya: 0.52,
-    elif: 0.62,
     tarik: 0.6,
   };
   seedSourceTrust(p, KAPICI, word[id]);
@@ -333,11 +309,10 @@ export function makeKapici(seed: number, now: number): Person {
     traits: { honesty: 0.6, extraversion: 0.5 },
     enable: { fatigueStore: true },
   });
-  // Rıza Efendi's notebook: what forty years on these stairs taught him, now yours.
-  seedBelief(p, 'nermin:nosy', true, 0.8, now);
-  seedBelief(p, 'huseyin:stingy', true, 0.72, now);
+  // The former caretaker’s notebook includes only ordinary observations.
+  seedBelief(p, 'hacer:nosy', true, 0.8, now);
   seedBelief(p, 'tarik:kind', true, 0.85, now);
-  // Hüseyin Bey's notice on the board by your door: the water goes off on Wednesday morning.
+  // Burak Bey's notice on the board by your door: the water goes off on Wednesday morning.
   seedBelief(p, 'notice:water', true, 0.95, now);
   for (const r of RIDS) seedSourceTrust(p, r, 0.6);
   return p;

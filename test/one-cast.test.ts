@@ -59,7 +59,7 @@ async function returnControl(
   return createPersona({
     format: 'hf-persona/1',
     castId: source.castId,
-    castRevision: '1',
+    castRevision: '2',
     branchId: source.branchId,
     parentRevision: source.revision,
     source: { game: 'hearsay', build: 'test', engine: p.engine, rules: '4' },

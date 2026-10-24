@@ -18,7 +18,7 @@ import {
   travelMinutes,
 } from '../src/sim/game.ts';
 import type { Rid } from '../src/sim/people.ts';
-import { STORY_FACTS } from '../src/sim/stories.ts';
+import { PRIVATE_FACTS, STORY_FACTS } from '../src/sim/stories.ts';
 
 function visit(s: ReturnType<typeof newGame>, who: Rid) {
   s.k.at = `door:${who}`;
@@ -40,33 +40,33 @@ function tell(s: ReturnType<typeof newGame>, who: Rid, prop: string, value = tru
 
 describe('v4 hidden resident stories', () => {
   it('keeps legacy state shape and gates clues on trust and repeated sitting', () => {
-    expect(newGame(11, 'stairwell@3')).not.toHaveProperty('stories');
+    expect(() => newGame(11, 'stairwell@3')).toThrow(/Start fresh/);
     const s = newGame(11);
-    s.k.at = 'door:nermin';
-    act(s, { kind: 'sit', who: 'nermin' });
-    expect(s.secrets[STORY_FACTS.nermin]).toBeUndefined();
-    sitting(s, 'nermin', 2);
-    expect(s.secrets[STORY_FACTS.nermin]).toBeUndefined();
-    sitting(s, 'nermin', 3);
-    expect(s.secrets[STORY_FACTS.nermin]).toBe(3);
+    s.k.at = 'door:hacer';
+    act(s, { kind: 'sit', who: 'hacer' });
+    expect(s.secrets[STORY_FACTS.hacer]).toBeUndefined();
+    sitting(s, 'hacer', 2);
+    expect(s.secrets[STORY_FACTS.hacer]).toBeUndefined();
+    sitting(s, 'hacer', 3);
+    expect(s.secrets[STORY_FACTS.hacer]).toBe(3);
   });
 
   it('requires both discovered accounts and truthful cross-resident tells before tea', () => {
     const s = newGame(11);
-    tell(s, 'sevim', STORY_FACTS.nermin);
-    expect(s.stories?.feud.nerminPassed).toBe(false);
-    for (const who of ['nermin', 'sevim'] as const) for (const day of [1, 2, 3]) sitting(s, who, day);
-    expect(tellables(s, 'burak').find((x) => x.prop === STORY_FACTS.nermin)?.words).toContain('dolma recipe');
-    tell(s, 'sevim', STORY_FACTS.nermin, false);
-    expect(s.stories?.feud.nerminPassed).toBe(false);
-    tell(s, 'sevim', STORY_FACTS.nermin);
-    tell(s, 'nermin', STORY_FACTS.sevim);
-    const affection = relationshipWith(personOf(s, 'nermin'), 'sevim').affection;
+    tell(s, 'sevim', STORY_FACTS.hacer);
+    expect(s.stories?.feud.hacerPassed).toBe(false);
+    for (const who of ['hacer', 'sevim'] as const) for (const day of [1, 2, 3]) sitting(s, who, day);
+    expect(tellables(s, 'burak').find((x) => x.prop === STORY_FACTS.hacer)?.words).toContain('notice');
+    tell(s, 'sevim', STORY_FACTS.hacer, false);
+    expect(s.stories?.feud.hacerPassed).toBe(false);
+    tell(s, 'sevim', STORY_FACTS.hacer);
+    tell(s, 'hacer', STORY_FACTS.sevim);
+    const affection = relationshipWith(personOf(s, 'hacer'), 'sevim').affection;
     s.minute = dayStart(6) + 17 * 60 - 1;
     s.k.walk = null;
     step(s);
     expect(s.stories?.feud.reconciled).toBe(true);
-    expect(relationshipWith(personOf(s, 'nermin'), 'sevim').affection).toBeGreaterThan(affection);
+    expect(relationshipWith(personOf(s, 'hacer'), 'sevim').affection).toBeGreaterThan(affection);
     expect(s.stamps.filter((x) => x.id === 'two_cups')).toHaveLength(1);
     step(s);
     expect(s.stamps.filter((x) => x.id === 'two_cups')).toHaveLength(1);
@@ -75,11 +75,11 @@ describe('v4 hidden resident stories', () => {
   it('requires the book and private consent, then repairs the boiler without charging the player', () => {
     const s = newGame(11);
     s.boilerBroken = true;
-    for (const who of ['huseyin', 'tarik'] as const) for (const day of [1, 2, 3]) sitting(s, who, day);
+    for (const who of ['burak', 'tarik'] as const) for (const day of [1, 2, 3]) sitting(s, who, day);
     expect(s.stories?.fund.bookRead).toBe(true);
-    tell(s, 'huseyin', STORY_FACTS.instalments);
-    visit(s, 'huseyin');
-    act(s, { kind: 'news', who: 'huseyin' });
+    tell(s, 'burak', STORY_FACTS.instalments);
+    visit(s, 'burak');
+    act(s, { kind: 'news', who: 'burak' });
     expect(s.stories?.fund.agreed).toBe(true);
     const money = s.k.money;
     s.minute = (s.stories?.fund.repairAt ?? 0) - 1;
@@ -94,9 +94,9 @@ describe('v4 hidden resident stories', () => {
   it('does not turn an invented repayment claim into consent or a repair', () => {
     const s = newGame(11);
     s.boilerBroken = true;
-    tell(s, 'huseyin', STORY_FACTS.instalments);
-    visit(s, 'huseyin');
-    act(s, { kind: 'news', who: 'huseyin' });
+    tell(s, 'burak', STORY_FACTS.instalments);
+    visit(s, 'burak');
+    act(s, { kind: 'news', who: 'burak' });
     expect(s.stories?.fund.agreed).toBe(false);
     expect(s.boilerBroken).toBe(true);
   });
@@ -116,13 +116,13 @@ function publicStoryRun() {
       for (const who of faceToFace(s)) {
         const resident = rOf(s, who);
         if (resident.sitDay !== dayOf(s.minute)) {
-          act(s, { kind: 'sit', who });
+          act(s, { kind: 'sit', who, ...(who === 'derya' ? { topic: 'boundaries' as const } : {}) });
           break;
         }
         const clues = [
-          ['sevim', STORY_FACTS.nermin, s.stories?.feud.nerminPassed],
-          ['nermin', STORY_FACTS.sevim, s.stories?.feud.sevimPassed],
-          ['huseyin', STORY_FACTS.instalments, s.stories?.fund.consentPassed],
+          ['sevim', STORY_FACTS.hacer, s.stories?.feud.hacerPassed],
+          ['hacer', STORY_FACTS.sevim, s.stories?.feud.sevimPassed],
+          ['burak', STORY_FACTS.instalments, s.stories?.fund.consentPassed],
         ] as const;
         for (const [listener, prop, passed] of clues)
           if (who === listener && s.secrets[prop] && !passed) {
@@ -130,24 +130,21 @@ function publicStoryRun() {
             expect(tellables(s, who).find((x) => x.prop === prop)?.words).toBeTruthy();
             act(s, { kind: 'tell', who, prop, value: true, sure: true });
           }
-        if (who === 'huseyin' && resident.newsDay !== dayOf(s.minute)) act(s, { kind: 'news', who });
+        if (who === 'burak' && resident.newsDay !== dayOf(s.minute)) act(s, { kind: 'news', who });
         if (dayOf(s.minute) < 3 && !resident.told.some((x) => x.prop === 'notice:water'))
           act(s, { kind: 'tell', who, prop: 'notice:water', value: true, sure: true });
-        // The player voices an impression; Friday's paper later confirms both claims.
-        for (const [prop, value] of [
-          ['elif:hardworking', true],
-          ['elif:lazy', false],
-        ] as const)
-          if (!resident.told.some((x) => x.prop === prop))
-            act(s, { kind: 'tell', who, prop, value, sure: false });
       }
       if (!s.k.walk) {
         const candidates = [
           ...new Set(openTasks(s).map((t) => (t.carried || !t.pickup ? t.place : t.pickup))),
         ].filter((place) => place !== s.k.at);
         candidates.sort((a, b) => travelMinutes(s, s.k.at, a) - travelMinutes(s, s.k.at, b));
-        const visits: Place[] = ['door:nermin', 'door:sevim', 'door:huseyin', 'door:tarik'];
-        const to = candidates[0] ?? visits[Math.floor(s.minute / 30) % visits.length];
+        const visits: Place[] = ['door:hacer', 'door:sevim', 'door:burak', 'door:tarik', 'door:derya'];
+        const visiting =
+          s.minute % 1440 >= 15 * 60 + 30 && s.minute % 1440 < 19 * 60
+            ? visits.find((place) => rOf(s, place.slice(5) as Rid).sitDay !== dayOf(s.minute))
+            : undefined;
+        const to = visiting ?? candidates[0] ?? visits[Math.floor(s.minute / 30) % visits.length];
         if (to) act(s, { kind: 'go', to });
       }
     }
@@ -159,7 +156,9 @@ function publicStoryRun() {
 
 it('discovers both stories through public actions and replays complete state and future outcomes exactly', () => {
   const original = publicStoryRun();
+
   expect(original.stories?.fund.agreed).toBe(true);
+  for (const fact of Object.values(PRIVATE_FACTS)) expect(original.secrets[fact], fact).toBeDefined();
   expect(original.stories?.feud.reconciled).toBe(false);
   const restored = replay(original.seed, original.inputs, original.minute, original.version);
   expect(restored).toEqual(original);
@@ -170,12 +169,7 @@ it('discovers both stories through public actions and replays complete state and
   expect(restored).toEqual(original);
 });
 
-it('keeps arbitrary legacy fact strings and narration unchanged', () => {
-  expect(claimWords(STORY_FACTS.nermin, true, 'stairwell@3')).toBe(STORY_FACTS.nermin);
-  expect(claimWords(STORY_FACTS.nermin, true, 'stairwell@4')).toContain('dolma recipe');
-  const legacy = newGame(1, 'stairwell@3');
-  visit(legacy, 'sevim');
-  act(legacy, { kind: 'tell', who: 'sevim', prop: STORY_FACTS.nermin, value: true, sure: true });
-  expect(personOf(legacy, 'sevim').memory.beliefs.find((x) => x.prop === STORY_FACTS.nermin)).toBeDefined();
-  expect(legacy).not.toHaveProperty('stories');
+it('uses current testimony wording and refuses old editions explicitly', () => {
+  expect(claimWords(STORY_FACTS.hacer, true, 'stairwell@6')).toContain('notice');
+  expect(() => newGame(1, 'stairwell@3')).toThrow(/Start fresh/);
 });

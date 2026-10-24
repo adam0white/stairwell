@@ -29,7 +29,7 @@ import {
   wordHint,
 } from '../src/sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../src/sim/people.ts';
-import { STORY_SECRETS } from '../src/sim/stories.ts';
+import { PRIVATE_SECRETS, STORY_SECRETS } from '../src/sim/stories.ts';
 
 interface Save {
   game: string;
@@ -48,18 +48,18 @@ if (!file) {
 const HELP = `Commands:
   new [seed]           start a new notebook (Monday 07:00)
   look                 what is in front of you
-  go <place>           walk somewhere: room, step, bakery, shop, roof, landing:<0-4>, or a name (nermin, sevim, burak, huseyin, derya, elif, tarik) for their door
+  go <place>           walk somewhere: room, step, bakery, shop, roof, landing:<0-4>, or a name (hacer, sevim, burak, derya, tarik) for their door
   task <n>             walk to where board item n needs you
   wait [minutes]       let time pass (default 15); stops early when someone new is in front of you or a new job appears
   news <name>          ask the person in front of you "Anything new?"
   tell <name> <n> [sure]   pass on item n from your notebook (add "sure" to say it for certain)
   tells <name>         list what you could tell them
   invent <name> <about> <trait>   make something up; traits: ${INVENTABLE.join(', ')}, or sweet:<name>
-  sit <name>           sit a minute with them (ten minutes, once a day each)
+  sit <name> [boundaries]   sit ten minutes; Derya can be asked about work boundaries and training
   word <name>          ask them for a word for you at Sunday's meeting
   misdeliver <name> <task n>   leave someone else's parcel at this door
   knock <name>         ring the bell even though the flat is quiet
-  prank gate|swap      leave the courtyard gate on the latch / swap Nermin's and Sevim's papers
+  prank gate|swap      leave the courtyard gate on the latch / swap Hacer's and Sevim's papers
   notebook             your notebook: the flats, the building's secrets, stamps
   next                 turn the page (at night, or Sunday)
   export               print the playtest file (seed + inputs + state)`;
@@ -237,7 +237,11 @@ function main() {
       send({ kind: 'word', who: rid(a0) });
       break;
     case 'sit':
-      send({ kind: 'sit', who: rid(a0) });
+      send({
+        kind: 'sit',
+        who: rid(a0),
+        ...(a0 === 'derya' && args[1] === 'boundaries' ? { topic: 'boundaries' } : {}),
+      });
       advance(s, 10, true);
       break;
     case 'misdeliver': {
@@ -260,7 +264,7 @@ function main() {
       send({ kind: 'next' });
       break;
     case 'notebook':
-      for (const x of s.stories ? [...SECRET_PROPS, ...STORY_SECRETS] : SECRET_PROPS)
+      for (const x of s.stories ? [...SECRET_PROPS, ...STORY_SECRETS, ...PRIVATE_SECRETS] : SECRET_PROPS)
         console.log(`  ${s.secrets[x.prop] !== undefined ? x.title : '…'}`);
       console.log(`Stamps: ${s.stamps.map((x) => x.id).join(', ') || 'none'}`);
       return;

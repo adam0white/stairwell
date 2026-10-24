@@ -480,10 +480,10 @@ export class StairwellAdapter {
         mischief: true,
       });
     const carried = (who) => s.tasks.some((t) => t.kind === 'bread' && t.for === who && t.carried && !t.done);
-    if (carried('nermin') && carried('sevim') && s.swappedDay !== dayOf(s.minute))
+    if (carried('hacer') && carried('sevim') && s.swappedDay !== dayOf(s.minute))
       out.push({
         id: 'prank:swap:sport',
-        label: "swap Nermin's and Sevim's papers",
+        label: "swap Hacer's and Sevim's papers",
         kind: 'prank',
         promise: 0.06,
         mischief: true,
