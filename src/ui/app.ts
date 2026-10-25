@@ -104,6 +104,8 @@ const ui: Ui = {
 };
 
 const notice = telemetryNotice();
+// Leave room for wider system fonts while keeping the shared notice node and type size.
+if (notice) notice.style.paddingInline = '2px';
 function mountNotice() {
   if (!notice || document.getElementById('telemetry-footer')) return;
   const footer = document.createElement('footer');

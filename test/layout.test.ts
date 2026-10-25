@@ -938,6 +938,8 @@ it('keeps the actual compact notice and wrapper readable without reserved blank 
           node: box.height,
           wrapper: wrapper.height,
           font: parseFloat(style.fontSize),
+          fontFamily: style.fontFamily,
+          contentWidth: el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
           textBottom: text.bottom,
           bottom: box.bottom,
           clipped: el.scrollHeight > el.clientHeight,
@@ -946,7 +948,8 @@ it('keeps the actual compact notice and wrapper readable without reserved blank 
       });
     const normal = await measure();
     expect(normal.font).toBeGreaterThanOrEqual(14);
-    expect(normal.wrapper).toBeLessThanOrEqual(40);
+    expect(normal.wrapper, JSON.stringify(normal)).toBeLessThanOrEqual(40);
+    expect(normal.contentWidth).toBeGreaterThanOrEqual(354);
     expect(normal.wrapper).toBeCloseTo(normal.node, 1);
     expect(normal.clipped).toBe(false);
     expect(normal.overflow).toBe(false);
