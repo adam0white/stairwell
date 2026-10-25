@@ -2,6 +2,34 @@
 
 ## What remains
 
+Owner acceptance of the cross-game feel remains separate, with review on 2026-11-03. Design and Deferred work belong to the games-deferred owner. Docsweb starts no playtest rounds. The playtest director may run lab-panel rounds on HF3 builds; friends’ playtests and Show HN remain paused. No new owner acceptance or completed lab cycle is claimed here.
+
+## Current source and deployed receipt — 2026-10-25
+
+Fetched `origin/main` and this documentation baseline both identify signed `270e625f9eaa81e186fa324196098c09355ea50a`. Independently fetched live `/release.json` identifies that same commit, app0.1.0, framework3.0.0 and `dirty:false`. The prior delivery report records exact green CI40235833549, 168 tests, 105 lint warnings and browser controls; those are delivery receipts, not a new docsweb test or human journey.
+
+Source pins HF3.0.0/engine2.23.0, immutable client0.4.10/kit0.5.11 and TypeScript7.0.2. Current notebook edition9 refuses older notebooks rather than changing their replay engine. The five canonical lives remain Derya44 revision2, Burak31, Sevim69, Tarık81 and Hacer58, introduced in edition7. App, package, engine, cast revision and notebook edition are distinct identifiers.
+
+The real native Hacer edition9/engine2.23 source fixture and finite central receiver have controlled exact-replay evidence in `~/code/.lab-scratch/v3/stairwell/report.md`. The receiver also retains the exact historical8/2.21 pair. This proves bounded source/receiving replay, not a new production human ownership journey. Current Hearsay mounts its garden, not the retired Derya shell. Do not infer a current Derya route from synthetic historical controls.
+
+## Current controls and storage
+
+The caretaker delivers supplies through Saturday, then attends Sunday’s vote on extra pay. Orders and building destinations preview trips; Go starts travel and arrival handles pickups/deliveries. Conversation offers news, stories and sitting together; support requests begin Thursday. Notebook and Clock speed are gameplay controls. The menu pauses play and contains Resume, Feedback, Full screen, All games, Recording and confirmed New game.
+
+The notebook saves locally in this browser, including timed inputs, minute and pinned continuity state. Continue restores it. Imports do not grant source ownership. Current exports replay deterministically; exact-parent checks and explicit alternatives preserve history. Recording links play across games on this device while enabled. Feedback shares an available run when Recording is on or Share is chosen. The source does not yet expose the newly authorized “I'm stopping” and “I'm confused” choices; do not describe them as shipped.
+
+Exports are diagnostic controls under `?lab=1`: Feedback → Keep a copy of this run, or Download this run at the ending. Title-page Lab tools → Load a playtest run imports a file. Downloads retain replay and continuity data but omit the derived state summary. The old ordinary-menu export description is superseded. The earlier manual download timeout below is historical; the HF3 report records an automated UI download and exact current replay. It does not turn that older manual attempt into a successful receipt.
+
+## Operations
+
+Use the managed worktree helper, Node>=24 and `/opt/homebrew/bin` first. Hold HF `scripts/suite-lock.ts` once around the normal full `npm run check:lane` and deployment; Stairwell does not take the lock. New launches require8GB free; stop below5GB. Preserve other workers, saves and shared-profile browser leases. Keep signing enabled and include `Co-Authored-By: Codex <noreply@openai.com>`. Fetch/rebase before push, require exact green CI, and verify the clean live manifest after an app deployment. Source-only documentation needs no app deployment.
+
+Current technical receipts: `~/code/.lab-scratch/v3/stairwell/report.md` and STATUS. Canonical history: [docs/cast-adoption.md](docs/cast-adoption.md). HF3 contract: [docs/hf3-adoption.md](docs/hf3-adoption.md). Preserve owner words and historical receipts below; their package versions, incomplete phases and task-specific round restrictions describe their dates, not current source or current lab-panel authorization.
+
+## Historical handoff entries — retained 2026-10-25
+
+## What remains
+
 Canonical adoption and its technical delivery are verified. Owner review of the cross-game feel remains on 2026-11-03; no owner acceptance or human recognition is claimed. The earlier Voice Hacer ownership conflict was resolved through the supported explicit alternative flow. It is not a current journey blocker.
 
 The manual browser download receipt remains unverified. Keep a copy was clicked, but the supported download event timed out. Browser security rejected internal Downloads inspection; no workaround was used. Preserved source export payloads, exact source-file replay and automated target export/replay controls are separate successful evidence. They do not prove a manual download completed.
