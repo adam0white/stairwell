@@ -8,4 +8,4 @@ Use the shared managed worktree tool. Prefix Node commands with PATH=/opt/homebr
 
 Use exact released HF/vendor pins. Keep signing enabled and include Co-Authored-By: Codex <noreply@openai.com>. Fetch/rebase origin/main before push. Exact pushed CI must pass before normal deployment; verify live /release.json commit/framework/dirty:false. Write receipts and proposed ledger rows in the cast scratch reports, not the central HF ledger.
 
-Plain-English and simplify policy: [docs/lab/plain-english.md](docs/lab/plain-english.md). Preserve replay text through display projections and retain all Turkish words and names.
+Plain-English and simplify policy: [docs/lab/plain-english.md](docs/lab/plain-english.md). Preserve replay text through display projections. Keep the setting and person/place names. Translate common Turkish words into plain English under F-493 and the linked policy.
