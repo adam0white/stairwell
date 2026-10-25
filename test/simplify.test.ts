@@ -8,19 +8,21 @@ it('projects prose without mutating the saved simulation or replay', () => {
   const opening = state.said.map((x) => displayText(x.text)).join(' ');
   expect(opening).toContain('Deliver the bread first.');
   expect(opening).toContain('Lale Apartmanı');
-  expect(opening).toContain('Burak Bey');
+  expect(opening).toContain('Mr Burak');
   expect(opening).toContain('10:00 to 12:00');
   expect(JSON.stringify(state)).toBe(before);
   expect(replay(7, [], state.minute).said).toEqual(state.said);
 });
 
-it('keeps uncertainty and cultural words in alternate dialogue', () => {
-  expect(displayText('Thanks, abi. Really. (₺5)')).toBe('Thanks, abi. I mean it. (₺5)');
-  expect(displayText('Old news, evladım.')).toBe('That is old news, evladım.');
+it('translates common Turkish words and keeps uncertainty in alternate dialogue', () => {
+  expect(displayText('Thanks, abi. Really. (₺5)')).toBe('Thanks, my friend. I mean it. (₺5)');
+  expect(displayText('Old news, evladım.')).toBe('That is old news, my child.');
   expect(displayText('The same man at flat 5 again, late. He carried a bag this time.')).toBe(
     'The same man came to flat 5 late again. He carried a bag this time.',
   );
-  expect(displayText('Hacer pressed a slice of börek on you.')).toBe('Hacer gave you a slice of börek.');
+  expect(displayText('Hacer pressed a slice of börek on you.')).toBe(
+    'Hacer gave you a slice of savoury pastry.',
+  );
   expect(displayText('Burak is not sweet on Derya.')).toBe(
     'Burak does not have romantic feelings for Derya.',
   );
@@ -44,5 +46,20 @@ it('explains alternate thanks, night margins and uncertain vote forecasts litera
     ),
   ).toBe(
     'Think about the vote before you sleep. Hacer will probably vote for your raise. Sevim may vote for your raise. Four votes will raise the tea money.',
+  );
+});
+
+it('projects titles, currency and imported-note terms while preserving people and places', () => {
+  expect(displayText('The new kapıcı. Kapıcı. Hacer Hanım. Tarık Bey. Rıza Efendi.')).toBe(
+    'The new caretaker. Caretaker. Ms Hacer. Mr Tarık. Mr Rıza.',
+  );
+  expect(displayText('Here is the book. Every kuruş. One flat is behind.')).toBe(
+    'Here is the book. Every hundredth of a lira is recorded. One flat is behind.',
+  );
+  expect(displayText('Don’t say anything to anyone, evladım.')).toBe(
+    'Don’t say anything to anyone, my child.',
+  );
+  expect(displayText('Derya brought börek to Lale Apartmanı in Istanbul.')).toBe(
+    'Derya brought savoury pastry to Lale Apartmanı in Istanbul.',
   );
 });

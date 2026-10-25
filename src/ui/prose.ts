@@ -123,7 +123,7 @@ const COPY: Record<string, string> = {
   'Flat 5 again after eleven.': 'The man came to flat 5 again after eleven.',
   'Sunday. The residents’ meeting in Burak Bey’s flat. Tea, the good glasses.':
     'It is Sunday. The residents meet in Burak Bey’s flat. He serves tea in the good glasses.',
-  'Here is the book. Every kuruş.': 'Here is the book. Every kuruş is recorded.',
+  'Here is the book. Every kuruş.': 'Here is the book. Every hundredth of a lira is recorded.',
   'The ginger cat again. Burak has started calling it Pamuk.':
     'The ginger cat came back. Burak has started calling it Pamuk.',
   'It came back to you. It always does, in a building. Lie low a day.':
@@ -147,6 +147,7 @@ export function displayText(text: string): string {
   // Longer keys first prevent a short thank-you from swallowing a longer variant.
   let result = text;
   for (const [before, after] of REWRITES) result = result.replaceAll(before, after);
+  result = englishTerms(result);
   return result
     .replace(/\bis sweet on\b/g, 'has romantic feelings for')
     .replace(/\bis not sweet on\b/g, 'does not have romantic feelings for')
@@ -180,6 +181,18 @@ export function displayText(text: string): string {
           )} Four votes will raise the tea money.`,
     )
     .replace(/would not count on that word for Sunday/g, 'could no longer count on their support on Sunday');
+}
+
+function englishTerms(text: string): string {
+  // Translate display text only, including old notebook lines and imported public notes.
+  return text
+    .replace(/\b[Kk]apıcı(?=$|[^\p{L}])/gu, (role) => (role === 'Kapıcı' ? 'Caretaker' : 'caretaker'))
+    .replace(/([\p{L}]+) Hanım(?=$|[^\p{L}])/gu, 'Ms $1')
+    .replace(/([\p{L}]+) (?:Bey|Efendi)(?=$|[^\p{L}])/gu, 'Mr $1')
+    .replace(/\babi(?=$|[^\p{L}])/gu, 'my friend')
+    .replace(/\bevladım(?=$|[^\p{L}])/gu, 'my child')
+    .replace(/\bbörek(?=$|[^\p{L}])/gu, 'savoury pastry')
+    .replace(/\bkuruş(?=$|[^\p{L}])/gu, 'hundredth of a lira');
 }
 
 export function residentRead(read: { warmth: string; word: string }): { warmth: string; word: string } {
