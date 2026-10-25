@@ -58,12 +58,12 @@ import { canWait, playback, untilSomethingHappens } from './playback.ts';
 import { isSaved, type Saved } from './save.ts';
 
 let stage: ReturnType<typeof phoneStage> | null = null;
-let buildingExpanded = false;
 
 let selectedSpeed: number | null = null;
 let infoOpen = false;
 let selection: { to: Place; person: Rid | null; task: number | null } | null = null;
 const SAVE_KEY = 'stairwell:notebook';
+const journalResizes = new WeakMap<HTMLElement, ResizeObserver>();
 const journalPositions = new WeakMap<
   HTMLElement,
   { position: ReturnType<typeof journalPosition>; top: number }
@@ -380,7 +380,6 @@ async function begin(s: GameState, file = false) {
     if (serial !== loadSerial) return;
     ui.s = s;
     selection = null;
-    buildingExpanded = false;
     ui.sheet = 'none';
     ui.sheetFor = null;
     ui.pendingPerson = null;
@@ -419,19 +418,13 @@ export async function start() {
   // Font swaps can reflow the log after render, without advancing the game clock.
   document.fonts.addEventListener('loadingdone', () => {
     const el = app().querySelector<HTMLElement>('.journal');
-    const saved = el && journalPositions.get(el);
-    if (el && saved && el.clientHeight > 0) {
-      // A reader may have scrolled before its queued scroll event is delivered.
-      const position = el.scrollTop === saved.top ? saved.position : journalPosition(el);
-      restoreJournalPosition(el, position);
-    }
+    if (el) restoreJournalAfterReflow(el);
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) save();
   });
   window.addEventListener('pagehide', save);
   window.addEventListener('resize', () => {
-    if (matchMedia('(min-width: 900px)').matches) buildingExpanded = false;
     if (ui.s?.phase === 'day') render(false);
   });
   requestAnimationFrame(loop);
@@ -1117,6 +1110,14 @@ function journalPosition(el: HTMLElement | null) {
   };
 }
 
+function restoreJournalAfterReflow(el: HTMLElement) {
+  const saved = journalPositions.get(el);
+  if (!saved || el.clientHeight === 0) return;
+  // Honour a reader's scroll even when its scroll event is still queued.
+  const position = el.scrollTop === saved.top ? saved.position : journalPosition(el);
+  restoreJournalPosition(el, position);
+}
+
 function rememberJournalScroll(el: HTMLElement) {
   if (el.clientHeight === 0) return;
   const saved = journalPositions.get(el);
@@ -1125,14 +1126,22 @@ function rememberJournalScroll(el: HTMLElement) {
 }
 
 function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof journalPosition>) {
-  if (!journalPositions.has(el)) {
+  if (!journalResizes.has(el)) {
     el.addEventListener('scroll', () => rememberJournalScroll(el));
+    const observer = new ResizeObserver(() => {
+      if (!el.isConnected) observer.disconnect();
+      else restoreJournalAfterReflow(el);
+    });
+    journalResizes.set(el, observer);
   }
   const lines = s.said.filter((x) => dayOf(x.at) === dayOf(s.minute) || x.kind === 'margin').slice(-40);
   const key = lines.map((x) => `${x.n}:${x.at}:${x.text}`).join('|');
   if (el.dataset.k !== key) {
     el.dataset.k = key;
     el.innerHTML = lines.map(saidLine).join('');
+    const observer = journalResizes.get(el);
+    observer?.disconnect();
+    for (const row of el.children) observer?.observe(row);
   }
   restoreJournalPosition(el, position);
 }
@@ -1441,7 +1450,7 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
       <button data-a="tell" ${!present ? 'disabled' : ''}>Tell…</button>
       <button data-a="sit" ${sat || !present ? 'disabled' : ''}>Sit together${sat ? '<span class="h">You sat together today. Return tomorrow.</span>' : ''}</button>
       ${who === 'derya' ? `<button data-a="sit-boundaries" ${sat || !present ? 'disabled' : ''}>Ask about work boundaries and training${sat ? '<span class="h">You sat together today. Return tomorrow.</span>' : ''}</button>` : ''}
-      <button data-a="word" ${r.word || !present ? 'disabled' : ''}>Will you support my raise on Sunday?<span class="h">${r.word ? (r.word === 'yes' ? 'promised' : 'said no') : dayOf(s.minute) < 4 ? 'too early' : wordHint(s, who)}</span></button>
+      <button data-a="word" ${r.word || !present ? 'disabled' : ''}>Will you support my raise on Sunday?<span class="h">${r.word ? (r.word === 'yes' ? 'promised' : 'said no') : wordHint(s, who)}</span></button>
     </div>`;
 }
 

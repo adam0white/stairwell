@@ -23,3 +23,7 @@ Pin the framework in both direct dependencies and npm overrides. The immutable l
 Name the resident in relationship descriptions and use the resident’s pronoun in the same sentence. Write missed errands as actions. Check every task family, including optional requests admitted with character history. A collected bag can still be undelivered; describe delivery, not collection, in the night summary. Keep assignment values in life state and omit internal assignment labels from player instructions. The boiler label prefix still triggers its discovery, so keep that semantic label intact. Route chips show walking and arrival times without framework narration.
 
 Technical delivery and final worktree cleanup are recorded in `~/code/.lab-scratch/plain3/stairwell-report.md`. The owner’s reading acceptance remains separate on 2026-11-03.
+
+## HF3 source boundary, 2026-10-25
+
+Edition9 uses HF3.0.0/engine2.23.0 and immutable client0.4.10/kit0.5.11. The fresh SDK already pins HF3, so the obsolete2.21 override is removed. `npm ls` must show one published3.0.0 dependency graph. Older notebooks require Start fresh. Plain English remains persisted in actual actors; no display projection rewrites replay state. See docs/hf3-adoption.md and the v3 scratch report for source and delivery proof.

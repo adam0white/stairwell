@@ -5,6 +5,10 @@ import { act, canReplay, GAME_VERSION, replay, step } from '../src/sim/game.ts';
 import { isSaved } from '../src/ui/save.ts';
 
 describe('canonical edition replay', () => {
+  it('refuses engine-2.21 edition 8 rather than silently replaying it with HF3', () => {
+    expect(canReplay('stairwell@8')).toBe(false);
+    expect(() => replay(7, [], 420, 'stairwell@8')).toThrow(/Start fresh/);
+  });
   it('refuses the frozen old-cast notebook instead of silently replacing its people', () => {
     const fixture = JSON.parse(
       readFileSync(new URL('./fixtures/stairwell-v3-notebook.json', import.meta.url), 'utf8'),

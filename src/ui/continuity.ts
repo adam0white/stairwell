@@ -21,8 +21,6 @@ let linkageKnown = false;
 let gateSerial = 0;
 let gatedGame: GameState | undefined;
 let gatedFile = false;
-let manualDenied: GameState | undefined;
-const choices: Promise<void> = Promise.resolve();
 /** Invalidate before any asynchronous run/load/reset work. Never consult gated playerId. */
 export function invalidateContinuity(): void {
   ++gateSerial;
@@ -47,11 +45,6 @@ const build = () => lab.build().c ?? 'development';
 const message = (error: unknown) =>
   error instanceof Error ? error.message : 'Character history is unavailable. Download a copy of your game.';
 const recordingKey = (g: GameState) => g.oneCast?.head?.branchId ?? g.oneCast?.recordingFileKey ?? null;
-const headsOf = (g: GameState) => (g.oneCast?.head ? [g.oneCast.head] : []);
-const selected = (g: GameState) =>
-  headsOf(g)
-    .map((h) => `${h.castId}/${h.branchId}/${h.revision}`)
-    .join(':');
 export async function gateContinuity(g: GameState | undefined, file = false): Promise<void> {
   ++gateSerial;
   gatedGame = g;
@@ -166,7 +159,7 @@ async function claimArrival(
   const claim = await createPersona({
     ...body,
     parentRevision: revision,
-    source: { game: 'stairwell', build: build(), engine: '2.21.0', rules: '8' },
+    source: { game: 'stairwell', build: build(), engine: '2.23.0', rules: '9' },
     transfer: {
       ...body.transfer,
       admission: { adapter: 'stairwell-one-cast/1', claimId: crypto.randomUUID() },

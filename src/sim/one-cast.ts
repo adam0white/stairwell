@@ -94,7 +94,7 @@ export async function createDeryaCheckpoint(
     castRevision: '2',
     branchId: options.branchId,
     parentRevision: options.parentRevision,
-    source: { game: 'stairwell', build: options.build, engine: person.engine, rules: '8' },
+    source: { game: 'stairwell', build: options.build, engine: person.engine, rules: '9' },
     transfer: {
       person: projection,
       history: [
@@ -303,7 +303,7 @@ export async function validateDeryaContinuity(s: GameState): Promise<void> {
     if (head.castId !== DERYA_CAST || head.castRevision !== '2')
       return fail('The saved character does not match Derya in this version.');
     if (!s.oneCast.admission) {
-      if (head.source.game !== 'stairwell' || head.source.rules !== '8')
+      if (head.source.game !== 'stairwell' || head.source.rules !== '9' || head.source.engine !== '2.23.0')
         return fail('The saved departure comes from an unsupported game or version.');
       const checkpoint = s.oneCast.lastCheckpoint ?? personOf(s, 'derya');
       const stamp = head.transfer.checkpoint as ReturnTypeShape;

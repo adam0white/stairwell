@@ -39,7 +39,7 @@ it('carries actual acquired fitness, temperament and RNG through a declared nati
     castRevision: '1',
     branchId: 'actual-control',
     parentRevision: null,
-    source: { game: 'stairwell', build: 'test', engine: '2.21.0', rules: '8' },
+    source: { game: 'stairwell', build: 'test', engine: '2.23.0', rules: '9' },
     transfer: { ...captured.transfer, life: initialPersonaLife('hf.cast.hacer.voice', 'actual-control', 0) },
     limitations: captured.transfer.person.person.limitations,
   });
@@ -80,11 +80,38 @@ it('does not erase source-world financial obligations in a new opening', async (
     castRevision: '1',
     branchId: 'account-control',
     parentRevision: null,
-    source: { game: 'stairwell', build: 'test', engine: '2.21.0', rules: '8' },
+    source: { game: 'stairwell', build: 'test', engine: '2.23.0', rules: '9' },
     transfer: { ...transfer, life: initialPersonaLife('hf.cast.burak.stairwell', 'account-control', 0) },
     limitations: [],
   });
   expect(() => admitCast(preparePersonaLife(parent, 100000), makeResident('burak', 7, 380))).toThrow(
     /account or dues/,
   );
+});
+
+it('refuses native edition and engine pairs that were never admitted', async () => {
+  const actual = makeResident('hacer', 19, 600);
+  const { transfer } = await sourceTransfer(actual, []);
+  for (const [rules, engine] of [
+    ['8', '2.23.0'],
+    ['9', '2.21.0'],
+    ['9', '2.24.0'],
+  ] as const) {
+    const parent = await createPersona({
+      format: 'hf-persona/1',
+      castId: 'hf.cast.hacer.voice',
+      castRevision: '1',
+      branchId: 'unsupported-native-engine',
+      parentRevision: null,
+      source: { game: 'stairwell', build: 'test', engine, rules },
+      transfer: {
+        ...transfer,
+        life: initialPersonaLife('hf.cast.hacer.voice', 'unsupported-native-engine', 0),
+      },
+      limitations: [],
+    });
+    expect(() => admitCast(preparePersonaLife(parent, 100000), makeResident('hacer', 7, 380))).toThrow(
+      /source role|format/,
+    );
+  }
 });

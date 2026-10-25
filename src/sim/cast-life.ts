@@ -63,14 +63,16 @@ export function admitCast(input: LifePreparation, opening: Person): Person {
     );
   const own =
     parent.source.game === 'stairwell' &&
-    parent.source.rules === '8' &&
+    ((parent.source.rules === '8' && parent.source.engine === '2.21.0') ||
+      (parent.source.rules === '9' && parent.source.engine === '2.23.0')) &&
     parent.transfer.castPassport === 'stairwell-cast/1';
   const voice =
     parent.source.game === 'voice' &&
     parent.source.rules === 'cast-1' &&
+    parent.source.engine === '2.21.0' &&
     parent.castId === 'hf.cast.hacer.voice' &&
     parent.transfer.castPassport === 'site-cast/1';
-  if ((!own && !voice) || parent.source.engine !== '2.21.0' || parent.transfer.sourceRole !== opening.id)
+  if ((!own && !voice) || parent.transfer.sourceRole !== opening.id)
     throw new Error(
       'This source role or character format is unsupported. Keep the chapter or export it. It will not be replaced with a new story.',
     );

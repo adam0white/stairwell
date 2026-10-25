@@ -53,6 +53,8 @@ async function returnControl(
 ) {
   const p = snapshot(personOf(s, 'derya'));
   if (mutate) mutate(p);
+  // Synthetic legacy-dialect control, not an actual HF3→Hearsay journey.
+  p.engine = '2.21.0';
   const person = projectPersona(p, { version: 'hearsay-stairwell/1', skills: {} });
   const source = s.oneCast?.head;
   if (!source) throw new Error('missing source head');

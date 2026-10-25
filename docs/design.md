@@ -27,33 +27,33 @@ Three concepts were written (kept below) and sent with the engine summary and th
 
 **Pick: A, The Stairwell.** All three chose it independently. It is the one concept where HF's testimony, source trust, reputation and conscience are the player's verbs. The cast is fixed, so lies come back. It has the classic time-management shape the owner liked in The Pass (bread rush, stairs, colliding requests) with the twist that every errand is also a doorway.
 
-| Craving (psych consult, 1 to 5) | A | B | C |
-|---|---|---|---|
-| Autonomy | 5 | 3 | 4 |
-| Competence | 3 | 4 | 4 |
-| Relatedness | 5 | 3 | 3 |
-| Ethical variable reward | 5 | 3 | 4 |
-| Curiosity gap | 5 | 4 | 3 |
-| Story to finish | 5 | 3 | 3 |
-| Mischief as benign violation | 5 | 3 | 3 |
+| Craving (psych consult, 1 to 5) | A   | B   | C   |
+| ------------------------------- | --- | --- | --- |
+| Autonomy                        | 5   | 3   | 4   |
+| Competence                      | 3   | 4   | 4   |
+| Relatedness                     | 5   | 3   | 3   |
+| Ethical variable reward         | 5   | 3   | 4   |
+| Curiosity gap                   | 5   | 4   | 3   |
+| Story to finish                 | 5   | 3   | 3   |
+| Mischief as benign violation    | 5   | 3   | 3   |
 
 ## Cravings map
 
-| Craving | Mechanic that serves it | HF faculty |
-|---|---|---|
-| Autonomy | Route and order of errands; at each door, keep, pass on, make it certain, or make something up; pranks; asking favours that a resident may refuse | `predict`/`decide` with the kapıcı as a voice; the player's words as `told` percepts |
-| Competence | Batch errands to spare your knees; learn who passes things on, who trusts you, who meets whom on the stairs; your word gets heavier as true things you said are confirmed | body and fatigue store; `memory.sourceTrust` moved by `confirm` |
-| Relatedness | The same seven households every day; they remember what you did for them and what you said; small kindnesses (Tarık's shopping) are noticed | relationships, `socialEvent`, reputation beliefs about the kapıcı |
-| Variable reward, ethical | Tips, börek and votes vary with trust, timing and what someone wanted to hear; every one has a cause written in the notebook; no login reward, no random bonus | relationships and beliefs; host tips from them |
-| Curiosity gap | Who is the man at Derya's at night? What is in the jeweller's parcel? Rıza's margin notes hint at what you have not seen | resident beliefs, told to you through `converse` |
-| Mastery curve | Day 1: few requests and your word weighs nothing. By Friday: routes, trust and who-talks-to-whom | source trust starts low for a stranger |
-| Collection and completion | The notebook's secrets page (Rıza filled the first entries, so it starts partly filled); stamps for kind and naughty deeds | the kapıcı's own beliefs are the notebook |
-| A story to finish | Three arcs through the week (the ring, the boiler fund, the late visitor) and the Sunday vote | arcs are host events; outcomes are residents' own decisions |
-| One more day | Each night page ends on one open question (the next day's first knock, a half-heard line) | host |
-| Low-friction sessions | One day is about four minutes; the notebook saves at every page; nothing happens while you are away | seed and input log |
-| Daily return without dark patterns | The building waits for you; no streaks, no decay for absence, the vote counts days played, not calendar days | host rule |
-| Mischief as play | Gossip, stretching a story, making one up, misdelivering a parcel, swapping newspapers, letting the stray cat in | `converse` (backbiting tag, deceit), source trust, `confirm` |
-| Social comparison | A spoiler-free share line of your week (tips, secrets found, times caught, the vote) | host |
+| Craving                            | Mechanic that serves it                                                                                                                                                   | HF faculty                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Autonomy                           | Route and order of errands; at each door, keep, pass on, make it certain, or make something up; pranks; asking favours that a resident may refuse                         | `predict`/`decide` with the kapıcı as a voice; the player's words as `told` percepts |
+| Competence                         | Batch errands to spare your knees; learn who passes things on, who trusts you, who meets whom on the stairs; your word gets heavier as true things you said are confirmed | body and fatigue store; `memory.sourceTrust` moved by `confirm`                      |
+| Relatedness                        | The same seven households every day; they remember what you did for them and what you said; small kindnesses (Tarık's shopping) are noticed                               | relationships, `socialEvent`, reputation beliefs about the kapıcı                    |
+| Variable reward, ethical           | Tips, börek and votes vary with trust, timing and what someone wanted to hear; every one has a cause written in the notebook; no login reward, no random bonus            | relationships and beliefs; host tips from them                                       |
+| Curiosity gap                      | Who is the man at Derya's at night? What is in the jeweller's parcel? Rıza's margin notes hint at what you have not seen                                                  | resident beliefs, told to you through `converse`                                     |
+| Mastery curve                      | Day 1: few requests and your word weighs nothing. By Friday: routes, trust and who-talks-to-whom                                                                          | source trust starts low for a stranger                                               |
+| Collection and completion          | The notebook's secrets page (Rıza filled the first entries, so it starts partly filled); stamps for kind and naughty deeds                                                | the kapıcı's own beliefs are the notebook                                            |
+| A story to finish                  | Three arcs through the week (the ring, the boiler fund, the late visitor) and the Sunday vote                                                                             | arcs are host events; outcomes are residents' own decisions                          |
+| One more day                       | Each night page ends on one open question (the next day's first knock, a half-heard line)                                                                                 | host                                                                                 |
+| Low-friction sessions              | One day is about four minutes; the notebook saves at every page; nothing happens while you are away                                                                       | seed and input log                                                                   |
+| Daily return without dark patterns | The building waits for you; no streaks, no decay for absence, the vote counts days played, not calendar days                                                              | host rule                                                                            |
+| Mischief as play                   | Gossip, stretching a story, making one up, misdelivering a parcel, swapping newspapers, letting the stray cat in                                                          | `converse` (backbiting tag, deceit), source trust, `confirm`                         |
+| Social comparison                  | A spoiler-free share line of your week (tips, secrets found, times caught, the vote)                                                                                      | host                                                                                 |
 
 ## The edge: a bit fun, slightly in our calculations
 
@@ -84,12 +84,12 @@ Three concepts were written (kept below) and sent with the engine summary and th
 
 ## Measure (`npm run measure`, 6 seeds, 2026-10-19, iteration 2)
 
-| Style | Tin (₺) | Treats | Times caught | Hands on Sunday (of 7) |
-|---|---|---|---|---|
-| Quiet: errands only | 244 | 3.3 | 0 | 0.5 |
-| Honest: errands, news, true things passed on | 692 | 4.0 | 2 | 6.5 |
-| Gossip: everything passed on "for certain" | 528 | 4.0 | 3 | 6.7 |
-| Liar: makes things up at every door | 432 | 7.3 | 14 | 0.8 |
+| Style                                        | Tin (₺) | Treats | Times caught | Hands on Sunday (of 7) |
+| -------------------------------------------- | ------- | ------ | ------------ | ---------------------- |
+| Quiet: errands only                          | 244     | 3.3    | 0            | 0.5                    |
+| Honest: errands, news, true things passed on | 692     | 4.0    | 2            | 6.5                    |
+| Gossip: everything passed on "for certain"   | 528     | 4.0    | 3            | 6.7                    |
+| Liar: makes things up at every door          | 432     | 7.3    | 14           | 0.8                    |
 
 **The edge in numbers.** Lying earns the most treats (7.3 against 4.0), because people like hearing what they want to hear. It is caught about 14 times a week and loses the vote. Gossip earns less money than honest service and about the same hands, because a kapıcı who tells everything is liked. This is the intended price: naughtiness pays in the short run and costs on Sunday, and honest service wins. Replay is exact for every style.
 
@@ -109,6 +109,7 @@ Three concepts were written (kept below) and sent with the engine summary and th
 6. No time passes while the player is away; nothing decays for absence.
 
 ## The world (host side, `src/sim`)
+
 - The building: ground floor (your room, flat 1, the front step), floors 1 to 4. Stairs cost minutes and effort; the kapıcı is an HF person with the opt-in fatigue store, so his legs carry the morning into the afternoon.
 - The day: 07:00 to 21:00. Bread and newspapers in the morning, parcels and small jobs, the evening on the stairs, bins at 20:00. Requests are pre-rolled from the seed per day.
 - Residents decide their own free time through HF (stay in, sit on the step, go to the shop, visit a neighbour). Two residents on the step, on the stairs at the same time, or visiting talk through `converse`.
@@ -118,10 +119,12 @@ Three concepts were written (kept below) and sent with the engine summary and th
 Five maintained residents: Hacer58, temporary entrance-side resident and retired shop assistant; Sevim69, widowed retired teacher; Burak31, single accountant and keeper of the building account; Derya44, single night nurse; Tarık81, widowed retired ferry captain. Flats4 and6 are unoccupied. See [the exhaustive census and playable discoveries](cast-adoption.md). Original identities and old romance/recipe history are retired, not transferred by renaming.
 
 ## Concepts not chosen
+
 - **B. Lost Property**, a ferry-terminal window where claimants describe what they lost and some lie. Rejected: a judgement puzzle at a window; one-off claimants give little relatedness; keeping things reads as theft.
 - **C. The Hostel**, a summer backpackers' hostel. Rejected: guests leave in a few nights, so lies never come back and memory and trust go unused; "I already run a booking desk" (wildcard).
 
 ## Deferred
+
 - Hidden resident backstories that progress with real outcomes, including hidden achievements and unlockable story paths and events (owner run `r-9m8bdyfbac`, [verbatim note](playtests/owner-2026-10-20.md); target: 2026-11-03). Not implemented in the log layout change.
 - Weeks 2 to 4 and the final vote on whether you stay (target: after round 2 of playtests).
 - The rainstorm under the awning (wildcard; target: week 2 build).
@@ -221,6 +224,7 @@ artifacts stay outside the repository. A builder's passing checks do not close
 the owner's pacing acceptance.
 
 ## Owner information and tally update (2026-10-21)
+
 The title’s job background opens through a small information button and a native dismissible popover. Its prose is retained. The menu no longer has a tally preference. The Sunday ending always computes Rıza’s recorded-work tally, hidden until “See tally” is pressed. Automatic pacing, gameplay answer disclosures, simulation rules, saves and replay remain unchanged. Adam accepts feel.
 
 Clock controls offer Automatic (the default), Slow, Steady and Fast. Selected rates apply to travel and empty stretches. Orders, conversation, inspection and new speech retain their existing protection. Until something happens remains guarded. These are page-session preferences; saves and replay inputs are unchanged.

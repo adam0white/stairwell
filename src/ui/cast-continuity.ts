@@ -48,18 +48,9 @@ let pending = Promise.resolve();
 const source = () => ({
   game: 'stairwell',
   build: lab.build().c ?? 'development',
-  engine: '2.21.0',
-  rules: '8',
+  engine: '2.23.0',
+  rules: '9',
 });
-const history = (g: GameState) => {
-  const heads = Object.fromEntries((g.castChapter?.claims ?? []).map((h) => [h.castId, h]));
-  Object.assign(heads, runtime(g).owned);
-  return ALLOCATION.flatMap((c) => (heads[c.castId] ? [heads[c.castId]!] : []));
-};
-const pin = (g: GameState) =>
-  history(g)
-    .map((h) => h.revision)
-    .join('/');
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message : 'Character history is unavailable. Download a copy of your game.';
 function recordingKey(r: Runtime): string {
@@ -296,7 +287,8 @@ export async function validateContinuity(g: GameState): Promise<void> {
         claim.parentRevision !== input.parent.revision ||
         claim.branchId !== input.parent.branchId ||
         claim.source.game !== 'stairwell' ||
-        claim.source.rules !== '8' ||
+        claim.source.rules !== '9' ||
+        claim.source.engine !== '2.23.0' ||
         canonicalPersona(claim.transfer.life) !== canonicalPersona(input.life)
       )
         throw new Error(
@@ -313,7 +305,8 @@ export async function validateContinuity(g: GameState): Promise<void> {
         head.castId !== id ||
         head.castRevision !== RESIDENTS[roleFor(id)].castRevision ||
         head.source.game !== 'stairwell' ||
-        head.source.rules !== '8'
+        head.source.rules !== '9' ||
+        head.source.engine !== '2.23.0'
       )
         throw new Error('The saved record of this game’s control of the character history is invalid.');
       const claim = header?.claims.find((h) => h.castId === id);

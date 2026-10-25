@@ -3,7 +3,7 @@ import { acceptPersona, createPersona } from '@adam0white/lab-client';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { act, type GameState, newGame, personOf, step } from '../src/sim/game.ts';
 
-const events = vi.hoisted(() => {
+vi.hoisted(() => {
   const target = new EventTarget();
   Object.defineProperty(globalThis, 'window', { configurable: true, value: target });
   return target;
@@ -63,7 +63,7 @@ async function pinned(scope: 'shared' | 'file' = 'shared'): Promise<GameState> {
     castRevision: '2',
     branchId: 'branch',
     parentRevision: null,
-    source: { game: 'stairwell', build: 'test', engine: person.engine, rules: '8' },
+    source: { game: 'stairwell', build: 'test', engine: person.engine, rules: '9' },
     transfer: { person: projection },
     limitations: projection.limitations,
   });
@@ -141,7 +141,9 @@ async function returnArrivalFixture() {
   prefix.oneCast!.head = source;
   prefix.oneCast!.scope = 'shared';
   prefix.oneCast!.lastCheckpoint = structuredClone(personOf(prefix, 'derya'));
-  const p = personOf(prefix, 'derya');
+  // Synthetic legacy-dialect control, not an actual HF3→Hearsay journey.
+  const p = structuredClone(personOf(prefix, 'derya'));
+  p.engine = '2.21.0';
   const projection = projectPersona(p, { version: 'hearsay-stairwell/1', skills: {} });
   const envelope = await createPersona({
     format: 'hf-persona/1',

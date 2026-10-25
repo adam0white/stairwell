@@ -1,5 +1,5 @@
 /* biome-ignore-all lint/style/noNonNullAssertion: The test must fail when required controls are missing. */
-import { type Browser, chromium, type Page } from 'playwright';
+import { type Browser, chromium, type Page, webkit } from 'playwright';
 import { createServer, type ViteDevServer } from 'vite';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 
@@ -10,13 +10,8 @@ beforeAll(async () => {
   server = await createServer({ server: { host: '127.0.0.1', port: 0 } });
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? '';
-  browser = await chromium.launch(
-    process.platform === 'darwin'
-      ? {
-          executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        }
-      : {},
-  );
+  // WebKit keeps the signed-in Chrome profile out of the synthetic fixture suite.
+  browser = await (process.platform === 'darwin' ? webkit : chromium).launch();
 });
 afterAll(async () => {
   await browser?.close();

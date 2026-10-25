@@ -53,3 +53,7 @@ The active report and evidence are ~/code/.lab-scratch/simplify/workers/stairwel
 ## 2026-10-24 final live text correction
 
 The d44fc58 compact footer passed exact CI and live browser checks. A stronger live last-line audit then reproduced a 360×690 defect: the opening journal could shrink to16px, and nested conversation scrolling could hide text. Preserve the building image and its44px tap targets. Reserve one complete journal line, allow the adjacent place sheet to shrink, and scroll the conversation sheet as a whole. The regression test exercises actual final text lines with the real notice still mounted. Rules, names, simulation and immutable packages stay unchanged. Final source/CI/deployment receipts remain in the simplify worker report; delivery is incomplete until the corrected source passes exact CI and a fresh live audit.
+
+## HF3 source migration, 2026-10-25
+
+Current source targets HF3.0.0/engine2.23.0, client0.4.10, kit0.5.11 and notebook edition9. Edition8 is refused with Start fresh rather than replayed under a different engine. Native source admission retains exact8/2.21 and9/2.23 tuples and all passport, role, cast, calendar and building-obligation guards. Thursday is named as the first day to ask for Sunday support. See docs/hf3-adoption.md for numbered request decisions and dated dependency exceptions. Dynamic source/receiver/review/CI/deploy/browser/cleanup receipts belong to `~/code/.lab-scratch/v3/stairwell/report.md`. Source readiness is not receiving completion. Owner acceptance remains2026-11-03.

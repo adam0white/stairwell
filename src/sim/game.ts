@@ -67,11 +67,10 @@ import {
 
 export const LEGACY_GAME_VERSION = 'stairwell@3';
 export const PREVIOUS_GAME_VERSION = 'stairwell@4';
-export const GAME_VERSION = 'stairwell@8';
+export const GAME_VERSION = 'stairwell@9';
 export const DAY_START = 7 * 60;
 export const DAY_END = 21 * 60;
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-export const LAST_DAY = 6;
 export const MEETING = 11 * 60;
 const GRATITUDE = 2.5;
 
@@ -685,7 +684,6 @@ function kapiciDoes(s: GameState, id: string, minutes: number, effort: number) {
 function home(r: RState): boolean {
   return r.where === 'home';
 }
-export const awakeHome = (r: RState) => r.where === 'home';
 const atStep = (s: GameState) => s.residents.filter((r) => r.where === 'step').map((r) => r.id);
 
 function freeOffers(s: GameState, r: RState): Affordance[] {
@@ -1987,6 +1985,7 @@ export function wordOffers(): Affordance[] {
 export const wordAsk: Suggestion = { voiceId: KAPICI, affordanceId: 'promise_word', strength: 0.5 };
 
 export function wordHint(s: GameState, who: Rid): string {
+  if (today(s) < 4) return 'Ask from Thursday.';
   const p = personOf(s, who);
   const r = predict(p, wordOffers(), wordAsk);
   return r.verdict === 'assented'
@@ -2006,10 +2005,7 @@ function askWord(s: GameState, who: Rid) {
     say(
       s,
       who,
-      pick(s, [
-        'Sunday? Ask me nearer the day. I hardly know you.',
-        'It’s only the start of the week. We’ll see.',
-      ]),
+      pick(s, ['Ask me from Thursday. I hardly know you yet.', 'Ask me from Thursday. We’ll see then.']),
       'voice',
     );
     return;

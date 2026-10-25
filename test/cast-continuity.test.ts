@@ -70,7 +70,7 @@ async function parent(id: 'hacer' | 'burak', fitness: number) {
     castRevision: '1',
     branchId: `source-${id}`,
     parentRevision: null,
-    source: { game: 'stairwell', build: 'test', engine: '2.21.0', rules: '8' },
+    source: { game: 'stairwell', build: 'test', engine: '2.23.0', rules: '9' },
     transfer: { ...transfer, life: initialPersonaLife(castId, `source-${id}`, 0) },
     limitations: [],
   });
@@ -195,7 +195,7 @@ it('restores only local accepted heads, refuses stale CAS and keeps imported rec
   const { closePersonaBranch } = await import('@adam0white/lab-client');
   const terminal = await closePersonaBranch(
     last,
-    { game: 'stairwell', build: 'test', engine: '2.21.0', rules: '8' },
+    { game: 'stairwell', build: 'test', engine: '2.23.0', rules: '9' },
     personOf(restored, 'hacer').now,
   );
   state = acceptPersonaBatch(state, [terminal]);

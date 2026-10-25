@@ -1,4 +1,5 @@
-import { type Browser, chromium, type Page } from 'playwright';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { type Browser, chromium, type Page, webkit } from 'playwright';
 import { createServer, type ViteDevServer } from 'vite';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { playWeek } from '../scripts/policy.ts';
@@ -12,11 +13,8 @@ beforeAll(async () => {
   server = await createServer({ server: { host: '127.0.0.1', port: 0 } });
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? '';
-  browser = await chromium.launch(
-    process.platform === 'darwin'
-      ? { executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }
-      : {},
-  );
+  // Use WebKit on the shared Mac; live Chrome checks use the existing signed-in browser.
+  browser = await (process.platform === 'darwin' ? webkit : chromium).launch();
 });
 
 afterAll(async () => {
@@ -183,14 +181,27 @@ it('follows new entries at the newest end of a full log', async () => {
   }
 });
 
-// Load a real local font after rendering, without relying on Google's network timing.
-// Courier New ships on macOS; Playwright's Linux dependencies include Liberation Mono.
+// Load a real font over HTTP after rendering. Local FontFace loads can complete
+// synchronously in WebKit and do not exercise its asynchronous font-loading events.
 it.each(['newest', 'older', 'pending scroll'])(
   'preserves the journal through a late font load (%s)',
   async (reading) => {
     const page = await testPage({ viewport: { width: 360, height: 780 } });
     try {
       await page.route('https://fonts.googleapis.com/**', (route) => route.abort());
+      const fontPath = [
+        '/System/Library/Fonts/Supplemental/Courier New.ttf',
+        '/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf',
+        '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
+      ].find((path) => existsSync(path));
+      if (!fontPath) throw new Error('Install the Playwright browser font dependencies.');
+      await page.route('**/__journal-test-font.ttf', (route) =>
+        route.fulfill({
+          body: readFileSync(fontPath),
+          contentType: 'font/ttf',
+        }),
+      );
       await importNotebook(page, 1254);
       if (await page.locator('.who [data-a=close]').isVisible())
         await page.locator('.who [data-a=close]').click();
@@ -223,9 +234,22 @@ it.each(['newest', 'older', 'pending scroll'])(
         const descriptors: FontFaceDescriptors & { sizeAdjust: string } = { sizeAdjust: '150%' };
         const font = new FontFace(
           'Journal test',
-          'local("Courier New"), local("Liberation Mono")',
+          `url("${location.origin}/__journal-test-font.ttf")`,
           descriptors,
         );
+        const journal = document.querySelector<HTMLElement>('.journal');
+        if (!journal) throw new Error('Expected the journal');
+        const originalHeight = journal.scrollHeight;
+        // Observe real browser layout. This observer never calls game code or changes scroll.
+        const reflowed = new Promise<void>((resolve) => {
+          const observer = new ResizeObserver(() => {
+            if (journal.scrollHeight !== originalHeight) {
+              observer.disconnect();
+              resolve();
+            }
+          });
+          for (const row of journal.children) observer.observe(row);
+        });
         document.fonts.add(font);
         const loaded = document.fonts.load('14px "Journal test"');
         if (pending) {
@@ -235,6 +259,7 @@ it.each(['newest', 'older', 'pending scroll'])(
         }
         await loaded;
         await document.fonts.ready;
+        await reflowed;
       }, reading === 'pending scroll');
       expect(await journal.evaluate((el) => el.scrollHeight)).toBeGreaterThan(before.height);
       if (reading === 'older') {
@@ -279,7 +304,7 @@ it.each([
       (inputs) =>
         localStorage.setItem(
           'stairwell:notebook',
-          JSON.stringify({ game: 'stairwell@8', seed: 7, inputs, minute: 440 }),
+          JSON.stringify({ game: 'stairwell@9', seed: 7, inputs, minute: 440 }),
         ),
       inputs,
     );
@@ -634,7 +659,7 @@ it('preserves the current notebook edition through continue, export and morning 
       localStorage.setItem(
         'stairwell:notebook',
         JSON.stringify({
-          game: 'stairwell@8',
+          game: 'stairwell@9',
           seed: 7,
           inputs: [{ at: 1260, kind: 'next' }],
           minute: 1860,
@@ -643,11 +668,11 @@ it('preserves the current notebook edition through continue, export and morning 
     );
     await page.reload();
     await page.locator('[data-a=continue]').click();
-    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@8');
+    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@9');
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     expect(
       await page.evaluate(() => JSON.parse(localStorage.getItem('stairwell:notebook') ?? '{}').game),
-    ).toBe('stairwell@8');
+    ).toBe('stairwell@9');
     await page.getByRole('button', { name: 'Feedback', exact: true }).click();
     const [download] = await Promise.all([
       page.waitForEvent('download'),
@@ -657,13 +682,31 @@ it('preserves the current notebook edition through continue, export and morning 
     let text = '';
     if (!stream) throw new Error('Missing download stream');
     for await (const chunk of stream) text += chunk.toString();
-    expect(JSON.parse(text).game).toBe('stairwell@8');
+    const downloaded = JSON.parse(text);
+    expect(downloaded.game).toBe('stairwell@9');
+    const actual = await page.evaluate('window.__st.s');
+    expect(
+      replay(
+        downloaded.seed,
+        downloaded.inputs,
+        downloaded.minute,
+        downloaded.game,
+        downloaded.oneCast?.admission,
+        downloaded.castChapter,
+      ),
+    ).toEqual(actual);
+    if (process.env.STAIRWELL_EXPORT_RECEIPT_DIR) {
+      const directory = process.env.STAIRWELL_EXPORT_RECEIPT_DIR;
+      mkdirSync(directory, { recursive: true });
+      writeFileSync(`${directory}/notebook.json`, text);
+      writeFileSync(`${directory}/state.json`, JSON.stringify(actual, null, 2));
+    }
     await page.getByRole('button', { name: 'Close feedback', exact: true }).click();
     await page.getByRole('button', { name: 'To the title page', exact: true }).click();
     await page.locator('[data-a=other]').click();
     await page.getByRole('button', { name: 'Turn back to Monday morning', exact: true }).click();
     await page.getByRole('button', { name: 'Yes, turn back', exact: true }).click();
-    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@8');
+    expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@9');
   } finally {
     await page.close();
   }

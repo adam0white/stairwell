@@ -10,11 +10,11 @@ The log now receives spare height and retains forty recent entries for scrolling
 
 Browser screenshots, with fonts loaded and the game clock held still:
 
-| Viewport | Log height | Screenshot |
-| --- | --- | --- |
-| 360×780 | 206px | [Phone](log-layout-2026-10-20/360x780.png) |
-| 412×891 | 360px | [Tall phone](log-layout-2026-10-20/412x891.png) |
-| 1440×900 | 369px | [Desktop](log-layout-2026-10-20/1440x900.png) |
+| Viewport | Log height | Screenshot                                      |
+| -------- | ---------- | ----------------------------------------------- |
+| 360×780  | 206px      | [Phone](log-layout-2026-10-20/360x780.png)      |
+| 412×891  | 360px      | [Tall phone](log-layout-2026-10-20/412x891.png) |
+| 1440×900 | 369px      | [Desktop](log-layout-2026-10-20/1440x900.png)   |
 
 The speed buttons, notebook button, building, task board and main conversation actions fit at every size. Browser regression tests exercise a separate public seeded notebook with a full task board, scrolling history, and a long notebook panel. They check log height, control hit testing, bottom following, reading earlier entries, and access to notebook export. The original layout failed the height assertions at all three sizes. CI installs Chromium before running `npm run check`.
 
