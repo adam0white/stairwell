@@ -56,10 +56,10 @@ const HELP = `Commands:
   tells <name>         list what you could tell them
   invent <name> <about> <trait>   make something up; traits: ${INVENTABLE.join(', ')}, or sweet:<name>
   sit <name> [boundaries]   sit ten minutes; Derya can be asked about work boundaries and training
-  word <name>          ask them for a word for you at Sunday's meeting
+  word <name>          ask them to support your raise at Sunday's meeting
   misdeliver <name> <task n>   leave someone else's parcel at this door
   knock <name>         ring the bell even though the flat is quiet
-  prank gate|swap      leave the courtyard gate on the latch / swap Hacer's and Sevim's papers
+  prank gate|swap      leave the courtyard gate open / swap Hacer's and Sevim's newspapers
   notebook             your notebook: the flats, the building's secrets, stamps
   next                 turn the page (at night, or Sunday)
   export               print the playtest file (seed + inputs + state)`;
@@ -67,7 +67,8 @@ const HELP = `Commands:
 function load(): { s: GameState; save: Save } | null {
   if (!existsSync(file as string)) return null;
   const save = JSON.parse(readFileSync(file as string, 'utf8')) as Save;
-  if (!canReplay(save.game)) throw new Error('Unsupported notebook edition');
+  if (!canReplay(save.game))
+    throw new Error('This saved game is from an unsupported version. Start a new game.');
   return { s: replay(save.seed, save.inputs, save.minute, save.game), save };
 }
 function store(s: GameState, seen: number) {
@@ -77,7 +78,7 @@ function store(s: GameState, seen: number) {
 
 const rid = (x: string | undefined): Rid => {
   const id = (x ?? '').toLowerCase().replace('ü', 'u').replace('ı', 'i') as Rid;
-  if (!RIDS.includes(id)) throw new Error(`Who? (${RIDS.join(', ')})`);
+  if (!RIDS.includes(id)) throw new Error(`Choose a resident: ${RIDS.join(', ')}.`);
   return id;
 };
 const place = (x: string | undefined): Place => {
@@ -108,14 +109,14 @@ function screen(s: GameState, seen: number): number {
     console.log(`== ${DAY_NAMES[d - 1]}, night ==`);
     if (rep)
       console.log(
-        `${rep.done} jobs on time, ${rep.late} late, ${rep.missed} not done. Tips ₺${rep.tips}. ${rep.treats.join('; ')}`,
+        `You completed ${rep.done} jobs on time and ${rep.late} late. You did not finish ${rep.missed} jobs. You received ₺${rep.tips} in tips. ${rep.treats.join('; ')}`,
       );
-    console.log(`In the tin: ₺${s.k.money}`);
+    console.log(`You have ₺${s.k.money} in your tin.`);
     for (const id of RIDS) {
       const r = readOf(s, id);
-      console.log(`  ${RESIDENTS[id].name}: ${r.warmth}; ${r.word}`);
+      console.log(`  ${RESIDENTS[id].name}: ${r.warmth} ${r.word}`);
     }
-    console.log(`\n(next) to turn the page.`);
+    console.log(`\nUse "next" to continue to the next day.`);
     return s.lineNo;
   }
   if (s.phase === 'sunday' || s.phase === 'end') {
@@ -123,18 +124,18 @@ function screen(s: GameState, seen: number): number {
     for (const id of RIDS) {
       const r = rOf(s, id);
       console.log(
-        `  ${RESIDENTS[id].name}: ${r.vote === 'yes' ? 'hand up' : r.vote === 'away' ? 'did not come' : 'hand down'}${r.word === 'yes' ? ' (had promised)' : ''}`,
+        `  ${RESIDENTS[id].name}: ${r.vote === 'yes' ? 'voted for your raise' : r.vote === 'away' ? 'did not come' : 'voted against your raise'}${r.word === 'yes' ? ' (had promised)' : ''}`,
       );
     }
     console.log(
-      `Tea money ${s.meeting?.raise ? 'goes up' : 'stays'}; ${s.meeting?.yes ?? 0} hands. Tin: ₺${s.k.money}. Week 2 is not written yet.`,
+      `Your tea money ${s.meeting?.raise ? 'increases' : 'stays the same'}. You received ${s.meeting?.yes ?? 0} votes for a raise. You have ₺${s.k.money} in your tin. Week 2 is not written yet.`,
     );
     return s.lineNo;
   }
   console.log(
-    `== ${DAY_NAMES[d - 1]} ${clockOf(s.minute)} == You are ${s.k.walk ? `on your way to ${placeName(s.k.walk.to)}` : `at ${placeName(s.k.at)}`}. Tin: ₺${s.k.money}.`,
+    `== ${DAY_NAMES[d - 1]} ${clockOf(s.minute)} == You are ${s.k.walk ? `on your way to ${placeName(s.k.walk.to)}` : `at ${placeName(s.k.at)}`}. You have ₺${s.k.money} in your tin.`,
   );
-  if (s.k.walk && s.k.walk.from === s.k.walk.to) console.log('Sitting a minute.');
+  if (s.k.walk && s.k.walk.from === s.k.walk.to) console.log('You are sitting for a minute.');
   if (s.k.busyTask !== null) console.log(`Working on: ${s.tasks.find((t) => t.id === s.k.busyTask)?.label}.`);
   const where = RIDS.filter((id) => rOf(s, id).where !== 'home' && rOf(s, id).where !== 'asleep').map(
     (id) => `${RESIDENTS[id].name} (${rOf(s, id).where.replace('visit:', 'visiting ')})`,
@@ -145,7 +146,7 @@ function screen(s: GameState, seen: number): number {
     const rd = readOf(s, who);
     const r = rOf(s, who);
     console.log(
-      `In front of you: ${RESIDENTS[who].call}, flat ${RESIDENTS[who].flat}. ${rd.warmth}, ${rd.word}. ${RESIDENTS[who].blurb}`,
+      `In front of you: ${RESIDENTS[who].call}, flat ${RESIDENTS[who].flat}. ${rd.warmth} ${rd.word} ${RESIDENTS[who].blurb}`,
     );
     console.log(
       `  You can: news ${who}${r.newsDay === d ? ' (asked today)' : ''} · tells ${who} · invent ${who} … · word ${who} (${r.word ? (r.word === 'yes' ? 'promised' : 'said no') : wordHint(s, who)})`,
@@ -155,7 +156,7 @@ function screen(s: GameState, seen: number): number {
     const id = s.k.at.slice(5) as Rid;
     console.log(
       rOf(s, id).where === 'asleep'
-        ? 'Quiet behind the door. (knock to ring anyway)'
+        ? 'It is quiet behind the door. Use "knock" to ring the bell anyway.'
         : `${RESIDENTS[id].name} is out.`,
     );
   }

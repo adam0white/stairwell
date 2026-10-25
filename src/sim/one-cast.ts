@@ -55,7 +55,7 @@ export interface DeryaContinuity {
   lastCheckpoint?: Person;
 }
 const fail = (s: string): never => {
-  throw new Error(`One cast: ${s}`);
+  throw new Error(`Character history: ${s}`);
 };
 const hash = /^[a-f0-9]{64}$/;
 export async function checkpointPerson(person: Person) {
@@ -75,12 +75,14 @@ export async function createDeryaCheckpoint(
   options: { build: string; branchId: string; parentRevision: string | null },
 ): Promise<PersonaEnvelope> {
   const departure = s.oneCast?.departure;
-  if (s.version !== GAME_VERSION || !departure) return fail('played source departure is required');
+  if (s.version !== GAME_VERSION || !departure)
+    return fail('Derya must finish her shift and leave this game before you can save her journey.');
   const person = personOf(s, 'derya');
   const episode = person.memory.episodes.find(
     (e) => e.id === departure.episodeId && e.action === 'night-work',
   );
-  if (!episode || person.activity) return fail('attended source night work is unavailable');
+  if (!episode || person.activity)
+    return fail('Derya has not finished the night work needed for this journey.');
   const projection = projectPersona(person, {
     version: 'stairwell-hearsay/1',
     skills: {},
@@ -124,13 +126,13 @@ export async function prepareDeryaReturn(
     envelope.source.engine !== '2.17.0' ||
     !['4', '5'].includes(envelope.source.rules)
   )
-    return fail('unsupported returning source');
+    return fail('This file comes from an unsupported game or version. Keep the file and start a new game.');
   if (
     Object.keys(envelope.transfer).some(
       (k) => !['person', 'history', 'checkpoint', 'admission', 'departure'].includes(k),
     )
   )
-    return fail('unsupported transfer field');
+    return fail('This file contains journey information that the game cannot read.');
   const projection = validatePersonaProjection(envelope.transfer.person);
   if (
     projection.mappingVersion !== 'hearsay-stairwell/1' ||
@@ -141,12 +143,12 @@ export async function prepareDeryaReturn(
     projection.commitments.length ||
     projection.episodes.length > 1
   )
-    return fail('unsupported returning mapping');
+    return fail('This file cannot bring Derya back into this version of the game.');
   if (!prefix.oneCast?.departure || prefix.oneCast.admission || prefix.version !== GAME_VERSION)
-    return fail('local source departure prefix is unavailable; fresh authored play remains available');
+    return fail('Derya’s saved departure is unavailable on this device. You can start a new game.');
   const sourceHead = prefix.oneCast.head;
   if (!sourceHead || sourceHead.branchId !== envelope.branchId)
-    return fail('return branch does not match local source receipt');
+    return fail('This return does not match Derya’s saved departure.');
   await validatePersona(sourceHead);
   const metadata = envelope.transfer.admission as Record<string, unknown> | undefined;
   const sourceStamp = sourceHead.transfer.checkpoint as Record<string, unknown>;
@@ -157,16 +159,16 @@ export async function prepareDeryaReturn(
     metadata.sourceRevision !== sourceHead.revision ||
     metadata.sourceCheckpointDigest !== sourceStamp.checkpointDigest
   )
-    return fail('return source receipt does not match local departure');
+    return fail('This return file does not match Derya’s saved departure.');
   const original = personOf(prefix, 'derya');
   if ((await checkpointPerson(original)).checkpointDigest !== sourceStamp.checkpointDigest)
-    return fail('local source checkpoint digest conflict');
+    return fail('The saved departure has changed. Keep your file and start a new game.');
   const rebuilt = replay(prefix.seed, prefix.inputs, prefix.minute, prefix.version);
   if (
     canonicalPersona(snapshot(personOf(rebuilt, 'derya'))) !== canonicalPersona(snapshot(original)) ||
     canonicalPersona(rebuilt.oneCast?.departure) !== canonicalPersona(prefix.oneCast.departure)
   )
-    return fail('local source departure prefix is invalid');
+    return fail('The game cannot replay Derya’s saved departure. Keep your file and start a new game.');
   const c = envelope.transfer.checkpoint as ReturnTypeShape;
   if (
     !c ||
@@ -176,11 +178,12 @@ export async function prepareDeryaReturn(
     c.sourceNow !== projection.source.now ||
     canonicalPersona(c.sourceRng) !== canonicalPersona(projection.rng)
   )
-    return fail('invalid checkpoint stamps');
+    return fail('The game cannot verify this saved character file.');
   const history = envelope.transfer.history;
-  if (!Array.isArray(history) || history.length > 1) return fail('unsupported return history');
+  if (!Array.isArray(history) || history.length > 1)
+    return fail('The game cannot read the history in this return file.');
   for (const fact of history) {
-    if (!fact || typeof fact !== 'object') return fail('invalid encounter history');
+    if (!fact || typeof fact !== 'object') return fail('The history in this file is incomplete or invalid.');
     const f = fact as Record<string, unknown>;
     if (
       Object.keys(f).some(
@@ -194,26 +197,28 @@ export async function prepareDeryaReturn(
       typeof f.episodeId !== 'string' ||
       f.episodeId.length > 128
     )
-      return fail('unsupported encounter history');
+      return fail('The game cannot read this encounter history.');
     if (
       projection.episodes.length &&
       !projection.episodes.some(
         (e) => e.id === f.episodeId && e.action === 'talk' && (!e.actorId || e.actorId === 'hearsay-hatice'),
       )
     )
-      return fail('encounter provenance mismatch');
+      return fail('The encounter does not match the history in this file.');
   }
-  if (projection.episodes.length && history.length !== 1) return fail('unapproved return episode');
+  if (projection.episodes.length && history.length !== 1)
+    return fail('This file contains an encounter that the game cannot verify.');
   if (
     original.body.health !== projection.health.health ||
     original.body.circadianPeak !== projection.health.circadianPeak
   )
-    return fail('clinical health or circadian conflict');
+    return fail('Derya’s health or sleep pattern in this file does not match her saved departure.');
   const opening = snapshot(original);
   opening.body.fitness = projection.health.fitness;
   const originalAge = original.now - original.life.bornAt;
   const carriedAge = projection.source.now - projection.life.bornAt;
-  if (carriedAge < originalAge || carriedAge >= 45 * 365 * 1440) return fail('return age conflict');
+  if (carriedAge < originalAge || carriedAge >= 45 * 365 * 1440)
+    return fail('Derya’s age in this file does not match her saved departure.');
   opening.life.bornAt = projection.life.bornAt + opening.now - projection.source.now;
   // A new local chapter starts at the local boundary, never at an earlier source opening.
   const admitted = admitPersona(projection, opening, {
@@ -250,7 +255,7 @@ export function applyDeryaReturn(prefix: GameState, admission: DeryaReturnAdmiss
     s.seed !== admission.prefix.seed ||
     canonicalPersona(s.inputs) !== canonicalPersona(admission.prefix.inputs)
   )
-    return fail('return prefix mismatch');
+    return fail('This return does not match the saved game.');
   s.people = s.people.map((p) => (p.id === 'derya' ? snapshot(admission.person) : p));
   s.oneCast = {
     ...s.oneCast,
@@ -267,14 +272,15 @@ export function applyDeryaReturn(prefix: GameState, admission: DeryaReturnAdmiss
     at: s.minute,
     who: 'derya',
     kind: 'voice',
-    text: 'Back at flat 5. I still need my morning sleep.',
+    text: 'I am back at flat 5. I still need my morning sleep.',
   });
   return s;
 }
 export async function validateDeryaContinuity(s: GameState): Promise<void> {
   if (!s.oneCast) return;
   const token = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-  if (!Array.isArray(s.oneCast.rows) || s.oneCast.rows.length > 128) return fail('invalid measurement rows');
+  if (!Array.isArray(s.oneCast.rows) || s.oneCast.rows.length > 128)
+    return fail('The saved journey records are invalid.');
   for (const row of s.oneCast.rows) {
     if (
       !row ||
@@ -289,19 +295,20 @@ export async function validateDeryaContinuity(s: GameState): Promise<void> {
       !(row.parentRevision === null || hash.test(row.parentRevision)) ||
       ![row.branchId, row.stage, row.outcome].every((v) => typeof v === 'string' && token.test(v))
     )
-      return fail('invalid measurement row');
+      return fail('A saved journey record is invalid.');
   }
 
   if (s.oneCast.head) {
     const head = await validatePersona(s.oneCast.head);
-    if (head.castId !== DERYA_CAST || head.castRevision !== '2') return fail('saved head cast conflict');
+    if (head.castId !== DERYA_CAST || head.castRevision !== '2')
+      return fail('The saved character does not match Derya in this version.');
     if (!s.oneCast.admission) {
       if (head.source.game !== 'stairwell' || head.source.rules !== '7')
-        return fail('saved source head conflict');
+        return fail('The saved departure comes from an unsupported game or version.');
       const checkpoint = s.oneCast.lastCheckpoint ?? personOf(s, 'derya');
       const stamp = head.transfer.checkpoint as ReturnTypeShape;
       if (!stamp || (await checkpointPerson(checkpoint)).checkpointDigest !== stamp.checkpointDigest)
-        return fail('saved source checkpoint conflict');
+        return fail('The saved character does not match the departure record.');
       const pinned = s.oneCast.sourcePrefix ?? {
         seed: s.seed,
         inputs: s.inputs,
@@ -313,26 +320,26 @@ export async function validateDeryaContinuity(s: GameState): Promise<void> {
         canonicalPersona(snapshot(personOf(reconstructed, 'derya'))) !==
         canonicalPersona(snapshot(checkpoint))
       )
-        return fail('saved source checkpoint is not replayed');
+        return fail('The game cannot replay the saved character’s departure.');
       const expected = await createDeryaCheckpoint(reconstructed, {
         build: head.source.build,
         branchId: head.branchId,
         parentRevision: head.parentRevision,
       });
       if (canonicalPersona(expected) !== canonicalPersona(head))
-        return fail('saved source projection conflict');
+        return fail('The saved character file does not match the replayed departure.');
     }
   }
   const admission = s.oneCast.admission;
   if (admission) {
     const p = admission.prefix;
     const prefix = replay(p.seed, p.inputs, p.minute, p.edition);
-    if (!prefix.oneCast) return fail('pinned prefix edition conflict');
+    if (!prefix.oneCast) return fail('The saved return belongs to an unsupported game version.');
     prefix.oneCast.head = structuredClone(p.sourceHead);
     if ((await checkpointPerson(personOf(prefix, 'derya'))).checkpointDigest !== p.checkpointDigest)
-      return fail('pinned prefix digest conflict');
+      return fail('The saved return does not match the departure record.');
     const expected = await prepareDeryaReturn(admission.envelope, prefix, { build: admission.targetBuild });
     if (canonicalPersona(expected) !== canonicalPersona(admission))
-      return fail('pinned return admission conflict');
+      return fail('The game cannot verify the saved return.');
   }
 }

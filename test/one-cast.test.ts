@@ -7,7 +7,7 @@ describe('Derya first morning boundary', () => {
     const s = newGame(7);
     await expect(
       createDeryaCheckpoint(s, { build: 'test', branchId: 'derya-test', parentRevision: null }),
-    ).rejects.toThrow(/departure/);
+    ).rejects.toThrow(/finish her shift and leave/);
     act(s, { kind: 'one-cast-depart' });
     expect(s.oneCast?.departure).toBeUndefined();
     while (s.minute < 480) step(s);
@@ -96,12 +96,12 @@ describe('Derya pinned return controls', () => {
     const bad = await returnControl(s, (p) => {
       p.body.health = 0.9;
     });
-    await expect(prepareDeryaReturn(bad, s, { build: 'test' })).rejects.toThrow(/clinical/);
+    await expect(prepareDeryaReturn(bad, s, { build: 'test' })).rejects.toThrow(/health or sleep pattern/);
   });
   it('refuses missing local prefix and mismatched source receipt', async () => {
     const s = await boundary();
     const e = await returnControl(s);
-    await expect(prepareDeryaReturn(e, newGame(7), { build: 'test' })).rejects.toThrow(/prefix/);
+    await expect(prepareDeryaReturn(e, newGame(7), { build: 'test' })).rejects.toThrow(/saved departure/);
     const { revision, ...body } = e;
     const bad = await createPersona({
       ...body,
@@ -110,7 +110,7 @@ describe('Derya pinned return controls', () => {
         admission: { ...(body.transfer.admission as object), sourceRevision: '0'.repeat(64) },
       },
     });
-    await expect(prepareDeryaReturn(bad, s, { build: 'test' })).rejects.toThrow(/source receipt/);
+    await expect(prepareDeryaReturn(bad, s, { build: 'test' })).rejects.toThrow(/saved departure/);
   });
   it('never drops an active source goal to allow projection', async () => {
     const s = await boundary();
@@ -158,7 +158,7 @@ it('rejects malformed received measurement rows without changing the loaded run'
     stage: 'checkpoint',
     outcome: 'accepted',
   });
-  await expect(validateDeryaContinuity(s)).rejects.toThrow(/measurement/);
+  await expect(validateDeryaContinuity(s)).rejects.toThrow(/journey record/);
 });
 
 it('admits the unchanged source-bound return contract from Hearsay rules 4 or 5 only', async () => {
@@ -174,6 +174,6 @@ it('admits the unchanged source-bound return contract from Hearsay rules 4 or 5 
   }
   const future = await createPersona({ ...body, source: { ...body.source, rules: '7' } });
   await expect(prepareDeryaReturn(future, s, { build: 'test' })).rejects.toThrow(
-    /unsupported returning source/,
+    /unsupported game or version/,
   );
 });

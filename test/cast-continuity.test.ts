@@ -133,7 +133,7 @@ it('refuses the entire startup before CAS when one source has an unsupported sem
   const { revision: _, ...body } = parents[1]!;
   const bad = await createPersona({ ...body, source: { ...body.source, game: 'unknown' } });
   prepared[1] = preparePersonaLife(bad, 12 * 60 * 60 * 1000);
-  await expect(arrive(7)).rejects.toThrow(/Unsupported source/);
+  await expect(arrive(7)).rejects.toThrow(/source role or character format is unsupported/);
   expect(mocks.batch).toHaveLength(0);
 });
 it('restores only local accepted heads, refuses stale CAS and keeps imported receipt histories gated', async () => {

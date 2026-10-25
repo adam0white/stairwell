@@ -1,7 +1,7 @@
 {
   "name": "The Stairwell",
   "short_name": "The Stairwell",
-  "description": "The new caretaker of a seven-flat block. Everyone tells you things.",
+  "description": "You are the new caretaker of a building with seven flats. Everyone tells you things.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

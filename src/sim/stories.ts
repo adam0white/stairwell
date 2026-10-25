@@ -10,18 +10,23 @@ export const STORY_SECRETS = [
   {
     prop: STORY_FACTS.hacer,
     value: true,
-    title: 'Hacer wanted the entrance notice to ask for quiet, not explanations.',
+    title:
+      'Hacer wanted the entrance notice to ask for quiet. She did not want visitors to explain themselves.',
   },
   {
     prop: STORY_FACTS.sevim,
     value: true,
-    title: 'Sevim meant to clarify the entrance notice, not control visitors.',
+    title: 'Sevim meant to make the entrance notice clearer. She did not want to control visitors.',
   },
-  { prop: STORY_FACTS.book, value: true, title: 'The pump supplier will accept the balance next week.' },
+  {
+    prop: STORY_FACTS.book,
+    value: true,
+    title: 'The pump supplier will accept the remaining payment next week.',
+  },
   {
     prop: STORY_FACTS.instalments,
     value: true,
-    title: 'Tarık offered Burak a private weekly repayment arrangement.',
+    title: 'Tarık offered to repay Burak in weekly payments. He wanted to arrange this privately.',
   },
 ];
 
@@ -31,32 +36,32 @@ export const STORY_WORDS: Record<string, [string, string]> = {
     'Hacer did not mean the notice as a request for quiet.',
   ],
   [STORY_FACTS.sevim]: [
-    'Sevim wanted a clear entrance notice. She did not intend to control visitors.',
-    'Sevim did not intend to clarify the notice.',
+    'Sevim wanted an entrance notice that was easy to understand. She did not intend to control visitors.',
+    'Sevim did not intend to make the notice clearer.',
   ],
   [STORY_FACTS.book]: [
-    'The pump supplier will take the balance next week. The book has enough for the deposit.',
+    'The pump supplier will take the remaining payment next week. The building fund has enough for the first payment.',
     'The pump supplier will not allow a later payment.',
   ],
   [STORY_FACTS.instalments]: [
-    'Tarık asks to arrange his dues with you privately, in weekly payments. He asked me to tell you.',
-    'Tarık has not offered a repayment arrangement.',
+    'Tarık asks to arrange his building payments with you privately. He wants to pay weekly. He asked me to tell you.',
+    'Tarık has not offered to arrange repayments.',
   ],
 };
 
 export const STORY_LINES = {
   hacer:
-    'I wrote that entrance notice for quiet in the mornings, not a list of everyone’s visitors. Sevim’s correction made it sound like I wanted explanations. Could you ask what she meant?',
+    'I wrote that entrance notice to ask for quiet in the mornings. I did not want a list of everyone’s visitors. Sevim’s correction made it sound like I wanted explanations. Could you ask what she meant?',
   sevim:
-    'I wanted a clear notice, not a rule about visitors. I corrected it before asking Hacer what she meant. Perhaps you could ask whether we can rewrite it together.',
-  book: 'Come, look at the book. ₺1,800 left; the pump is ₺2,400. The supplier offered a week for the last ₺600. I need a repayment date I can stand behind. No names on the stairs, please.',
+    'I wanted a notice that was easy to understand. I did not want a rule about visitors. I corrected it before asking Hacer what she meant. Perhaps you could ask whether we can rewrite it together.',
+  book: 'Come and look at the book. We have ₺1,800 left, and the pump costs ₺2,400. The supplier gave us a week to pay the last ₺600. I need a repayment date I can be sure of. Please do not name anyone when you talk on the stairs.',
   instalments:
-    'The pension comes next week. I can clear the dues in weekly payments. Tell Burak that, just Burak. I would rather agree it with him than hide upstairs.',
+    'My pension comes next week. I can pay what I owe in weekly payments. Tell Burak that. Tell only Burak. I would rather agree on this with him than hide upstairs.',
   agreement:
-    'He asked you to tell me? Then I’ll speak with him privately. The supplier can have the deposit from the fund and the balance next week. Keep your own money. I’ll book the engineer.',
+    'He asked you to tell me? Then I’ll speak with him privately. We can pay the supplier a first payment from the fund. We can pay the rest next week. Keep your own money. I’ll book the engineer.',
   repair:
-    'The engineer fitted the new pump. Hot water ran at every tap. Burak entered the deposit and the balance due in the fund book; Tarık’s repayment dates stayed between them.',
-  tea: 'On Saturday, Hacer and Sevim rewrote the entrance notice over two cups of tea. Quiet mornings, no explanations demanded. This time each asked what the other meant.',
+    'The engineer fitted the new pump. Hot water ran at every tap. Burak wrote the first payment and the amount still owed in the building account book. He and Tarık kept the repayment dates private.',
+  tea: 'On Saturday, Hacer and Sevim rewrote the entrance notice over two cups of tea. The notice asked for quiet mornings. It did not demand explanations. This time each asked what the other meant.',
 };
 
 export interface StoryState {
@@ -87,15 +92,15 @@ export const PRIVATE_FACTS = {
 } as const;
 export const PRIVATE_LINES = {
   hacer:
-    'Could you hold this bit of packaging? I make little paper rooms after tea. That one has a window and no front door. My niece thinks these catalogues are only paperwork. Please let me choose who sees them.',
+    'Could you hold this bit of packaging? I make little paper rooms after tea. That one has a window and no front door. My niece thinks I keep these catalogues only for paperwork. Please let me choose who sees them.',
   sevim:
-    'I kept a pupil’s exercise books. I called him lazy before I learned he was caring for a sick parent. I am choosing an example for a lesson, and I keep stopping at his page. That judgment was mine.',
+    'I kept a pupil’s exercise books. I called him lazy. Later I learned he was caring for a sick parent. I am choosing an example for a lesson, and I keep stopping at his page. I was the one who judged him.',
   burak:
-    'Hold this harbour fold, please. Pull the tab and the paper ferry crosses it. I learned from a library book when I knew few people. Accounting is still my work; this does not have to be useful.',
+    'Please hold this folded paper harbour. Pull the tab and the paper ferry crosses it. I learned from a library book when I knew few people. Accounting is still my work. This does not have to be useful.',
   derya:
-    'Since you asked about boundaries and training, I can tell you why it is a difficult subject: I reported a scheduling error before anyone was harmed. Training offers stopped afterwards. I kept the correspondence; I do not know whether the two were connected.',
+    'You asked about work boundaries and training. I can tell you why it is a difficult subject. I reported a scheduling error before anyone was harmed. Training offers stopped afterwards. I kept the letters and messages. I do not know whether the two events were connected.',
   tarik:
-    'Could you help with the player? These tapes are birds from different ferry landings. Some also have my wife’s voice. I choose what we listen to; those voices are not for a public archive. I do not know every bird’s name.',
+    'Could you help with the tape player? These tapes have bird recordings from different ferry stops. Some also have my wife’s voice. I choose what we listen to. I do not want those voices in a public archive. I do not know every bird’s name.',
 } as const;
 export const PRIVATE_SECRETS = Object.entries(PRIVATE_FACTS).map(([id, prop]) => ({
   prop,
@@ -105,8 +110,8 @@ export const PRIVATE_SECRETS = Object.entries(PRIVATE_FACTS).map(([id, prop]) =>
       hacer: 'Hacer makes tiny paper rooms.',
       sevim: 'Sevim kept a former pupil’s exercise books.',
       burak: 'Burak makes moving paper models.',
-      derya: 'Derya reported an old scheduling error; its career effects are uncertain.',
-      tarik: 'Tarık keeps private bird recordings from ferry landings.',
+      derya: 'Derya reported an old scheduling error. She does not know whether it affected her career.',
+      tarik: 'Tarık keeps private bird recordings from ferry stops.',
     } as Record<string, string>
   )[id]!,
 }));
@@ -118,19 +123,19 @@ export const PRIVATE_WORDS: Record<string, [string, string]> = {
     'Hacer did not show me paper rooms.',
   ],
   [PRIVATE_FACTS.sevim]: [
-    'Sevim told me privately that she once judged a pupil unfairly before learning about his caring duties.',
+    'Sevim told me privately that she once judged a pupil unfairly. She later learned he was caring for a sick parent.',
     'Sevim did not tell me about judging a pupil unfairly.',
   ],
   [PRIVATE_FACTS.burak]: [
-    'Burak showed me a moving paper ferry; he makes models in private.',
+    'Burak showed me a moving paper ferry. He makes models in private.',
     'Burak did not show me a paper model.',
   ],
   [PRIVATE_FACTS.derya]: [
-    'Derya says she reported an old scheduling error before anyone was harmed. She does not know whether later lost training offers were connected.',
+    'Derya says she reported an old scheduling error before anyone was harmed. She later stopped receiving training offers. She does not know whether this was connected to her report.',
     'Derya did not tell me about an old scheduling error.',
   ],
   [PRIVATE_FACTS.tarik]: [
-    'Tarık showed me private bird recordings and asked to keep the incidental voices private.',
+    'Tarık showed me private bird recordings. He asked me to keep the voices heard on the tapes private.',
     'Tarık did not show me his recordings.',
   ],
 };

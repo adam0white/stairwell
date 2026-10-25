@@ -19,7 +19,7 @@ it('refuses a biography-only head rather than resetting it to a fresh Person', a
   });
   const input = preparePersonaLife(parent, 12 * 60 * 60 * 1000);
   const opening = makeResident('hacer', 7, 380);
-  expect(() => admitCast(input, opening)).toThrow(/actual|Biography|passport/);
+  expect(() => admitCast(input, opening)).toThrow(/biography|character format/);
   const corrupted = structuredClone(input);
   corrupted.life.assignment = 999;
   expect(() => admitCast(corrupted, opening)).toThrow();
@@ -67,7 +67,7 @@ it('refuses a native passport whose host edition has a different meaning', async
     limitations: [],
   });
   expect(() => admitCast(preparePersonaLife(parent, 100000), makeResident('hacer', 7, 380))).toThrow(
-    /source role|edition/,
+    /source role|version/,
   );
 });
 

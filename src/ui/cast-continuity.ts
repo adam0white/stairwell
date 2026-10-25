@@ -61,7 +61,7 @@ const pin = (g: GameState) =>
     .map((h) => h.revision)
     .join('/');
 const errorText = (e: unknown) =>
-  e instanceof Error ? e.message : 'Continuity unavailable. Keep a local export.';
+  e instanceof Error ? e.message : 'Character history is unavailable. Download a copy of your game.';
 function recordingKey(r: Runtime): string {
   if (!r.recordingKey) r.recordingKey = `stairwell-group:${crypto.randomUUID()}`;
   return r.recordingKey;
@@ -119,11 +119,13 @@ function persistRecovery(key: string, notebook: RecoveryNotebook, accepted: bool
   const keys = JSON.parse(localStorage.getItem(recoveryIndex) ?? '[]') as string[];
   if (!keys.includes(key) && keys.length >= 8)
     throw new Error(
-      'Local recovery archive is full. Export accepted recovery chapters before more checkpoints.',
+      'The local recovery archive is full. Download the accepted recovery chapters before saving more character progress.',
     );
   const text = JSON.stringify({ accepted, notebook });
   if (new TextEncoder().encode(text).length > 2 * 1024 * 1024)
-    throw new Error('Recovery chapter exceeds the local bound. Keep a run export.');
+    throw new Error(
+      'The recovery chapter is larger than the local storage limit. Download a copy of this game.',
+    );
   localStorage.setItem(key, text);
   if (!keys.includes(key)) localStorage.setItem(recoveryIndex, JSON.stringify([...keys, key]));
 }
@@ -159,7 +161,7 @@ if (typeof window !== 'undefined') {
   });
 }
 function requireCurrent(serial: number) {
-  if (serial !== generation) throw new Error('Run or identity changed. Choose again.');
+  if (serial !== generation) throw new Error('The game or player identity changed. Choose again.');
 }
 /** Distinguish a refused preparation from a submitted claim with a lost reply. */
 export class AdmissionFailure extends Error {
@@ -219,7 +221,7 @@ export async function arrive(seed: number, fresh = false): Promise<GameState> {
         const target = personOf(opening, id);
         if (target.activity)
           throw new Error(
-            `${RESIDENTS[id].name} has a real opening work duty. Use a supported source-bound return or play fresh locally.`,
+            `${RESIDENTS[id].name} has an opening work duty. Continue from a supported earlier save, or start a new game in this browser.`,
           );
         initial[id] = snapshot(admitCast(input, target));
       }
@@ -259,7 +261,7 @@ export async function validateContinuity(g: GameState): Promise<void> {
       header.claims.length !== header.inputs.length ||
       new Set(header.inputs.map((i) => i.parent.castId)).size !== header.inputs.length
     )
-      throw new Error('Invalid whole-cast replay header.');
+      throw new Error('The saved chapter has an invalid record of its character histories.');
     const expected = Object.fromEntries(
       ALLOCATION.map((c) => [
         c.castId,
@@ -270,7 +272,9 @@ export async function validateContinuity(g: GameState): Promise<void> {
       canonicalPersona(expected) !== canonicalPersona(header.expectedHeads) ||
       Object.keys(header.initial).length !== header.inputs.length
     )
-      throw new Error('Cast collection or expected absence pin mismatch.');
+      throw new Error(
+        'There is a mismatch between the character histories saved with this chapter and the histories it expects.',
+      );
     const opening = newGame(g.seed);
     for (const input of header.inputs) {
       await validatePersona(input.parent);
@@ -278,9 +282,11 @@ export async function validateContinuity(g: GameState): Promise<void> {
       const target = personOf(opening, id);
       const expected = admitCast(input, target);
       if (canonicalPersona(snapshot(expected)) !== canonicalPersona(header.initial[id]))
-        throw new Error('Initial admitted person differs from pinned source.');
+        throw new Error(
+          'The character at the start of this chapter does not match the earlier state saved with it.',
+        );
       const claim = header.claims.find((h) => h.castId === input.parent.castId);
-      if (!claim) throw new Error('Missing initial claim.');
+      if (!claim) throw new Error('The record of this game accepting the character is missing.');
       await validatePersona(claim);
       if (
         claim.parentRevision !== input.parent.revision ||
@@ -289,7 +295,9 @@ export async function validateContinuity(g: GameState): Promise<void> {
         claim.source.rules !== '7' ||
         canonicalPersona(claim.transfer.life) !== canonicalPersona(input.life)
       )
-        throw new Error('Initial claim binding mismatch.');
+        throw new Error(
+          'There is a mismatch in the record that links this game to its starting character history.',
+        );
     }
   }
   const r = runtime(g);
@@ -303,10 +311,10 @@ export async function validateContinuity(g: GameState): Promise<void> {
         head.source.game !== 'stairwell' ||
         head.source.rules !== '7'
       )
-        throw new Error('Invalid saved ownership receipt.');
+        throw new Error('The saved record of this game’s control of the character history is invalid.');
       const claim = header?.claims.find((h) => h.castId === id);
       if (claim && head.branchId !== claim.branchId)
-        throw new Error('Saved branch differs from this chapter.');
+        throw new Error('The saved character history does not match this chapter.');
       r.owned[id] = head;
     }
   delete r.rawOwned;
@@ -337,10 +345,10 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
   const actual = personOf(g, id);
   if (r.fileOrigin && !fork)
     throw new Error(
-      'Imported file receipts do not grant ownership. Keep a local export or explicitly fork this played pause.',
+      'An imported file does not give this game control of the shared character history. Download a copy of your game or create a separate history from this pause.',
     );
   if (!actual.body.alive || actual.body.health <= 0) {
-    if (!old) throw new Error('No owned branch to close.');
+    if (!old) throw new Error('This game does not control a character history it can close.');
     const closed = await closePersonaBranch(old, source(), actual.now);
     requireCurrent(serial);
     const recoveryKey = `stairwell-cast-recovery:${old.branchId}:${id}`;
@@ -360,17 +368,17 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
   }
   if (g.castPauses?.[id] !== 'paused' || actual.activity)
     throw new Error(
-      `${RESIDENTS[id].name} has not reached a played pause. Close the menu and continue through actual duties.`,
+      `${RESIDENTS[id].name} has not reached a pause in the game. Close the menu and continue until their duties are complete.`,
     );
   const captured = snapshot(actual);
   const projected = await sourceTransfer(
     captured,
     id === 'burak'
       ? [
-          'The source building account and supplier balance remain at Lale Apartmanı. No ledger handover is implemented.',
+          'The building account and the money owed to the supplier remain at Lale Apartmanı. The game cannot transfer the account book.',
         ]
       : id === 'tarik'
-        ? ['The source dues and private repayment arrangement are not discharged.']
+        ? ['The earlier building fees and private repayment agreement remain unpaid.']
         : [],
   );
   requireCurrent(serial);
@@ -382,13 +390,15 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
   ) {
     await shelf.request({ action: 'put', envelope: old });
     requireCurrent(serial);
-    status = 'The unchanged accepted checkpoint is still active.';
+    status = 'The accepted character save is still active and has not changed.';
     return;
   }
   if (current() !== g || canonicalPersona(snapshot(personOf(g, id))) !== canonicalPersona(captured))
-    throw new Error('Person changed during capture. Pause again.');
+    throw new Error('The character changed while the game was saving them. Pause again.');
   if (new TextEncoder().encode(JSON.stringify({ ...r.sources, [id]: projected.raw })).length > 1024 * 1024)
-    throw new Error('Full local source archive is full. Keep a run export before another checkpoint.');
+    throw new Error(
+      'The local archive of earlier character states is full. Download a copy of your game before saving more character progress.',
+    );
   const branchId = fork ? crypto.randomUUID() : (old?.branchId ?? crypto.randomUUID());
   const life =
     old?.transfer.life && !fork
@@ -428,7 +438,7 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
   r.localChoice = undefined;
   r.sources[id] = projected.raw;
   store();
-  status = `${RESIDENTS[id].name}: accepted played chapter checkpoint.`;
+  status = `The saved progress for ${RESIDENTS[id].name} in this chapter was accepted.`;
   await gateContinuity(g);
 }
 export function checkpointContinuity(): Promise<void> {
@@ -484,7 +494,7 @@ export function continuityPanel(): HTMLElement {
   toggle.type = 'checkbox';
   toggle.checked = shelf.enabled;
   const label = document.createElement('label');
-  label.append(toggle, 'Keep fictional people between games in this browser');
+  label.append(toggle, 'Keep fictional characters between games in this browser');
   section.append(label);
   toggle.addEventListener('change', () => {
     invalidateContinuity();
@@ -496,16 +506,16 @@ export function continuityPanel(): HTMLElement {
   line.dataset.castStatus = '';
   line.textContent =
     status ||
-    'Fresh chapters consider all five people together. Loaded chapters keep their pinned people. Unsupported histories refuse; local fresh play remains available.';
+    'A new chapter checks all five characters together. A loaded chapter keeps the character histories saved with it. Unsupported histories cannot continue. You can still start a new game without earlier character history.';
   section.append(line);
   const link = document.createElement('a');
   link.href = 'https://human.adamwhite.work/lab/people/';
   link.target = '_blank';
   link.rel = 'noopener';
-  link.textContent = 'Inspect, download or delete your people';
+  link.textContent = 'View, download or delete your characters';
   section.append(link);
   const select = document.createElement('select');
-  select.setAttribute('aria-label', 'Person for chapter checkpoint');
+  select.setAttribute('aria-label', 'Character whose progress you want to save');
   for (const id of RIDS) {
     const opt = document.createElement('option');
     opt.value = id;
@@ -521,45 +531,47 @@ export function continuityPanel(): HTMLElement {
   });
   section.append(select);
   section.append(
-    button('Pause selected person after actual duties', () => {
+    button('Pause the selected character after their duties', () => {
       const g = current();
       if (!g) return;
       act(g, { kind: 'cast-pause', who: selected });
       store();
       line.textContent =
         g.castPauses?.[selected] === 'requested'
-          ? 'Close the menu and continue play. Work and sleep boundaries still apply.'
+          ? 'Close the menu and continue playing. The character must still finish their work and sleep.'
           : g.castPauses?.[selected] === 'paused'
-            ? 'This person has reached the played pause.'
-            : (g.said.at(-1)?.text ?? 'This duty does not support a chapter pause.');
+            ? 'This character has reached the pause in the game.'
+            : (g.said.at(-1)?.text ?? 'The game cannot pause this chapter during this duty.');
     }),
   );
   section.append(
-    button('Save selected person checkpoint', async () => {
+    button('Save the selected character’s progress', async () => {
       const g = current();
       if (!g) return;
-      if (!shelf.enabled) throw new Error('Enable browser continuity first, or keep a local run export.');
+      if (!shelf.enabled)
+        throw new Error('Turn on character history in this browser first, or download a copy of your game.');
       await checkpoint(g, selected);
       line.textContent = status;
     }),
   );
   section.append(
-    button('Begin an explicit alternate branch from this played pause', async () => {
+    button('Create a separate character history from this pause', async () => {
       const g = current();
       if (!g) return;
-      if (!shelf.enabled) throw new Error('Enable browser continuity first.');
+      if (!shelf.enabled) throw new Error('Turn on character history in this browser first.');
       await checkpoint(g, selected, true);
       line.textContent = status;
     }),
   );
   section.append(
-    button('Keep selected person file', () => {
+    button('Download the selected character’s file', () => {
       const g = current();
       if (!g) return;
       const envelope =
         runtime(g).owned[RESIDENTS[selected].castId] ??
         g.castChapter?.claims.find((h) => h.castId === RESIDENTS[selected].castId);
-      if (!envelope) throw new Error('No accepted person checkpoint yet. Keep a run export instead.');
+      if (!envelope)
+        throw new Error('No character save has been accepted yet. Download a copy of your game instead.');
       const url = URL.createObjectURL(
         new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' }),
       );
@@ -572,7 +584,7 @@ export function continuityPanel(): HTMLElement {
   );
   for (const recovery of acceptedCastRecoveries()) {
     section.append(
-      button('Resume an accepted saved cast chapter', async () => {
+      button('Resume an accepted chapter saved for recovery', async () => {
         if (!resumeGame) throw new Error('Open this chapter from the game menu.');
         const saved = recovery.notebook;
         const g = replay(
@@ -589,7 +601,7 @@ export function continuityPanel(): HTMLElement {
       }),
     );
     section.append(
-      button('Keep this accepted recovery file', () => {
+      button('Download this accepted recovery file', () => {
         const url = URL.createObjectURL(
           new Blob([JSON.stringify(recovery.notebook, null, 2)], { type: 'application/json' }),
         );
@@ -601,12 +613,12 @@ export function continuityPanel(): HTMLElement {
       }),
     );
     section.append(
-      button('Remove this recovery copy after keeping an export', () => {
+      button('Remove this recovery copy after downloading it', () => {
         const keys = JSON.parse(localStorage.getItem(recoveryIndex) ?? '[]') as string[];
         localStorage.removeItem(recovery.key);
         localStorage.setItem(recoveryIndex, JSON.stringify(keys.filter((key) => key !== recovery.key)));
         line.textContent =
-          'This local recovery copy was removed. The current notebook, source shelf and exported file were not changed.';
+          'This recovery copy was removed from this browser. Your current notebook, shared character history and downloaded file have not changed.';
       }),
     );
   }

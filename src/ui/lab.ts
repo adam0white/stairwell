@@ -179,7 +179,7 @@ export function openFeedback(
   note.rows = 4;
   noteLabel.append(note);
   const nameLabel = document.createElement('label');
-  nameLabel.textContent = 'Your name or tester id (optional)';
+  nameLabel.textContent = 'Your name or tester ID (optional)';
   const name = document.createElement('input');
   name.type = 'text';
   name.maxLength = 60;
@@ -193,14 +193,14 @@ export function openFeedback(
   const explanation = document.createElement('p');
   explanation.className = 'soft';
   explanation.textContent =
-    'A name labels your player id and its linked play history, past and future on this device. It is remembered here. Leave it empty to stay pseudonymous.';
+    'Your name is saved on this device. It labels your player ID and the past and future play history linked to that ID. Leave it empty to use only your player ID.';
   nameDetails.append(explanation);
   const details = document.createElement('details');
   const summary = document.createElement('summary');
   summary.textContent = 'What is sent';
   const preview = document.createElement('p');
   preview.textContent =
-    'Recording on or Share includes an available run and links play across games on this device. Otherwise only your note, verdict and optional name are sent.';
+    'If Recording is on or you choose Share, your feedback includes a saved game when one is available. It also links your play history across games on this device. Otherwise, only your note, answer and optional name are sent.';
   details.append(summary, preview, privacyLink());
   const preferences = document.createElement('div');
   const status = document.createElement('p');
@@ -256,12 +256,12 @@ export function openFeedback(
       rememberName(submittedName);
       queued = true;
       status.textContent = !noteOnly
-        ? 'Note queued. An available run may also be included. This is not a delivery receipt.'
-        : 'Note queued without a run or history linkage. This is not a delivery receipt.';
+        ? 'Your note is waiting to be sent. It may include your saved game if one is available. This message does not confirm delivery.'
+        : 'Your note is waiting to be sent. It does not include your saved game or link your play history. This message does not confirm delivery.';
       send.textContent = 'Back to the game';
     } catch (error) {
       console.error('Feedback failed', error);
-      status.textContent = 'Your note could not be queued. Please try again.';
+      status.textContent = 'The game could not save your note for sending. Please try again.';
     } finally {
       sending = false;
       update();

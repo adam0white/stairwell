@@ -45,7 +45,7 @@ if (typeof window !== 'undefined') {
 }
 const build = () => lab.build().c ?? 'development';
 const message = (error: unknown) =>
-  error instanceof Error ? error.message : 'Continuity unavailable. Keep a local file.';
+  error instanceof Error ? error.message : 'Character history is unavailable. Download a copy of your game.';
 const recordingKey = (g: GameState) => g.oneCast?.head?.branchId ?? g.oneCast?.recordingFileKey ?? null;
 const headsOf = (g: GameState) => (g.oneCast?.head ? [g.oneCast.head] : []);
 const selected = (g: GameState) =>
@@ -71,7 +71,9 @@ let conflict: { envelope: PersonaEnvelope; game: GameState; prefix: GameState } 
 const RECOVERY_INDEX = 'stairwell-one-cast-recoveries';
 function ensureGeneration(serial: number): void {
   if (serial !== gateSerial)
-    throw new Error('Continuity action cancelled: another run or recording identity was selected.');
+    throw new Error(
+      'The character history action was cancelled because you selected another game or recording identity.',
+    );
 }
 type Recovery =
   | { game: GameState }
@@ -94,7 +96,7 @@ function readPrefix(envelope: PersonaEnvelope): GameState | undefined {
   const revision = admission?.sourceRevision;
   if (typeof revision !== 'string' || !/^[a-f0-9]{64}$/.test(revision))
     throw new Error(
-      'Continuation return unavailable: the return does not identify its exact source checkpoint.',
+      'This character cannot return because the file does not identify the exact earlier save it needs.',
     );
   const raw = localStorage.getItem(departureKey(envelope.branchId, revision));
   return raw ? (JSON.parse(raw) as GameState) : undefined;
@@ -133,7 +135,7 @@ export async function arrive(seed: number, fresh = false): Promise<GameState> {
       const prefix = readPrefix(envelope);
       if (!prefix)
         throw new Error(
-          'Continuation return unavailable: this browser has no matching Stairwell departure prefix. A fresh authored week remains available.',
+          'This character cannot return because this browser has no matching save from when they left The Stairwell. You can still start a new week without earlier character history.',
         );
       const scope = candidate?.revision === envelope.revision ? 'file' : 'shared';
       pendingArrival = { envelope, prefix, scope, seed };
@@ -181,7 +183,9 @@ async function claimArrival(
   else await shelf.request({ action: 'put', envelope: claim });
   keepRecovery(claim.revision, { game });
   if (serial !== gateSerial) {
-    throw new Error('Accepted continuation retained for explicit recovery after the selected run changed.');
+    throw new Error(
+      'The continued game was accepted and saved for recovery because you selected another game.',
+    );
   }
 
   return game;
@@ -197,7 +201,8 @@ export function acknowledgeContinuity(game: GameState): void {
 export async function validateContinuity(game: GameState): Promise<void> {
   const cast = game.oneCast;
   if (!cast) return;
-  if (!Array.isArray(cast.rows) || cast.rows.length > 128) throw new Error('Unsupported continuity save.');
+  if (!Array.isArray(cast.rows) || cast.rows.length > 128)
+    throw new Error('This character history save is unsupported.');
   if (cast.head) await validatePersona(cast.head);
   if (cast.head || cast.admission) {
     // Adapter validation checks the replay-pinned admission, never the current shared head.
@@ -237,7 +242,7 @@ export function checkpointContinuity(): Promise<void> {
           if (scope === 'file') await acceptLocalPersona(prior);
           else await shelf.request({ action: 'put', envelope: prior });
           if (serial === gateSerial && current() === game)
-            bridgeStatus = 'The exact accepted checkpoint is still active.';
+            bridgeStatus = 'The accepted character save is still active and has not changed.';
           return;
         }
         if (serial !== gateSerial || current() !== game) return;
@@ -270,7 +275,7 @@ export function checkpointContinuity(): Promise<void> {
           await gateContinuity(game, scope === 'file');
           if (current() === game) store();
         }
-        bridgeStatus = 'Derya’s chapter checkpoint is saved in this browser.';
+        bridgeStatus = 'Derya’s progress in this chapter is saved in this browser.';
         conflict = undefined;
         lab.milestone('one cast source completion');
       } catch (error) {
@@ -307,7 +312,8 @@ export function continuityPanel(): HTMLElement {
   const status = document.createElement('p');
   status.role = 'status';
   status.textContent =
-    bridgeStatus || 'Continuity uses this browser. A fresh authored week is always available.';
+    bridgeStatus ||
+    'This browser saves character history between games. You can always start a new week without earlier character history.';
   box.append(
     personaControls({
       enabled: shelf.enabled,
@@ -346,14 +352,14 @@ export function continuityPanel(): HTMLElement {
     status.textContent = game.oneCast?.departure
       ? bridgeStatus
       : game.oneCast?.departureRequested
-        ? 'Pause requested. Derya finishes her actual shift at 08:00 first. Her morning sleep schedule and tiredness remain.'
-        : 'Request this pause on the first morning between 07:00 and 08:00. A fresh authored week remains available.';
+        ? 'You requested a pause. Derya must finish her shift at 08:00 first. She still needs her morning sleep and remains tired.'
+        : 'Request this pause on the first morning between 07:00 and 08:00. You can still start a new week without earlier character history.';
   });
-  add('Save a chapter checkpoint', async () => {
+  add('Save character progress in this chapter', async () => {
     await checkpointContinuity();
     status.textContent = bridgeStatus;
   });
-  add('Keep a person file', async () => {
+  add('Download a character file', async () => {
     const game = current();
     if (!game) return;
     if (!game.oneCast?.head) {
@@ -387,7 +393,7 @@ export function continuityPanel(): HTMLElement {
     }
     downloadEnvelope(game.oneCast!.head!);
   });
-  add('Open a person file', () => {
+  add('Open a character file', () => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,application/json';
@@ -395,13 +401,13 @@ export function continuityPanel(): HTMLElement {
       void (async () => {
         const file = input.files?.[0];
         if (!file) return;
-        if (file.size > 256 * 1024) throw new Error('Person file exceeds 256 KiB.');
+        if (file.size > 256 * 1024) throw new Error('The character file is larger than the 256 KiB limit.');
         const envelope = await validatePersona(JSON.parse(await file.text()));
         if (envelope.castId !== CAST || envelope.source.game !== 'hearsay')
-          throw new Error('This person file is not a supported Derya return.');
+          throw new Error('This character file is unsupported for Derya’s return.');
         candidate = envelope;
         status.textContent =
-          'Person file checked. Begin a new week to continue its matching local departure. Your loaded run remains unchanged.';
+          'The character file has been checked. Begin a new week to continue from the matching earlier save in this browser. Your current game has not changed.';
       })().catch((e) => {
         status.textContent = message(e);
       });
@@ -409,14 +415,15 @@ export function continuityPanel(): HTMLElement {
     input.click();
   });
   if (pendingArrival)
-    add('Fork the arriving history', async () => {
+    add('Create a separate copy of the arriving character history', async () => {
       const held = pendingArrival;
       if (!held || !loadArrival) return;
       const serial = gateSerial;
       const owner = current();
       const valid = () => {
         ensureGeneration(serial);
-        if (current() !== owner || pendingArrival !== held) throw new Error('Arrival selection changed.');
+        if (current() !== owner || pendingArrival !== held)
+          throw new Error('You selected a different arriving character.');
       };
       const admission = await prepareDeryaReturn(held.envelope, held.prefix, { build: build() });
       valid();
@@ -437,16 +444,17 @@ export function continuityPanel(): HTMLElement {
       pendingArrival = undefined;
       candidate = null;
       await loadArrival(game);
-      status.textContent = 'Explicit fork admitted into a new return chapter.';
+      status.textContent = 'A separate copy of this character history was accepted for a new chapter.';
     });
   if (conflict)
-    add('Fork this continuation', async () => {
+    add('Create a separate copy of this continued game', async () => {
       const held = conflict;
       if (!held || current() !== held.game) return;
       const serial = gateSerial;
       const valid = () => {
         ensureGeneration(serial);
-        if (current() !== held.game || conflict !== held) throw new Error('Continuation selection changed.');
+        if (current() !== held.game || conflict !== held)
+          throw new Error('You selected a different continued game.');
       };
       const { revision: _, ...body } = held.envelope;
       const fork = await createPersona({ ...body, branchId: crypto.randomUUID(), parentRevision: null });
@@ -481,13 +489,13 @@ export function continuityPanel(): HTMLElement {
       conflict = undefined;
       await gateContinuity(held.game);
       if (current() === held.game) store();
-      status.textContent = 'Explicit fork saved.';
+      status.textContent = 'A separate copy of this character history was saved.';
     });
   const recoveries = JSON.parse(localStorage.getItem(RECOVERY_INDEX) ?? '[]') as string[];
   for (const revision of recoveries) {
     const raw = localStorage.getItem(`stairwell-one-cast-recovery:${revision}`);
     if (!raw || (JSON.parse(raw) as { accepted?: boolean }).accepted === false) continue;
-    add(`Resume accepted continuation ${revision.slice(0, 8)}`, async () => {
+    add(`Resume accepted continued game ${revision.slice(0, 8)}`, async () => {
       if (!loadArrival) return;
       const serial = gateSerial;
       const recovery = JSON.parse(raw) as Recovery;

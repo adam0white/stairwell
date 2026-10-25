@@ -85,7 +85,7 @@ it('sends feedback in one sheet with recording off, privacy on, or unanswered co
     expect(results.calls).toHaveLength(2);
     for (const result of results.results) {
       expect(result.enabled).toBe(true);
-      expect(result.status).toContain('queued');
+      expect(result.status).toContain('waiting to be sent');
       expect(result.nested).toBe(0);
     }
   } finally {
@@ -108,7 +108,7 @@ it('keeps a failed send and its note on the original sheet', async () => {
     });
     await expect
       .poll(() => page.locator('dialog [role=status]').innerText())
-      .toContain('Your note could not be queued.');
+      .toContain('The game could not save your note for sending.');
     expect(await page.locator('.hflab-veil').count()).toBe(0);
     expect(await page.locator('textarea').inputValue()).toBe('Retained note');
   } finally {
@@ -167,7 +167,7 @@ it('keeps title-menu feedback available without a run', async () => {
     });
     expect(result.enabled).toBe(true);
     expect(result.sent).toBe(true);
-    expect(result.status).toContain('Note queued');
+    expect(result.status).toContain('Your note is waiting to be sent');
   } finally {
     await page.close();
   }

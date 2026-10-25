@@ -7,12 +7,12 @@ export function playback(
   inspecting: boolean,
   selectedSpeed: number | null = null,
 ): { rate: number; reason: string } {
-  if (inspecting) return { rate: 0, reason: 'Reading · time waits' };
-  if (talking) return { rate: 0, reason: 'Conversation · time waits' };
+  if (inspecting) return { rate: 0, reason: 'You are reading. Time is paused.' };
+  if (talking) return { rate: 0, reason: 'You are talking. Time is paused.' };
   if (state.k.walk || state.k.busyUntil > state.minute)
-    return { rate: selectedSpeed ?? 6, reason: 'On the way' };
-  if (openTasks(state).length > 0) return { rate: 0.6, reason: 'Orders need you' };
-  return { rate: selectedSpeed ?? 6, reason: 'The building carries on' };
+    return { rate: selectedSpeed ?? 6, reason: 'You are travelling or working.' };
+  if (openTasks(state).length > 0) return { rate: 0.6, reason: 'Orders are waiting.' };
+  return { rate: selectedSpeed ?? 6, reason: 'Time is passing.' };
 }
 
 export function canWait(state: GameState, talking: boolean, inspecting: boolean): boolean {

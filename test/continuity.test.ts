@@ -225,7 +225,7 @@ it('retains a late accepted arrival with full pins for explicit recovery without
   invalidateContinuity();
   recording.setPersonaRecording.mockClear();
   finish(accepted);
-  await expect(arrival).rejects.toThrow(/retained/);
+  await expect(arrival).rejects.toThrow(/saved for recovery/);
   const raw = values.get(`stairwell-one-cast-recovery:${accepted?.revision}`);
   expect(raw).toBeTruthy();
   const recovery = JSON.parse(raw!);
@@ -281,7 +281,9 @@ it('saves an explicit source fork with its own replay-valid checkpoint and prefi
     },
   });
   const panel = continuityPanel() as unknown as ElementControl;
-  const button = panel.children.find((e) => e.textContent === 'Fork this continuation');
+  const button = panel.children.find(
+    (e) => e.textContent === 'Create a separate copy of this continued game',
+  );
   expect(button).toBeDefined();
   let saved = false;
   installContinuity(

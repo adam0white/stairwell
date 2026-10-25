@@ -56,7 +56,6 @@ import {
 } from './cast-continuity.ts';
 import { downloadRun, gameMenu, lab, labScreen, labTools, openFeedback } from './lab.ts';
 import { canWait, playback, untilSomethingHappens } from './playback.ts';
-import { displayText, residentRead } from './prose.ts';
 import { isSaved, type Saved } from './save.ts';
 
 let stage: ReturnType<typeof phoneStage> | null = null;
@@ -127,13 +126,15 @@ function showLoadError(error: unknown, action: string) {
     ? 'The shared history accepted the new game, but this page could not finish saving it.'
     : submitted
       ? 'The shared history may have changed, but no confirmation reached this page. Do not start another game yet.'
-      : /opening work duty|opening is already on duty/i.test(detail)
+      : /opening work duty|opening is already on duty|already doing something at the start/i.test(detail)
         ? 'A resident must finish their current work before this chapter can start. Continue in the earlier game, then return here.'
         : /source.*(dues|account|duty)|obligations|duties/i.test(detail)
           ? 'This history still has duties or payments in the earlier game. Finish them there before returning.'
           : /closed|death|terminal/i.test(detail)
             ? 'A resident’s earlier story has ended. That story cannot continue here.'
-            : /unsupported|older|passport|biography|mismatch|edition|binding/i.test(detail)
+            : /unsupported|older|passport|biography|mismatch|edition|binding|does not match|older or different version/i.test(
+                  detail,
+                )
               ? 'This history cannot continue in this version of The Stairwell. You can keep playing your saved game or return to the earlier game through All games.'
               : connection
                 ? 'The game could not check the shared history. You can try the connection again.'
@@ -205,7 +206,7 @@ function showLoadError(error: unknown, action: string) {
   dialog.showModal();
 }
 const app = () => document.getElementById('app') as HTMLElement;
-const esc = (x: string) => displayText(x).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+const esc = (x: string) => x.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 // ---------- saves ----------
 
@@ -306,18 +307,20 @@ function importRun(file: File) {
         oneCast: raw.continuity ?? (Array.isArray(raw.oneCast) ? undefined : raw.oneCast),
       } as Saved;
       if (!canReplay(x.game)) {
-        alert('This notebook is from another edition of the game. Start fresh.');
+        alert('This notebook is from a different version of the game. Start a new game.');
         return;
       }
       if (!isSaved(x)) {
-        alert('Could not read that notebook. Check its inputs or choose another file.');
+        alert('The game could not read that notebook. Choose another file or start a new game.');
         return;
       }
       void begin(restoreNotebook(x, true), true).catch(() =>
-        alert('Could not validate that notebook’s pinned history.'),
+        alert(
+          'The game could not check the history saved with that notebook. Keep the file and start a new game.',
+        ),
       );
     } catch {
-      alert('Could not read that file.');
+      alert('The game could not read that file.');
     }
   });
 }
@@ -530,7 +533,7 @@ function infoContent(s: GameState | null) {
   const [heading, text] = !s
     ? [
         'The job',
-        'Rıza kept this door for forty years. Deliver bread by eight. Then deliver shopping and parcels, do small jobs, and take the bins down by 20:45. Seven flats will tell you things. On Sunday they vote on your tea money, the extra pay for your work. Nothing happens while you are away.',
+        'Rıza worked here as the caretaker for forty years. Deliver bread by eight. Then deliver shopping and parcels, do small jobs, and take the bins down by 20:45. Money is in Turkish lira, shown as ₺. The people in seven flats will tell you things. On Sunday they vote on your tea money, the extra pay for your work. Nothing happens while you are away.',
       ]
     : phase === 'night'
       ? [
@@ -540,16 +543,16 @@ function infoContent(s: GameState | null) {
       : phase !== 'day'
         ? [
             'The meeting',
-            'Each flat raises a hand or not. The tally is Rıza’s own reckoning, not a measure of people.',
+            'Each flat can vote for your raise by raising a hand. Rıza adds up your completed jobs and the votes for your raise. His total counts what happened in the game. It does not measure anyone’s worth.',
           ]
         : who && ui.dismissed !== `${s.k.at}:${who}`
           ? [
               'Talking',
-              'Ask for news once a day. Tell… lets you repeat what you heard. Say whether you are certain. If you make up a story, people may find out. You can sit together once a day. From Thursday you can ask residents to support your raise on Sunday. They may break a promise.',
+              'Ask for news once a day. Choose Tell… to repeat what you heard. Say whether you are certain. If you make up a story, people may find out. You can sit together once a day. From Thursday you can ask residents to support your raise on Sunday. They may break a promise.',
             ]
           : [
               'Orders and the stairs',
-              'Tap an order, a name or a place on the building to see the trip. Go starts walking; a walk cannot be turned back. You pick up or deliver items automatically when you arrive. A dot over a door means something is for them. Climbing tires you. The trip preview tells you how tiring it will be. Time slows while orders wait and stops while you talk or read a list.',
+              'Tap an order, a name or a place on the building to see the trip. Choose Go to start walking. You cannot turn back during a walk. You pick up or deliver items automatically when you arrive. A dot over a door means you have something to deliver to that flat. Climbing tires you. The trip preview tells you how tiring it will be. Time slows while orders wait and stops while you talk or read a list.',
             ];
   return `<h2>${heading}</h2><p>${text}</p>`;
 }
@@ -631,7 +634,7 @@ function titlePage() {
   infoOpen = false;
   const saved = loadSaved();
   const savedState = saved ? restoreNotebook(saved) : null;
-  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${olderNotebook() ? '<p role="status">This notebook belongs to an older edition. Start fresh.</p>' : ''}<p>Keep five occupied flats supplied through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div>${labTools ? '<button data-a="other">Lab tools ▸</button>' : ''}<div class="title-spacer"></div></main><div class="action-bar">
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${olderNotebook() ? '<p role="status">This notebook is from a different version of the game. Start a new game.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div>${labTools ? '<button data-a="other">Lab tools ▸</button>' : ''}<div class="title-spacer"></div></main><div class="action-bar">
     ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${DAY_NAMES[dayOf(savedState.minute) - 1]} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
     <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'New game' : 'Begin on Monday'}</button><div class="new-confirm" hidden>The old notebook will be replaced.<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
   mountNotice();
@@ -664,11 +667,11 @@ function titlePage() {
         !saved?.oneCast ||
         (Object.keys(saved.oneCast).every((key) => key === 'rows') && saved.oneCast.rows.length === 0);
       const ms = saved && unlinked && !saved.castChapter ? mornings(saved) : [];
-      dialog.innerHTML = `<div class="who"><b>Lab tools</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body">${ms.length > 1 ? ms.map((m, i) => `<div><button data-morning="${i}">Turn back to ${DAY_NAMES[m.day - 1]} morning</button><div data-confirm="${i}" hidden>Everything after that morning is torn out.<div class="row"><button data-yes="${i}">Yes, turn back</button><button data-no="${i}">No</button></div></div></div>`).join('') : ''}<label class="file-button">Load a playtest run<input type="file" accept="application/json"></label></div>`;
+      dialog.innerHTML = `<div class="who"><b>Lab tools</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body">${ms.length > 1 ? ms.map((m, i) => `<div><button data-morning="${i}">Turn back to ${DAY_NAMES[m.day - 1]} morning</button><div data-confirm="${i}" hidden>Your progress after that morning will be removed.<div class="row"><button data-yes="${i}">Yes, turn back</button><button data-no="${i}">No</button></div></div></div>`).join('') : ''}<label class="file-button">Load a playtest run<input type="file" accept="application/json"></label></div>`;
       document.body.append(dialog);
       dialog.showModal();
       const authored = document.createElement('button');
-      authored.textContent = 'Begin fresh without continuity';
+      authored.textContent = 'Begin a new week without earlier character history';
       authored.addEventListener('click', async () => {
         dialog.close();
         await startFresh(true);
@@ -768,12 +771,12 @@ function dayView(s: GameState, full: boolean) {
   const ctx = pacingContext(s);
   const who = ui.sheetFor ?? faces[0];
   const slowed = ctx.inspecting
-    ? 'Reading · time waits'
+    ? 'You are reading. Time is paused.'
     : ctx.talking
-      ? `${who ? RESIDENTS[who].name : 'Someone'} is talking · time waits`
+      ? `${who ? RESIDENTS[who].name : 'Someone'} is talking. Time is paused.`
       : !s.k.walk && s.k.busyUntil <= s.minute && openTasks(s).length
-        ? 'orders · 0.6 game min/s'
-        : `${clockPlayback(s).rate} game min/s`;
+        ? 'Orders waiting · 0.6 game minutes/second'
+        : `${clockPlayback(s).rate} game minutes/second`;
   root.querySelector('.clock-rate')!.textContent = slowed;
   const tasks = openTasks(s).sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
   root.querySelector('.order-pips')!.innerHTML = s.tasks
@@ -812,7 +815,7 @@ function dayView(s: GameState, full: boolean) {
   }
   const voice = [...s.said].reverse().find((x) => x.kind === 'voice');
   root.querySelector<HTMLElement>('.speech-overlay')!.textContent =
-    voice && performance.now() < ui.readUntil ? `${nameOf(voice.who)}: ${displayText(voice.text)}` : '';
+    voice && performance.now() < ui.readUntil ? `${nameOf(voice.who)}: ${voice.text}` : '';
   const panel = root.querySelector<HTMLElement>('.sheet')!;
   const action = root.querySelector<HTMLElement>('.action-bar')!;
   const previousVerbs = action.querySelector('.verbs');
@@ -1380,7 +1383,7 @@ function departureLine(s: GameState, who: Rid) {
 function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
   const info = RESIDENTS[who];
   const r = rOf(s, who);
-  const read = residentRead(readOf(s, who));
+  const read = readOf(s, who);
   const lastLine = [...s.said]
     .reverse()
     .find((x) => x.who === who && dayOf(x.at) === dayOf(s.minute) && s.minute - x.at < 30);
@@ -1526,7 +1529,7 @@ function notebookHtml(s: GameState): string {
   const props = secretProps(s);
   const found = props.filter((x) => s.secrets[x.prop] !== undefined);
   const flats = RIDS.map((id) => {
-    const rd = residentRead(readOf(s, id));
+    const rd = readOf(s, id);
     return `<div class="flatline"><b>${RESIDENTS[id].flat} ${RESIDENTS[id].name}</b> <span class="hand soft">${esc(rd.warmth)} ${esc(rd.word)}</span></div>`;
   }).join('');
   return `<div class="who"><b>The notebook</b><button class="x" data-a="close">✕</button></div>
@@ -1544,12 +1547,12 @@ const STAMPS: Record<string, string> = {
   caught: 'Caught telling different stories',
   treat: 'Received a snack for gossip',
   wrong_door: 'The wrong door',
-  gate: 'The gate on the latch',
+  gate: 'The gate left open',
   swap: 'Swapped newspapers',
   confided: 'Derya trusted you',
   envelope: 'Tarık’s envelope',
-  paper_ferry: 'Held the harbour fold',
-  raise: 'Tea money up',
+  paper_ferry: 'Held the fold in Burak’s paper harbour',
+  raise: 'Tea money increased',
   cat: 'Pamuk',
   word_back: 'They heard what you said',
 };
@@ -1571,13 +1574,13 @@ function nightPage(s: GameState) {
         `<span class="pip ${t.done ? (t.done > t.by ? 'late' : 'done') : 'missed'}">${t.done ? (t.done > t.by ? '◩' : '■') : '□'}</span>`,
     )
     .join('')}</div><span>₺${s.k.money} in the tin</span></div><main class="page-body">
-    <p>${rep ? `You completed ${rep.done} jobs on time${rep.late ? `, ${rep.late} late` : ''}${rep.missed ? `, ${rep.missed} not done` : ''}.` : ''} Tips: <span class="money">₺${rep?.tips ?? 0}</span>. Money in your tin: <span class="money">₺${s.k.money}</span>.</p>
+    <p>${rep ? `You completed ${rep.done} jobs on time.${rep.late ? ` You completed ${rep.late} jobs late.` : ''}${rep.missed ? ` You did not complete ${rep.missed} jobs.` : ''}` : ''} You received <span class="money">₺${rep?.tips ?? 0}</span> in tips. You have <span class="money">₺${s.k.money}</span> in your tin.</p>
     ${rep?.treats.length ? `<p>You received ${rep.treats.map(esc).join(', ')}.</p>` : ''}
     <p class="soft">The residents talked ${talks === 0 ? 'about nothing much' : talks < 6 ? 'a little' : talks < 14 ? 'a fair bit' : 'all day'} on the stairs and the step.</p>
     ${heard.length ? `<div class="heardbox">${heard.map((x) => `<div class="heard">… ${esc(x.text)}</div>`).join('')}</div>` : ''}
     ${tonight.map(saidLine).join('')}
     <div class="flats">${RIDS.map((id) => {
-      const rd = residentRead(readOf(s, id));
+      const rd = readOf(s, id);
       return `<div class="flatline"><b>${RESIDENTS[id].name}</b> <span class="hand soft">${esc(rd.warmth)} ${esc(rd.word)}</span></div>`;
     }).join('')}</div>
     ${margin ? `<div class="margin hand">${esc(margin)} <span class="soft">— R.</span></div>` : ''}
@@ -1593,12 +1596,12 @@ function nightPage(s: GameState) {
 }
 
 const OPEN_Q: Record<number, string> = {
-  1: 'Tomorrow a courier comes. Rıza wrote: “Read the labels. Everyone does.”',
+  1: 'A courier will come tomorrow. Rıza wrote: “Read the labels. Everyone does.”',
   2: 'The radiators ticked and went quiet around midnight.',
   3: 'Who is the man at flat 5?',
-  4: 'Tomorrow is Friday. Tarık Bey has been wanting a word with you.',
-  5: 'Burak asked what the weather will be on Saturday evening. On the roof.',
-  6: 'Tomorrow at eleven: the meeting, and the vote on your tea money.',
+  4: 'Tomorrow is Friday. Mr Tarık has been wanting to talk with you.',
+  5: 'Burak asked what the weather will be like on the roof on Saturday evening.',
+  6: 'The meeting is tomorrow at eleven. The residents will vote on your tea money.',
 };
 
 function nightMargin(s: GameState, d: number): string {
@@ -1606,15 +1609,19 @@ function nightMargin(s: GameState, d: number): string {
   const caught = s.residents.some(
     (r) => r.caught.some((m) => dayOf(m) === d) || r.grudges.some((g) => dayOf(g.at) === d),
   );
-  if (caught) return 'It came back to you. It always does, in a building. Lie low a day.';
-  if (told.includes('hacer')) return 'Whatever you tell Hacer, the step hears by six.';
+  if (caught)
+    return 'People heard what you said about them. That always happens in a building. Stay quiet for a day.';
+  if (told.includes('hacer')) return 'Whatever you tell Hacer, people on the step hear by six.';
   if (told.length === 0 && d === 1)
-    return 'You said nothing to anyone today. Wise, or dull. They will decide which.';
-  if (d === 2) return 'I did the same with a parcel in 1994. Never again. Mostly.';
-  if (d === 3) return 'Burak is careful, not crooked. The building forgets the difference when it is cold.';
-  if (d === 4) return 'Derya is good to that building. Remember it when they talk.';
-  if (d === 5) return 'Tarık Bey is proud. Carry his shopping and never mention the stairs.';
-  return 'Sleep. Bread at seven.';
+    return 'You said nothing to anyone today. They will decide whether you are wise or dull.';
+  if (d === 2)
+    return 'I did the same with a parcel in 1994. I decided never to do it again. I mostly kept to that.';
+  if (d === 3)
+    return 'Burak is careful, not dishonest. When the building is cold, people forget the difference.';
+  if (d === 4)
+    return 'Derya treats the people in this building well. Remember that when people talk about her.';
+  if (d === 5) return 'Mr Tarık is proud. Carry his shopping and never mention the stairs.';
+  return 'Go to sleep. You need to collect bread at seven.';
 }
 
 /** Rıza's optional game reckoning uses only recorded work and the meeting's hands. */
@@ -1626,7 +1633,7 @@ function weekTallyHtml(s: GameState): string {
   return `<section data-week-tally id="week-tally" hidden aria-label="Rıza’s week tally">
     <h3>Rıza’s week tally: ${total}</h3>
     <p>On-time jobs ${onTime} × 2 + late jobs ${late} × 1 + hands raised ${hands} × 5 = ${total}.</p>
-    <p class="hand soft">This tally counts your work in the game. It does not measure people. “A little sum for the notebook.” — Rıza</p>
+    <p class="hand soft">This total counts your work in the game. It does not measure anyone’s worth. “I added it up for the notebook.” — Rıza</p>
   </section>`;
 }
 
@@ -1647,13 +1654,13 @@ function sundayPage(s: GameState) {
       const broke = r.word === 'yes' && r.vote === 'no';
       return `<div class="flatline"><b>${RESIDENTS[id].name}</b> <span class="hand ${r.vote === 'yes' ? 'moss' : 'soft'}">${r.vote === 'yes' ? 'voted for your raise' : r.vote === 'away' ? 'did not come' : 'voted against your raise'}</span>${kept ? ' <span class="soft small">as promised</span>' : broke ? ' <span class="rope small">despite a promise</span>' : ''}${p ? '' : ''}</div>`;
     }).join('')}</div>
-    <p>Six days: <span class="money">₺${total}</span> in tips${m?.raise ? ', and the tea money goes up' : ''}. The tin: <span class="money">₺${s.k.money}</span>.</p>
+    <p>You received <span class="money">₺${total}</span> in tips over six days.${m?.raise ? ' Your tea money will increase.' : ''} You have <span class="money">₺${s.k.money}</span> in your tin.</p>
     <p>${s.ring.answer === 'yes' ? 'Burak showed his moving paper ferry. ' : s.ring.answer === 'not yet' ? 'Burak kept his paper project private. ' : 'Burak has his own unfinished work. '}${s.catHome ? 'Pamuk sleeps on the step.' : ''}</p>
-    <p class="story-outcomes">${s.stories?.feud.reconciled ? 'Hacer and Sevim rewrote the notice over tea. ' : ''}${s.stories?.fund.repaired ? 'The new pump is running; the repair is recorded in the fund book.' : ''}</p>
+    <p class="story-outcomes">${s.stories?.feud.reconciled ? 'Hacer and Sevim rewrote the notice over tea. ' : ''}${s.stories?.fund.repaired ? 'The new pump is running. The repair is recorded in the fund book.' : ''}</p>
     <div class="margin hand">${m?.raise ? 'You did well in your first week. They will want more next week.' : 'Your first week is over. Next week they will know you better.'} <span class="soft">— R.</span></div>
     <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
-    <p class="soft small">Week 2 is still being written. Your notebook is saved.</p>
+    <p class="soft small">Week 2 is still being developed. Your notebook is saved.</p>
     </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button>${labTools ? '<button data-a="download">Download this run</button>' : ''}</div><button class="primary" data-a="title">Close the notebook</button></div>
   </div>`;
   mountMenu(app().querySelector('.menu-slot'), s);

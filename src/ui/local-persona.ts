@@ -49,7 +49,7 @@ export function reduceLocalPersona(
       arrival.branchId !== envelope.branchId ||
       envelope.parentRevision !== arrival.revision
     )
-      throw new Error('The file claim does not continue its selected arrival.');
+      throw new Error('This saved character does not continue the arrival you selected.');
     // Retry the current accepted claim without replaying its now-historical source insertion.
     if (state.heads[envelope.castId] === envelope.revision) return acceptPersona(state, envelope);
     // A file starts its local chain at an imported checkpoint. Its earlier revisions remain in the source.
@@ -89,7 +89,11 @@ export async function acceptLocalPersona(
       }
     };
     tx.oncomplete = () => resolve(envelope);
-    tx.onerror = () => reject(failure ?? tx.error ?? new Error('File continuity storage failed.'));
-    tx.onabort = () => reject(failure ?? tx.error ?? new Error('File continuity storage was interrupted.'));
+    tx.onerror = () =>
+      reject(failure ?? tx.error ?? new Error('The character history could not be saved on this device.'));
+    tx.onabort = () =>
+      reject(
+        failure ?? tx.error ?? new Error('Saving the character history on this device was interrupted.'),
+      );
   });
 }

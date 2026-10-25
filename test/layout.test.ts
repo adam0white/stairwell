@@ -329,11 +329,11 @@ it.each([
     const before = await page.evaluate('window.__st.s.minute');
     await page.clock.runFor(3100);
     expect(await page.evaluate('window.__st.s.minute')).toBe(before);
-    expect(await page.locator('.clock-rate').textContent()).toContain('is talking · time waits');
+    expect(await page.locator('.clock-rate').textContent()).toContain('is talking. Time is paused.');
     await page.getByRole('button', { name: 'Residents', exact: true }).click();
     await page.clock.runFor(3100);
     expect(await page.evaluate('window.__st.s.minute')).toBe(before);
-    expect(await page.locator('.clock-rate').textContent()).toContain('Reading · time waits');
+    expect(await page.locator('.clock-rate').textContent()).toContain('You are reading. Time is paused.');
     await page.locator('.resident-list button').nth(1).click();
     expect(await page.evaluate('window.__st.s.minute')).toBe(before);
     expect(await page.locator('.action-bar').textContent()).toContain('min');
@@ -613,13 +613,13 @@ it('shows the rate when the order slowdown ends', async () => {
       for (const task of debug.s.tasks) if (task.from <= debug.s.minute) task.done = debug.s.minute;
       debug.render();
     });
-    expect(await page.locator('.clock-rate').textContent()).toBe('6 game min/s');
+    expect(await page.locator('.clock-rate').textContent()).toBe('6 game minutes/second');
     await page.getByRole('button', { name: 'Information', exact: true }).click();
     await page.getByText('Clock speed', { exact: true }).click();
     await page.getByRole('button', { name: 'Fast', exact: true }).click();
     await page.getByRole('button', { name: 'Close information', exact: true }).click();
     await page.clock.runFor(32);
-    expect(await page.locator('.clock-rate').textContent()).toBe('12 game min/s');
+    expect(await page.locator('.clock-rate').textContent()).toBe('12 game minutes/second');
   } finally {
     await page.close();
   }
@@ -700,7 +700,7 @@ it('shows the working rate while unfinished orders remain', async () => {
       debug.s.k.busyUntil = debug.s.minute + 20;
       debug.render();
     });
-    expect(await page.locator('.clock-rate').textContent()).toBe('6 game min/s');
+    expect(await page.locator('.clock-rate').textContent()).toBe('6 game minutes/second');
   } finally {
     await page.close();
   }
@@ -782,7 +782,7 @@ it('explains that an older cast notebook requires Start fresh', async () => {
     );
     await page.reload();
     expect(await page.locator('[data-a=continue]').count()).toBe(0);
-    expect(await page.getByRole('status').textContent()).toContain('Start fresh');
+    expect(await page.getByRole('status').textContent()).toContain('Start a new game');
   } finally {
     await page.close();
   }

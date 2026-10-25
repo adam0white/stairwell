@@ -44,20 +44,22 @@ export interface CastChapter {
 }
 export const roleFor = (castId: string): Rid => {
   const role = (Object.keys(RESIDENTS) as Rid[]).find((id) => RESIDENTS[id].castId === castId);
-  if (!role) throw new Error('Person is outside Stairwell allocation.');
+  if (!role) throw new Error('This character does not have a role in The Stairwell.');
   return role;
 };
 export function admitCast(input: LifePreparation, opening: Person): Person {
   const { parent } = input;
   const canonical = canonicalCast(parent.castId);
   if (parent.castRevision !== canonical.revision || roleFor(parent.castId) !== opening.id)
-    throw new Error('Older or mismatched cast edition. Export it or choose an explicit fresh branch.');
+    throw new Error(
+      'This character belongs to an older or different version. Export the file or start a new character history.',
+    );
   if (canonicalPersona(preparePersonaLife(parent, input.clockMs)) !== canonicalPersona(input))
-    throw new Error('Pinned away-life differs from its source/clock.');
+    throw new Error('The saved time away does not match the character’s history.');
   lifeAdmission(input, 'stairwell');
   if (parent.transfer.castPassport === 'authored-cast/1')
     throw new Error(
-      'Biography-only head has no actual Person passport. Keep its archive or explicitly begin a fresh local story.',
+      'This file contains only a biography, without a saved character. Keep its archive or start a new local story.',
     );
   const own =
     parent.source.game === 'stairwell' &&
@@ -70,11 +72,11 @@ export function admitCast(input: LifePreparation, opening: Person): Person {
     parent.transfer.castPassport === 'site-cast/1';
   if ((!own && !voice) || parent.source.engine !== '2.17.0' || parent.transfer.sourceRole !== opening.id)
     throw new Error(
-      'Unsupported source role/dialect. Keep that chapter or export it; no silent fresh replacement.',
+      'This source role or character format is unsupported. Keep the chapter or export it. It will not be replaced with a new story.',
     );
   if (own && (!Array.isArray(parent.transfer.hostObligations) || parent.transfer.hostObligations.length))
     throw new Error(
-      'The source building account or dues remain unresolved in their source world. Keep that chapter; these obligations cannot disappear in a fresh opening.',
+      'The building account or dues still need attention in the source game. Keep that chapter. Starting here cannot remove those duties.',
     );
   const portable = validateCalendarPersona(parent.transfer.person);
   const mapping = own ? CAST_MAP : 'site-cast-calendar/1';
@@ -83,7 +85,7 @@ export function admitCast(input: LifePreparation, opening: Person): Person {
     portable.person.source.id !== opening.id ||
     portable.person.source.engine !== parent.source.engine
   )
-    throw new Error('Passport source binding mismatch.');
+    throw new Error('The character file does not match its source game.');
   const receipt = parent.transfer.checkpoint as
     | { schema?: unknown; sourceMinute?: unknown; rng?: unknown; sha256?: unknown }
     | undefined;
@@ -96,11 +98,11 @@ export function admitCast(input: LifePreparation, opening: Person): Person {
     typeof receipt.sha256 !== 'string' ||
     !/^[a-f0-9]{64}$/.test(receipt.sha256)
   )
-    throw new Error('Missing full-source receipt.');
+    throw new Error('The file is missing the record needed to verify its source.');
   const norms = portable.calendar.norms.map((norm) => {
     const known = DEFAULT_NORMS.find((n) => n.id === norm.id);
     if (!known || canonicalPersona(known) !== canonicalPersona(norm))
-      throw new Error('Unsupported norm meaning.');
+      throw new Error('The game cannot carry one of this character’s personal rules.');
     return known;
   });
   const obligations = [...portable.calendar.commitments, ...portable.calendar.owed];
@@ -112,7 +114,7 @@ export function admitCast(input: LifePreparation, opening: Person): Person {
         ('toId' in c && c.toId && !['self', 'god', 'Allah'].includes(c.toId)),
     )
   )
-    throw new Error('A source duty needs its original place/person. It cannot be waived here.');
+    throw new Error('A duty still needs someone or somewhere in the source game. You cannot cancel it here.');
   const shifted = structuredClone(portable);
   const offset = opening.now - portable.person.source.now;
   shifted.calendar.offset = offset;
@@ -128,11 +130,11 @@ export function admitCast(input: LifePreparation, opening: Person): Person {
   }
   if (shifted.calendar.lapse) shifted.calendar.lapse.since += offset;
   const target = restore(snapshot(opening));
-  if (target.activity) throw new Error('Target opening is already on duty.');
+  if (target.activity) throw new Error('This character is already doing something at the start of the game.');
   target.body.fitness = portable.person.health.fitness;
   const age = portable.person.source.now - portable.person.life.bornAt;
   if (age < canonical.age * 525600 || age > (canonical.age + 200) * 525600)
-    throw new Error('Canonical age provenance mismatch.');
+    throw new Error('The character’s age does not match the saved history.');
   target.life.bornAt = portable.person.life.bornAt + offset;
   // Unknown skills retain their source archive and are explicitly omitted, never recertified.
   const omitted = Object.keys(shifted.person.skills);
@@ -140,7 +142,7 @@ export function admitCast(input: LifePreparation, opening: Person): Person {
   shifted.person.skillRetention = null;
   if (omitted.length)
     shifted.person.limitations.push(
-      `Source archive retains skills without Stairwell evidence: ${omitted.join(', ')}`,
+      `These skills remain in the earlier game’s archive because The Stairwell has no evidence for them: ${omitted.join(', ')}.`,
     );
   target.agenda.commitments = [];
   delete target.agenda.owed;
@@ -181,7 +183,7 @@ export async function sourceTransfer(person: Person, hostObligations: string[]) 
     },
   });
   portable.person.limitations.push(
-    'Host beliefs, source-trust, relationships, household account, visitor secrets and raw episodes remain in the full Stairwell source archive. No work, debt or private outcome is completed by travel.',
+    'Beliefs, trust, relationships, building accounts, visitor secrets and memories remain in the full archive of this game. Moving to another game does not finish work, pay debts or resolve private matters.',
   );
   const raw = snapshot(person);
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPersona(raw)));
