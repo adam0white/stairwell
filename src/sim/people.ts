@@ -154,6 +154,7 @@ export function makeResident(id: Rid, seed: number, now: number): Person {
   const r = RESIDENTS[id];
   const base = {
     id,
+    lexicon: { plainEnglish: true },
     name: r.name,
     now,
     bornAt: yearsAgo(now, r.age),
@@ -293,6 +294,7 @@ function seedNeighbours(p: Person, now: number) {
 export function makeKapici(seed: number, now: number): Person {
   const p = createPerson({
     id: KAPICI,
+    lexicon: { plainEnglish: true },
     name: 'Kapıcı',
     now,
     seed: seed ^ 0x99,

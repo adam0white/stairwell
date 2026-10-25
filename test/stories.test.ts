@@ -170,6 +170,6 @@ it('discovers both stories through public actions and replays complete state and
 });
 
 it('uses current testimony wording and refuses old editions explicitly', () => {
-  expect(claimWords(STORY_FACTS.hacer, true, 'stairwell@7')).toContain('notice');
+  expect(claimWords(STORY_FACTS.hacer, true, 'stairwell@8')).toContain('notice');
   expect(() => newGame(1, 'stairwell@3')).toThrow(/Start fresh/);
 });

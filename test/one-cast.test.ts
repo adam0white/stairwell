@@ -172,7 +172,7 @@ it('admits the unchanged source-bound return contract from Hearsay rules 4 or 5 
     expect(admitted.prefix.sourceHead.revision).toBe(s.oneCast?.head?.revision);
     expect(admitted.person).toEqual(expected.person);
   }
-  const future = await createPersona({ ...body, source: { ...body.source, rules: '7' } });
+  const future = await createPersona({ ...body, source: { ...body.source, rules: '8' } });
   await expect(prepareDeryaReturn(future, s, { build: 'test' })).rejects.toThrow(
     /unsupported game or version/,
   );

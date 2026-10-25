@@ -1,6 +1,8 @@
-# Canonical Stairwell edition 7
+# Canonical Stairwell cast: content edition 7
 
 Technical delivery ends with released whole-cast integration, exact green CI, live deployment and both-size genuine peer journeys. The owner reviews afterwards. This content checkpoint does not complete delivery. Content checkpoint3ab8526 preceded publication. Integration uses released HF2.18.0 (engine2.17.0), client0.4.0 and kit0.5.0 from the exact immutable published artifacts.
+
+The integration versions above describe the original canonical-content delivery. The current narration notebook is edition8 with HF2.21.0/engine2.21.0. Its five canonical lives remain unchanged. Fresh actors enable plain English; replay restores the pinned admitted narration choice. Old edition7 seed-only notebooks explicitly require Start fresh. Current adoption and delivery evidence is recorded in ~/code/.lab-scratch/hfadopt/stairwell-report.md; this page preserves the historical content receipts below.
 
 ## Exhaustive foreground census
 

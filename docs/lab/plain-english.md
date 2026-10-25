@@ -11,3 +11,9 @@ The frozen shared reading checker reports source candidates, including internal 
 Technical completion requires signed source on origin, exact green CI, a fresh latest-origin deployment, a clean matching release and the eight browser/viewport checks. The owner accepts feel and readiness separately. Friends and Show HN remain paused. This task runs no new playtest round. F-492 retains the simplification history. F-493 is the route for the setting and Turkish-word pass.
 
 The 2026-10-25 source rewrite follows the Pass pilot. Delivery requires the rules comparison, current export replay, ten minutes of automated play, both requested layouts, one independent Codex review, signed main, exact green CI and a clean matching live release. The owner accepts the reading experience separately. HF package narration remains outside this game change.
+
+## HF 2.21 adoption lesson
+
+Fresh Stairwell edition 8 actors enable HF's persisted `lexicon.plainEnglish` option at construction. Calendar admission starts a new host chapter with that option. Replay restores the chapter's pinned initial actors and validates their saved lexicon instead of replacing it with the current default. Edition 7 seed-only notebooks refuse with a plain Start fresh message. They cannot silently acquire different narration.
+
+Pin the framework in both direct dependencies and npm overrides. The immutable lab-client package otherwise installs its older framework transitively. Keep activity and claim IDs, history order, intention meanings and counteroffer timing when comparing upgrades. HF intention and counteroffer labels are prose with semantic consumers: invert the exact grammar change for comparison rather than discarding all strings. Treat missing evidence as unfinished work.

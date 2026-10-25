@@ -67,7 +67,7 @@ import {
 
 export const LEGACY_GAME_VERSION = 'stairwell@3';
 export const PREVIOUS_GAME_VERSION = 'stairwell@4';
-export const GAME_VERSION = 'stairwell@7';
+export const GAME_VERSION = 'stairwell@8';
 export const DAY_START = 7 * 60;
 export const DAY_END = 21 * 60;
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];

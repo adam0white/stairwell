@@ -48,8 +48,8 @@ let pending = Promise.resolve();
 const source = () => ({
   game: 'stairwell',
   build: lab.build().c ?? 'development',
-  engine: '2.17.0',
-  rules: '7',
+  engine: '2.21.0',
+  rules: '8',
 });
 const history = (g: GameState) => {
   const heads = Object.fromEntries((g.castChapter?.claims ?? []).map((h) => [h.castId, h]));
@@ -280,6 +280,10 @@ export async function validateContinuity(g: GameState): Promise<void> {
       await validatePersona(input.parent);
       const id = roleFor(input.parent.castId);
       const target = personOf(opening, id);
+      // A replay validates the admitted narration choice, not today's fresh-game default.
+      const savedLexicon = header.initial[id]?.lexicon;
+      if (savedLexicon) target.lexicon = structuredClone(savedLexicon);
+      else delete target.lexicon;
       const expected = admitCast(input, target);
       if (canonicalPersona(snapshot(expected)) !== canonicalPersona(header.initial[id]))
         throw new Error(
@@ -292,7 +296,7 @@ export async function validateContinuity(g: GameState): Promise<void> {
         claim.parentRevision !== input.parent.revision ||
         claim.branchId !== input.parent.branchId ||
         claim.source.game !== 'stairwell' ||
-        claim.source.rules !== '7' ||
+        claim.source.rules !== '8' ||
         canonicalPersona(claim.transfer.life) !== canonicalPersona(input.life)
       )
         throw new Error(
@@ -309,7 +313,7 @@ export async function validateContinuity(g: GameState): Promise<void> {
         head.castId !== id ||
         head.castRevision !== RESIDENTS[roleFor(id)].castRevision ||
         head.source.game !== 'stairwell' ||
-        head.source.rules !== '7'
+        head.source.rules !== '8'
       )
         throw new Error('The saved record of this game’s control of the character history is invalid.');
       const claim = header?.claims.find((h) => h.castId === id);

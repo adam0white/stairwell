@@ -70,7 +70,7 @@ async function parent(id: 'hacer' | 'burak', fitness: number) {
     castRevision: '1',
     branchId: `source-${id}`,
     parentRevision: null,
-    source: { game: 'stairwell', build: 'test', engine: '2.17.0', rules: '7' },
+    source: { game: 'stairwell', build: 'test', engine: '2.21.0', rules: '8' },
     transfer: { ...transfer, life: initialPersonaLife(castId, `source-${id}`, 0) },
     limitations: [],
   });
@@ -120,10 +120,21 @@ it('claims both known people together and replays their full actual admitted sta
   expect(mocks.batch).toHaveLength(1);
   expect(current.castChapter?.inputs).toHaveLength(2);
   expect(personOf(current, 'hacer').body.fitness).toBe(0.43);
+  for (const actor of [...current.people, current.kapici]) expect(actor.lexicon?.plainEnglish).toBe(true);
   expect(personOf(current, 'burak').body.fitness).toBe(0.57);
   expect(
     replay(current.seed, current.inputs, current.minute, GAME_VERSION, undefined, current.castChapter),
   ).toEqual(current);
+  // Loading pinned admitted state must not reset an explicit saved narration choice.
+  const chapter = current.castChapter;
+  if (!chapter) throw new Error('Expected an admitted cast chapter');
+  const pinned = structuredClone(chapter);
+  const hacer = pinned.initial.hacer;
+  if (!hacer) throw new Error('Expected pinned Hacer');
+  hacer.lexicon = { plainEnglish: false };
+  const loaded = replay(current.seed, current.inputs, current.minute, GAME_VERSION, undefined, pinned);
+  expect(personOf(loaded, 'hacer').lexicon?.plainEnglish).toBe(false);
+  await validateContinuity(loaded);
   await gateContinuity(current);
   expect(mocks.allowed).toBe(true);
   await chooseContinuityRecording(true);
@@ -182,7 +193,7 @@ it('restores only local accepted heads, refuses stale CAS and keeps imported rec
   const { closePersonaBranch } = await import('@adam0white/lab-client');
   const terminal = await closePersonaBranch(
     last,
-    { game: 'stairwell', build: 'test', engine: '2.17.0', rules: '7' },
+    { game: 'stairwell', build: 'test', engine: '2.21.0', rules: '8' },
     personOf(restored, 'hacer').now,
   );
   state = acceptPersonaBatch(state, [terminal]);

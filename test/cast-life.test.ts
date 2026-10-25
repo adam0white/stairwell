@@ -10,7 +10,7 @@ it('refuses a biography-only head rather than resetting it to a fresh Person', a
     castRevision: '1',
     branchId: 'cast-control',
     parentRevision: null,
-    source: { game: 'voice', build: 'test', engine: '2.17.0', rules: 'voice-4' },
+    source: { game: 'voice', build: 'test', engine: '2.21.0', rules: 'voice-4' },
     transfer: {
       castPassport: 'authored-cast/1',
       life: initialPersonaLife('hf.cast.hacer.voice', 'cast-control', 0),
@@ -39,7 +39,7 @@ it('carries actual acquired fitness, temperament and RNG through a declared nati
     castRevision: '1',
     branchId: 'actual-control',
     parentRevision: null,
-    source: { game: 'stairwell', build: 'test', engine: '2.17.0', rules: '7' },
+    source: { game: 'stairwell', build: 'test', engine: '2.21.0', rules: '8' },
     transfer: { ...captured.transfer, life: initialPersonaLife('hf.cast.hacer.voice', 'actual-control', 0) },
     limitations: captured.transfer.person.person.limitations,
   });
@@ -62,7 +62,7 @@ it('refuses a native passport whose host edition has a different meaning', async
     castRevision: '1',
     branchId: 'old-native-control',
     parentRevision: null,
-    source: { game: 'stairwell', build: 'test', engine: '2.17.0', rules: '6' },
+    source: { game: 'stairwell', build: 'test', engine: '2.21.0', rules: '6' },
     transfer: { ...transfer, life: initialPersonaLife('hf.cast.hacer.voice', 'old-native-control', 0) },
     limitations: [],
   });
@@ -80,7 +80,7 @@ it('does not erase source-world financial obligations in a new opening', async (
     castRevision: '1',
     branchId: 'account-control',
     parentRevision: null,
-    source: { game: 'stairwell', build: 'test', engine: '2.17.0', rules: '7' },
+    source: { game: 'stairwell', build: 'test', engine: '2.21.0', rules: '8' },
     transfer: { ...transfer, life: initialPersonaLife('hf.cast.burak.stairwell', 'account-control', 0) },
     limitations: [],
   });

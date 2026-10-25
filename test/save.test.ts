@@ -15,7 +15,7 @@ describe('saved notebook validation', () => {
     expect(isSaved({ ...notebook(), game: 'stairwell@3' })).toBe(false);
     expect(isSaved({ ...notebook(), game: 'stairwell@4' })).toBe(false);
     expect(isSaved({ ...notebook(), game: 'stairwell@5' })).toBe(false);
-    expect(isSaved({ ...notebook(), game: 'stairwell@7' })).toBe(true);
+    expect(isSaved({ ...notebook(), game: 'stairwell@8' })).toBe(true);
   });
   it('accepts exported weeks and notebooks without a saved minute', () => {
     for (const policy of ['quiet', 'honest', 'gossip', 'liar'] as const) {
