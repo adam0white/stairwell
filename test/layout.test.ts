@@ -977,3 +977,49 @@ it('keeps the actual compact notice and wrapper readable without reserved blank 
     await page.close();
   }
 });
+
+it('keeps full journal and conversation lines readable with the phone footer', async () => {
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await gotoGame(page);
+    await expect
+      .poll(() => page.locator('.lk-telemetry-notice').evaluate((el) => getComputedStyle(el).visibility))
+      .toBe('visible');
+    await page.locator('[data-a=new]').click();
+    await page.locator('.game').waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    await page.clock.install();
+    const lastLine = async (selector: string) =>
+      page.locator(selector).evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let last: Node | null = null;
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          if (node.textContent?.trim()) last = node;
+        }
+        if (!last) throw new Error('Expected actual reading text');
+        const range = document.createRange();
+        range.selectNodeContents(last);
+        const line = Array.from(range.getClientRects()).at(-1);
+        if (!line) throw new Error('Expected a rendered final line');
+        const box = el.getBoundingClientRect();
+        return {
+          top: line.top,
+          bottom: line.bottom,
+          boxTop: box.top,
+          boxBottom: box.bottom,
+          height: el.clientHeight,
+        };
+      });
+    const journal = await lastLine('.journal');
+    expect(journal.top, JSON.stringify(journal)).toBeGreaterThanOrEqual(journal.boxTop - 1);
+    expect(journal.bottom, JSON.stringify(journal)).toBeLessThanOrEqual(journal.boxBottom + 1);
+    await page.evaluate("window.__st.send({ kind: 'go', to: 'door:hacer' }); window.__st.advance(20);");
+    await page.locator('[data-a=news]').click();
+    const dialogue = await lastLine('.sheet');
+    expect(dialogue.top, JSON.stringify(dialogue)).toBeGreaterThanOrEqual(dialogue.boxTop - 1);
+    expect(dialogue.bottom, JSON.stringify(dialogue)).toBeLessThanOrEqual(dialogue.boxBottom + 1);
+  } finally {
+    await page.close();
+  }
+});
