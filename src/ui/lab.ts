@@ -227,15 +227,15 @@ export function openFeedback(
   form.append(body, actions);
   dialog.append(form);
   let sending = false;
-  let queued = false;
+  let sent = false;
   const choice = feedbackPersonaControl(lab);
   if (choice) preferences.append(choice);
   const update = () => {
-    send.disabled = !queued && sending;
+    send.disabled = !sent && sending;
   };
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (queued) {
+    if (sent) {
       dialog.close();
       return;
     }
@@ -247,21 +247,18 @@ export function openFeedback(
     const submittedName = name.value.trim().slice(0, 60);
     try {
       const sharePlay = feedbackSharePlay(choice);
-      const noteOnly = !lab.telemetryOn && !sharePlay;
-      await lab.sendFeedback(text, {
+      const receipt = await lab.sendFeedback(text, {
         name: submittedName,
         run: feedbackRun(getRun),
         sharePlay,
       });
       rememberName(submittedName);
-      queued = true;
-      status.textContent = !noteOnly
-        ? 'Your note is waiting to be sent. It may include your saved game if one is available. This message does not confirm delivery.'
-        : 'Your note is waiting to be sent. It does not include your saved game or link your play history. This message does not confirm delivery.';
+      sent = true;
+      status.textContent = `Sent. Your note is stored. Reference ${receipt}.`;
       send.textContent = 'Back to the game';
     } catch (error) {
       console.error('Feedback failed', error);
-      status.textContent = 'The game could not save your note for sending. Please try again.';
+      status.textContent = 'Your note could not be sent. Please try again.';
     } finally {
       sending = false;
       update();
