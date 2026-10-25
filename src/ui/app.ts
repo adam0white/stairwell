@@ -104,8 +104,11 @@ const ui: Ui = {
 };
 
 const notice = telemetryNotice();
-// Leave room for wider system fonts while keeping the shared notice node and type size.
-if (notice) notice.style.paddingInline = '2px';
+// Use portable footer metrics without changing the shared node, type size or body typography.
+if (notice) {
+  notice.style.paddingInline = '2px';
+  notice.style.fontFamily = 'Arial, "Liberation Sans", sans-serif';
+}
 function mountNotice() {
   if (!notice || document.getElementById('telemetry-footer')) return;
   const footer = document.createElement('footer');

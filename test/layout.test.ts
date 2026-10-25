@@ -934,11 +934,20 @@ it('keeps the actual compact notice and wrapper readable without reserved blank 
         const range = document.createRange();
         range.selectNodeContents(el);
         const text = range.getBoundingClientRect();
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d')!;
+        context.font = style.font;
         return {
           node: box.height,
           wrapper: wrapper.height,
           font: parseFloat(style.fontSize),
           fontFamily: style.fontFamily,
+          letterSpacing: style.letterSpacing,
+          textWidth: context.measureText(el.textContent ?? '').width,
+          lineRects: Array.from(range.getClientRects(), (rect) => ({
+            width: rect.width,
+            height: rect.height,
+          })),
           contentWidth: el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
           textBottom: text.bottom,
           bottom: box.bottom,
@@ -950,6 +959,7 @@ it('keeps the actual compact notice and wrapper readable without reserved blank 
     expect(normal.font).toBeGreaterThanOrEqual(14);
     expect(normal.wrapper, JSON.stringify(normal)).toBeLessThanOrEqual(40);
     expect(normal.contentWidth).toBeGreaterThanOrEqual(354);
+    expect(normal.lineRects).toHaveLength(1);
     expect(normal.wrapper).toBeCloseTo(normal.node, 1);
     expect(normal.clipped).toBe(false);
     expect(normal.overflow).toBe(false);
