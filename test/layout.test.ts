@@ -563,7 +563,7 @@ it('shows lateness before an order is committed', async () => {
     });
     await page.getByRole('button', { name: /^Orders/ }).click();
     await page.locator('.sheet .task').first().click();
-    expect(await page.locator('.trip-line').textContent()).toContain('late by about');
+    expect(await page.locator('.trip-line').textContent()).toMatch(/about \d+ min late/);
     expect(await page.evaluate('window.__st.s.inputs.length')).toBe(0);
   } finally {
     await page.close();
@@ -597,7 +597,7 @@ it('includes a carried deadline when selecting its flat directly', async () => {
       d.render();
     });
     await page.locator('.scene [data-go="door:tarik"]').click();
-    expect(await page.locator('.trip-line').textContent()).toContain('late by about');
+    expect(await page.locator('.trip-line').textContent()).toMatch(/about \d+ min late/);
     expect(await page.evaluate('window.__st.s.inputs.length')).toBe(0);
   } finally {
     await page.close();

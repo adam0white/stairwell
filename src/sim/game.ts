@@ -381,6 +381,23 @@ const JOBS: {
   { for: 'tarik', label: 'fix his dripping tap', place: 'door:tarik', work: 18, window: [11 * 60, 18 * 60] },
 ];
 
+function unfinishedTask(t: Task): string {
+  const name = nameOf(t.for);
+  if (t.kind === 'bread' || t.kind === 'parcel') return `You did not deliver ${t.label} to ${name} today.`;
+  if (t.label === 'pick up her pharmacy bag') return `You did not deliver ${name}’s pharmacy bag today.`;
+  if (t.label === 'his shopping: bread, olives and tea')
+    return `You did not bring ${name} bread, olives and tea today.`;
+  if (t.label === 'Water his plants. The key is under the mat.')
+    return `You did not water ${name}’s plants today.`;
+  if (t.label === 'look at the boiler because there is no hot water')
+    return `You did not check the boiler for ${name} today. There was no hot water.`;
+  const action = t.label
+    .replace(/[.!?]$/, '')
+    .replace(/^./, (c) => c.toLowerCase())
+    .replace(/\b(his|her)\b/g, `${name}’s`);
+  return `You did not ${action}${action.includes(`${name}’s`) ? '' : ` for ${name}`} today.`;
+}
+
 export function planDay(s: GameState, day: number) {
   const d = dayStart(day);
   const r = (kind: number, i: number) => hashUnit(s.seed, kind, day, i);
@@ -562,7 +579,7 @@ export function newGame(seed: number, edition = GAME_VERSION, chapter?: CastChap
   say(
     s,
     'narrator',
-    'It is Monday. This is your first day at Lale Apartmanı. The bread order is on the board. Mr Burak’s notice says the water will be off on Wednesday from 10:00 to 12:00.',
+    'It is Monday. This is your first day at Lale Apartmanı, the Lale apartment building. The bread order is on the board. Mr Burak’s notice says the water will be off on Wednesday from 10:00 to 12:00.',
     'journal',
   );
   if (chapter) {
@@ -590,7 +607,7 @@ export function newGame(seed: number, edition = GAME_VERSION, chapter?: CastChap
         addTask(s, {
           kind: 'job',
           for: id,
-          label: `Request ${life.assignment}: Bring ${id === 'hacer' ? (input.life.assignment === 0 ? 'clean packaging' : 'a folded shop notice') : id === 'burak' ? 'a blank account sheet' : id === 'sevim' ? 'a clear notice draft' : id === 'tarik' ? 'a recorder battery' : 'supplies quietly to the door hook'}.`,
+          label: `Bring ${id === 'hacer' ? (input.life.assignment === 0 ? 'clean packaging' : 'a folded shop notice') : id === 'burak' ? 'a blank account sheet' : id === 'sevim' ? 'a clear notice draft' : id === 'tarik' ? 'a recorder battery' : 'supplies quietly to the door hook'}.`,
           place: `door:${id}`,
           from: 16 * 60,
           by: 19 * 60,
@@ -1100,7 +1117,12 @@ function wordGetsBack(s: GameState, subj: Rid, from: Rid, prop: string, value: b
     believeSelf(p, 'kapici:dishonest', true, 0.75, s.minute);
     seedSourceTrust(p, KAPICI, trustOf(p, KAPICI) * 0.8);
   }
-  say(s, 'narrator', `${nameOf(from)} told ${nameOf(subj)} what you had been saying about them.`, 'event');
+  say(
+    s,
+    'narrator',
+    `${nameOf(from)} repeated your comments about ${nameOf(subj)} to ${subj === 'burak' || subj === 'tarik' ? 'him' : 'her'}.`,
+    'event',
+  );
   stamp(s, 'word_back');
   void value;
 }
@@ -1415,7 +1437,12 @@ function complete(s: GameState, t: Task, hook: boolean) {
   if (!present) {
     if (late) report(s).late++;
     else report(s).done++;
-    say(s, 'narrator', `${nameOf(t.for)} had gone out. They will find it done.`, 'journal');
+    say(
+      s,
+      'narrator',
+      `${nameOf(t.for)} had gone out. ${t.for === 'burak' || t.for === 'tarik' ? 'He' : 'She'} will find the work done on coming home.`,
+      'journal',
+    );
     return;
   }
   const aff = relationshipWith(p, KAPICI).affection;
@@ -1609,7 +1636,7 @@ function applyInput(s: GameState, inp: Input) {
     case 'invent':
     case 'word':
       if (!canTalk(s, inp.who)) {
-        say(s, 'narrator', `${nameOf(inp.who)} is not in front of you.`, 'journal');
+        say(s, 'narrator', `${nameOf(inp.who)} is not here. You need to meet face to face.`, 'journal');
         return;
       }
       if (inp.kind === 'news') return askNews(s, inp.who);
@@ -1618,7 +1645,7 @@ function applyInput(s: GameState, inp: Input) {
       return askWord(s, inp.who);
     case 'sit':
       if (!canTalk(s, inp.who)) {
-        say(s, 'narrator', `${nameOf(inp.who)} is not in front of you.`, 'journal');
+        say(s, 'narrator', `${nameOf(inp.who)} is not here. You need to meet face to face.`, 'journal');
         return;
       }
       return sit(s, inp.who, inp.topic);
@@ -1658,7 +1685,7 @@ const SIT_LINES: Record<Rid, string[]> = {
   tarik: [
     'In 1974 the ferry froze in the harbour. Did I tell you? We walked to Karaköy on the ice. Nobody believes me.',
     'My family visits when they can. When they cancel a visit, I still notice the time I would have spent with them.',
-    'I worked on the Kadıköy run for forty years. I knew the route without looking. Some mornings I did not look.',
+    'I worked on the ferry route to Kadıköy for forty years. I knew the route without looking. Some mornings I did not look.',
     'You climb those stairs for me every day. You have saved my legs some work. I am grateful.',
   ],
 };
@@ -1873,14 +1900,14 @@ function deliverClaim(s: GameState, who: Rid, prop: string, value: boolean, conf
   else if (unfav && aboutPerson && holds) {
     line = pick(s, [
       'I would rather not hear that.',
-      'That’s their business, not mine.',
+      'That is a private matter.',
       'Let’s not talk about people.',
     ]);
     socialEvent(p, { at: s.minute, kind: 'conflict', otherId: KAPICI, byMe: false, magnitude: 0.1 });
   } else if (unfav && aboutPerson && feel > 0.35) {
     line = pick(s, [
       `Don’t talk like that about ${nameOf(subject)}.`,
-      `Are you talking about ${nameOf(subject)}? No, I do not believe that about them.`,
+      `Are you talking about ${nameOf(subject)}? No, I do not believe it.`,
     ]);
     socialEvent(p, { at: s.minute, kind: 'insult', otherId: KAPICI, byMe: false, magnitude: 0.2 });
   } else if (moved < 0.03)
@@ -1897,7 +1924,7 @@ function deliverClaim(s: GameState, who: Rid, prop: string, value: boolean, conf
     ]);
     pleasure = moved * (0.5 - feel) * 2;
   } else if (!unfav && aboutPerson && feel > 0.2) {
-    line = pick(s, ['That’s nice to hear.', 'That is good. I am happy for them.']);
+    line = pick(s, ['That’s nice to hear.', 'That is good. I am happy to hear it.']);
     pleasure = moved * feel;
   } else if (prop === FACTS.ring || prop.includes(':sweet:') || prop === FACTS.visitor) {
     line = pick(s, [
@@ -1963,10 +1990,10 @@ export function wordHint(s: GameState, who: Rid): string {
   const p = personOf(s, who);
   const r = predict(p, wordOffers(), wordAsk);
   return r.verdict === 'assented'
-    ? 'They will probably agree.'
+    ? `${nameOf(who)} will probably agree.`
     : r.verdict === 'refused'
-      ? 'They will probably refuse.'
-      : 'They might agree.';
+      ? `${nameOf(who)} will probably refuse.`
+      : `${nameOf(who)} might agree.`;
 }
 
 function askWord(s: GameState, who: Rid) {
@@ -2648,7 +2675,7 @@ function endDay(s: GameState) {
         say(
           s,
           'narrator',
-          `${nameOf(t.for)}’s request remained unfulfilled at their chapter pause.`,
+          `You had not finished ${nameOf(t.for)}’s request when ${nameOf(t.for)} left this chapter.`,
           'journal',
         );
         continue;
@@ -2661,7 +2688,7 @@ function endDay(s: GameState) {
       say(
         s,
         'narrator',
-        `You did not finish this task for ${nameOf(t.for)} today: ${t.label.replace(/[.!?]$/, '')}. ${t.carried ? 'You left it by their door for the morning.' : 'They will have dealt with it themselves.'} They noticed.`,
+        `${unfinishedTask(t)} ${t.carried ? `You left the delivery by ${nameOf(t.for)}’s door for the morning.` : `${t.for === 'burak' || t.for === 'tarik' ? 'He' : 'She'} probably dealt with it without your help.`} ${t.for === 'burak' || t.for === 'tarik' ? 'He' : 'She'} noticed.`,
         'journal',
       );
     }
@@ -2718,14 +2745,14 @@ function endDay(s: GameState) {
     if (credence(personOf(s, r.id), 'kapici:dishonest') < 0.65) continue;
     r.word = 'no';
     const why = r.caught.length
-      ? 'they caught you telling two stories'
+      ? `${nameOf(r.id)} caught you telling different stories.`
       : r.grudges.some((g) => g.lie)
-        ? 'what you said about them got back to them'
-        : 'people on the step say you are dishonest';
+        ? `Your comments about ${nameOf(r.id)} got back to ${r.id === 'burak' || r.id === 'tarik' ? 'him' : 'her'}.`
+        : 'People on the step say you are dishonest.';
     say(
       s,
       'narrator',
-      `${nameOf(r.id)} avoided looking at you on the stairs because ${why}. You could no longer count on their support on Sunday.`,
+      `${nameOf(r.id)} avoided looking at you on the stairs. ${why} You can no longer count on ${r.id === 'burak' || r.id === 'tarik' ? 'his' : 'her'} vote on Sunday.`,
       'event',
     );
   }
@@ -2735,7 +2762,7 @@ function endDay(s: GameState) {
     say(
       s,
       'riza',
-      `Think about the vote before you sleep. ${likely.length ? `${likely.join(', ')} will probably vote for your raise.` : 'There is nobody you can be sure of.'} ${maybe.length ? `${maybe.join(', ')} may vote for your raise.` : ''} Four votes will raise the tea money.`,
+      `Think about the vote before you sleep. ${likely.length ? `${likely.join(', ')} will probably vote for your raise.` : 'There is nobody you can be sure of.'} ${maybe.length ? `${maybe.join(', ')} may vote for your raise. ` : ''}Four votes will raise the tea money.`,
       'margin',
     );
   }
@@ -2858,28 +2885,31 @@ export function readOf(s: GameState, id: Rid): { warmth: string; word: string } 
   const a = relationshipWith(p, KAPICI).affection;
   const w = trustOf(p, KAPICI);
   const lie = credence(p, 'kapici:dishonest');
+  const name = nameOf(id);
+  const subject = id === 'burak' || id === 'tarik' ? 'he' : 'she';
+  const start = subject === 'he' ? 'He' : 'She';
   const warmth =
     a > 0.35
-      ? 'They are fond of you.'
+      ? `${name} is fond of you.`
       : a > 0.12
-        ? 'They seem friendly.'
+        ? `${name} seems friendly.`
         : a > -0.08
-          ? 'They are polite to you.'
+          ? `${name} is polite to you.`
           : a > -0.25
-            ? 'They seem distant.'
-            : 'They seem unfriendly.';
+            ? `${name} seems distant.`
+            : `${name} seems unfriendly.`;
   const word =
     lie >= 0.65
-      ? 'They think you lie.'
+      ? `${start} thinks you lie.`
       : lie >= 0.55 && w >= 0.45
-        ? 'They are not sure they can trust you.'
+        ? `${start} is not sure ${subject} can trust you.`
         : w >= 0.72
-          ? 'They believe what you say.'
+          ? `${start} believes what you say.`
           : w >= 0.58
-            ? 'They listen to you.'
+            ? `${start} listens to you.`
             : w >= 0.45
-              ? 'They are not sure they can trust you.'
-              : 'They doubt what you say.';
+              ? `${start} is not sure ${subject} can trust you.`
+              : `${start} doubts what you say.`;
   return { warmth, word };
 }
 

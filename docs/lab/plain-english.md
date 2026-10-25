@@ -17,3 +17,9 @@ The 2026-10-25 source rewrite follows the Pass pilot. Delivery requires the rule
 Fresh Stairwell edition 8 actors enable HF's persisted `lexicon.plainEnglish` option at construction. Calendar admission starts a new host chapter with that option. Replay restores the chapter's pinned initial actors and validates their saved lexicon instead of replacing it with the current default. Edition 7 seed-only notebooks refuse with a plain Start fresh message. They cannot silently acquire different narration.
 
 Pin the framework in both direct dependencies and npm overrides. The immutable lab-client package otherwise installs its older framework transitively. Keep activity and claim IDs, history order, intention meanings and counteroffer timing when comparing upgrades. HF intention and counteroffer labels are prose with semantic consumers: invert the exact grammar change for comparison rather than discarding all strings. Treat missing evidence as unfinished work.
+
+## Second reading pass, 2026-10-25
+
+Name the resident in relationship descriptions and use the resident’s pronoun in the same sentence. Write missed errands as actions. Check every task family, including optional requests admitted with character history. A collected bag can still be undelivered; describe delivery, not collection, in the night summary. Keep assignment values in life state and omit internal assignment labels from player instructions. The boiler label prefix still triggers its discovery, so keep that semantic label intact. Route chips show walking and arrival times without framework narration.
+
+Technical delivery and final worktree cleanup are recorded in `~/code/.lab-scratch/plain3/stairwell-report.md`. The owner’s reading acceptance remains separate on 2026-11-03.

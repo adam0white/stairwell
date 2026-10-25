@@ -6,6 +6,10 @@ Canonical adoption and its technical delivery are verified. Owner review of the 
 
 The manual browser download receipt remains unverified. Keep a copy was clicked, but the supported download event timed out. Browser security rejected internal Downloads inspection; no workaround was used. Preserved source export payloads, exact source-file replay and automated target export/replay controls are separate successful evidence. They do not prove a manual download completed.
 
+## 2026-10-25 second reading pass
+
+Source narration names each resident, writes missed errands as complete sentences, explains Lale Apartmanı and the Kadıköy ferry route, and removes internal assignment labels from optional request instructions. Route chips show walking and arrival times. Task rules, canonical people, HF2.21.0 plain-English settings and edition8 remain unchanged. The source proof, exact delivery receipts and cleanup belong to `~/code/.lab-scratch/plain3/stairwell-report.md`. Owner reading acceptance remains separate on 2026-11-03.
+
 ## 2026-10-25 HF narration adoption
 
 The current source uses HF2.21.0/engine2.21.0 and narration notebook edition8. The five canonical lives and their content remain the edition7 cast documented in docs/cast-adoption.md. Fresh actors use HF plain English. Pinned admitted actors retain their saved narration choice on replay. Edition7 seed-only notebooks now refuse with an explicit Start fresh message; no silent narration migration occurs. Dynamic validation, signed delivery, CI and live-release receipts belong to ~/code/.lab-scratch/hfadopt/stairwell-report.md. That report distinguishes unfinished delivery and browser coverage gaps from verified evidence.

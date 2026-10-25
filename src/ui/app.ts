@@ -17,7 +17,6 @@ import {
   type GameState,
   INVENTABLE,
   type Input,
-  legsLine,
   type NewInput,
   nameOf,
   openTasks,
@@ -887,14 +886,13 @@ function tripActions(s: GameState, el: HTMLElement) {
     const first = travelMinutes(s, s.k.at, to);
     const second = task && !task.carried && task.pickup ? travelMinutes(s, to, task.place) : 0;
     const arrive = s.minute + first + second;
-    const legs = legsLine(s, task?.place ?? to);
     const person = selection?.person;
     const title = task
       ? `${task.kind === 'bins' ? 'Bins' : RESIDENTS[task.for].name} · ${task.label}`
       : person
         ? `${RESIDENTS[person].name} · flat ${RESIDENTS[person].flat}`
         : placeName(to);
-    el.innerHTML = `<div class="trip-line"><b>${esc(title)}</b><span>${esc(placeName(to))} ${first} min${second ? `, then ${esc(placeName(task!.place))} ${second} min` : ''} · ${legs ? esc(legs) : `there about ${clockOf(arrive)}`}${task ? ` · due ${clockOf(task.by)}` : ''}${task && arrive > task.by ? `<strong class="late"> · late by about ${arrive - task.by} min</strong>` : ''}${!task && to.startsWith('door:') && rOf(s, to.slice(5) as Rid).where === 'work' ? ` · ${RESIDENTS[to.slice(5) as Rid].name} is out` : ''}</span></div><button class="primary" data-a="go">Go to ${esc(placeName(to))}</button>${selection && !task ? '<button data-a="clear-trip">Back</button>' : ''}`;
+    el.innerHTML = `<div class="trip-line"><b>${esc(title)}</b><span>${esc(placeName(to))} · ${first} min walk${second ? `, then ${esc(placeName(task!.place))} · ${second} min walk` : ''} · there about ${clockOf(arrive)}${task ? ` · due ${clockOf(task.by)}` : ''}${task && arrive > task.by ? `<strong class="late"> · about ${arrive - task.by} min late</strong>` : ''}${!task && to.startsWith('door:') && rOf(s, to.slice(5) as Rid).where === 'work' ? ` · ${RESIDENTS[to.slice(5) as Rid].name} is out` : ''}</span></div><button class="primary" data-a="go">Go to ${esc(placeName(to))}</button>${selection && !task ? '<button data-a="clear-trip">Back</button>' : ''}`;
     el.querySelector('[data-a=go]')?.addEventListener('click', () => {
       const p = selection?.person ?? null;
       selection = null;
@@ -1437,7 +1435,7 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
   return `${title}<div class="door-context">${tabs}<div class="soft small">flat ${info.flat} · ${esc(read.warmth)} ${esc(read.word)}</div>
     ${present ? (lastLine ? spoken : `<div class="soft small">${esc(info.blurb)}</div>`) : `<div class="hand departure">${esc(departure)}</div>`}
     ${grudge ? `<div class="hand rope">“I hear you’ve been saying things about me.”</div>` : ''}
-    ${present ? carriedOther.map((t) => `<button class="prank" data-mis="${t.id}">Leave ${esc(RESIDENTS[t.for].name)}’s parcel here</button>`).join('') : ''}</div>
+    ${present ? carriedOther.map((t) => `<button class="prank" data-mis="${t.id}">Leave ${esc(RESIDENTS[t.for].name)}’s ${esc(t.label.replace(/^a /, ''))} here</button>`).join('') : ''}</div>
     <div class="verbs lk-commit">
       <button data-a="news" ${asked || !present ? 'disabled' : ''}>Anything new?${asked ? '<span class="h">You asked today. Ask again tomorrow.</span>' : ''}</button>
       <button data-a="tell" ${!present ? 'disabled' : ''}>Tell…</button>
@@ -1530,7 +1528,7 @@ function notebookHtml(s: GameState): string {
   const found = props.filter((x) => s.secrets[x.prop] !== undefined);
   const flats = RIDS.map((id) => {
     const rd = readOf(s, id);
-    return `<div class="flatline"><b>${RESIDENTS[id].flat} ${RESIDENTS[id].name}</b> <span class="hand soft">${esc(rd.warmth)} ${esc(rd.word)}</span></div>`;
+    return `<div class="flatline"><b>flat ${RESIDENTS[id].flat}</b> <span class="hand soft">${esc(rd.warmth)} ${esc(rd.word)}</span></div>`;
   }).join('');
   return `<div class="who"><b>The notebook</b><button class="x" data-a="close">✕</button></div>
     <div class="nb">
@@ -1581,7 +1579,7 @@ function nightPage(s: GameState) {
     ${tonight.map(saidLine).join('')}
     <div class="flats">${RIDS.map((id) => {
       const rd = readOf(s, id);
-      return `<div class="flatline"><b>${RESIDENTS[id].name}</b> <span class="hand soft">${esc(rd.warmth)} ${esc(rd.word)}</span></div>`;
+      return `<div class="flatline"><b>${esc(rd.warmth)}</b> <span class="hand soft">${esc(rd.word)}</span></div>`;
     }).join('')}</div>
     ${margin ? `<div class="margin hand">${esc(margin)} <span class="soft">— R.</span></div>` : ''}
     ${open ? `<p class="open hand">${esc(open)}</p>` : ''}
@@ -1660,7 +1658,7 @@ function sundayPage(s: GameState) {
     <div class="margin hand">${m?.raise ? 'You did well in your first week. They will want more next week.' : 'Your first week is over. Next week they will know you better.'} <span class="soft">— R.</span></div>
     <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
-    <p class="soft small">Week 2 is still being developed. Your notebook is saved.</p>
+    <p class="soft small">Your notebook is saved.</p>
     </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button>${labTools ? '<button data-a="download">Download this run</button>' : ''}</div><button class="primary" data-a="title">Close the notebook</button></div>
   </div>`;
   mountMenu(app().querySelector('.menu-slot'), s);

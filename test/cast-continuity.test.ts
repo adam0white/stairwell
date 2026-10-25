@@ -118,6 +118,8 @@ beforeEach(async () => {
 it('claims both known people together and replays their full actual admitted state without shelf reads', async () => {
   current = await arrive(7);
   expect(mocks.batch).toHaveLength(1);
+  expect(current.tasks.some((t) => t.label.startsWith('Bring '))).toBe(true);
+  expect(current.tasks.some((t) => /^Request /.test(t.label))).toBe(false);
   expect(current.castChapter?.inputs).toHaveLength(2);
   expect(personOf(current, 'hacer').body.fitness).toBe(0.43);
   for (const actor of [...current.people, current.kapici]) expect(actor.lexicon?.plainEnglish).toBe(true);
