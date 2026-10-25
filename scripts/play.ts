@@ -109,7 +109,7 @@ function screen(s: GameState, seen: number): number {
     console.log(`== ${DAY_NAMES[d - 1]}, night ==`);
     if (rep)
       console.log(
-        `You completed ${rep.done} jobs on time and ${rep.late} late. You did not finish ${rep.missed} jobs. You received ₺${rep.tips} in tips. ${rep.treats.join('; ')}`,
+        `You completed ${rep.done} ${rep.done === 1 ? 'job' : 'jobs'} on time and ${rep.late} late. You did not finish ${rep.missed} ${rep.missed === 1 ? 'job' : 'jobs'}. You received ₺${rep.tips} in tips. ${rep.treats.join('; ')}`,
       );
     console.log(`You have ₺${s.k.money} in your tin.`);
     for (const id of RIDS) {
@@ -128,7 +128,7 @@ function screen(s: GameState, seen: number): number {
       );
     }
     console.log(
-      `Your tea money ${s.meeting?.raise ? 'increases' : 'stays the same'}. You received ${s.meeting?.yes ?? 0} votes for a raise. You have ₺${s.k.money} in your tin. Week 2 is not written yet.`,
+      `Your tea money ${s.meeting?.raise ? 'increases' : 'stays the same'}. You received ${s.meeting?.yes ?? 0} ${s.meeting?.yes === 1 ? 'vote' : 'votes'} for a raise. You have ₺${s.k.money} in your tin. Week 2 is not written yet.`,
     );
     return s.lineNo;
   }

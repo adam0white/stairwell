@@ -1574,7 +1574,7 @@ function nightPage(s: GameState) {
         `<span class="pip ${t.done ? (t.done > t.by ? 'late' : 'done') : 'missed'}">${t.done ? (t.done > t.by ? '◩' : '■') : '□'}</span>`,
     )
     .join('')}</div><span>₺${s.k.money} in the tin</span></div><main class="page-body">
-    <p>${rep ? `You completed ${rep.done} jobs on time.${rep.late ? ` You completed ${rep.late} jobs late.` : ''}${rep.missed ? ` You did not complete ${rep.missed} jobs.` : ''}` : ''} You received <span class="money">₺${rep?.tips ?? 0}</span> in tips. You have <span class="money">₺${s.k.money}</span> in your tin.</p>
+    <p>${rep ? `You completed ${rep.done} ${rep.done === 1 ? 'job' : 'jobs'} on time.${rep.late ? ` You completed ${rep.late} ${rep.late === 1 ? 'job' : 'jobs'} late.` : ''}${rep.missed ? ` You did not complete ${rep.missed} ${rep.missed === 1 ? 'job' : 'jobs'}.` : ''}` : ''} You received <span class="money">₺${rep?.tips ?? 0}</span> in tips. You have <span class="money">₺${s.k.money}</span> in your tin.</p>
     ${rep?.treats.length ? `<p>You received ${rep.treats.map(esc).join(', ')}.</p>` : ''}
     <p class="soft">The residents talked ${talks === 0 ? 'about nothing much' : talks < 6 ? 'a little' : talks < 14 ? 'a fair bit' : 'all day'} on the stairs and the step.</p>
     ${heard.length ? `<div class="heardbox">${heard.map((x) => `<div class="heard">… ${esc(x.text)}</div>`).join('')}</div>` : ''}
@@ -1644,7 +1644,7 @@ function sundayPage(s: GameState) {
   const total = s.reports.reduce((a, x) => a + x.tips, 0);
   const secrets = Object.keys(s.secrets).length;
   const caught = s.residents.reduce((a, r) => a + r.caught.length + r.grudges.length, 0);
-  const share = `In my first week in The Stairwell, I saved ₺${s.k.money} and found ${secrets} of ${secretProps(s).length} secrets. I was caught telling stories ${caught} times. My tea money ${m?.raise ? 'went up' : 'stayed the same'}, with ${m?.yes ?? 0} votes for a raise.${s.ring.answer === 'yes' ? ' I helped with a paper ferry.' : ''}${s.catHome ? ' A cat lives on the step.' : ''}`;
+  const share = `In my first week in The Stairwell, I saved ₺${s.k.money} and found ${secrets} of ${secretProps(s).length} secrets. I was caught telling stories ${caught} ${caught === 1 ? 'time' : 'times'}. My tea money ${m?.raise ? 'went up' : 'stayed the same'}, with ${m?.yes ?? 0} ${m?.yes === 1 ? 'vote' : 'votes'} for a raise.${s.ring.answer === 'yes' ? ' I helped with a paper ferry.' : ''}${s.catHome ? ' A cat lives on the step.' : ''}`;
   app().innerHTML = `<div class="page sunday">${topbar('Sunday · the meeting')}<main class="page-body">
     ${lines.map(saidLine).join('')}
     <div class="votes">${RIDS.map((id) => {
