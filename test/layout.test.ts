@@ -916,3 +916,51 @@ it.each([768, 820, 1180, 1366])('uses readable Tell and Invent choices at tablet
     await page.close();
   }
 });
+
+it('keeps the actual compact notice and wrapper readable without reserved blank space', async () => {
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await page.goto(url);
+    const notice = page.locator('#telemetry-footer > .lk-telemetry-notice');
+    await expect.poll(() => notice.evaluate((el) => getComputedStyle(el).visibility)).toBe('visible');
+    await page.evaluate(() => document.fonts.ready);
+    expect(await notice.textContent()).toBe('We record and link play across games on this device.');
+    expect(await notice.locator('button').count()).toBe(0);
+    const measure = () =>
+      notice.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const wrapper = el.parentElement!.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const text = range.getBoundingClientRect();
+        return {
+          node: box.height,
+          wrapper: wrapper.height,
+          font: parseFloat(style.fontSize),
+          textBottom: text.bottom,
+          bottom: box.bottom,
+          clipped: el.scrollHeight > el.clientHeight,
+          overflow: document.documentElement.scrollWidth > innerWidth,
+        };
+      });
+    const normal = await measure();
+    expect(normal.font).toBeGreaterThanOrEqual(14);
+    expect(normal.wrapper).toBeLessThanOrEqual(40);
+    expect(normal.wrapper).toBeCloseTo(normal.node, 1);
+    expect(normal.clipped).toBe(false);
+    expect(normal.overflow).toBe(false);
+    expect(normal.textBottom).toBeLessThanOrEqual(normal.bottom);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '32px';
+    });
+    const enlarged = await measure();
+    expect(enlarged.node).toBeGreaterThan(normal.node);
+    expect(enlarged.wrapper).toBeCloseTo(enlarged.node, 1);
+    expect(enlarged.clipped).toBe(false);
+    expect(enlarged.overflow).toBe(false);
+    expect(enlarged.textBottom).toBeLessThanOrEqual(enlarged.bottom);
+  } finally {
+    await page.close();
+  }
+});

@@ -1096,7 +1096,6 @@ body {
 #telemetry-footer {
   flex: none;
   width: 100%;
-  font-size: 12px;
 }
 #telemetry-footer:empty {
   display: none;

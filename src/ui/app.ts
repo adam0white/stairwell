@@ -104,7 +104,6 @@ const ui: Ui = {
 };
 
 const notice = telemetryNotice();
-if (notice) Object.assign(notice.style, { position: 'static', transform: 'none', margin: '0 auto' });
 function mountNotice() {
   if (!notice || document.getElementById('telemetry-footer')) return;
   const footer = document.createElement('footer');
