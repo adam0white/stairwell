@@ -341,7 +341,11 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
         confirm.hidden = true;
         confirm.textContent = 'Replace the saved notebook and begin on Monday?';
         confirm.append(
-          button('Yes, begin', () => leave(options.newGame!)),
+          button('Yes, begin', () => {
+            const newGame = options.newGame;
+            if (!newGame) throw new Error('Missing Stairwell menu new game action');
+            leave(newGame);
+          }),
           button('Cancel', () => {
             confirm.hidden = true;
           }),
@@ -353,7 +357,14 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
           confirm,
         );
       }
-      if (labTools && options.title) body.append(button('To the title page', () => leave(options.title!)));
+      if (labTools && options.title)
+        body.append(
+          button('To the title page', () => {
+            const title = options.title;
+            if (!title) throw new Error('Missing Stairwell menu title action');
+            leave(title);
+          }),
+        );
       const games = document.createElement('a');
       games.href = 'https://human.adamwhite.work/games/';
       games.textContent = 'All games';

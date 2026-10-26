@@ -208,6 +208,11 @@ function showLoadError(error: unknown, action: string) {
   dialog.showModal();
 }
 const app = () => document.getElementById('app') as HTMLElement;
+
+function requiredUiValue<T>(value: T | null | undefined, context: string): T {
+  if (value === null || value === undefined) throw new Error(`Missing Stairwell UI ${context}`);
+  return value;
+}
 const esc = (x: string) => x.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 // ---------- saves ----------
@@ -608,7 +613,7 @@ function mountMenu(target: Element | null, s: GameState | null) {
   }
   const info = app().querySelector<HTMLElement>('#game-info');
   if (info) {
-    info.querySelector('.info-content')!.innerHTML = infoContent(ui.s);
+    requiredUiValue(info.querySelector('.info-content'), 'information content').innerHTML = infoContent(ui.s);
     info.addEventListener('toggle', () => {
       infoOpen = info.matches(':popover-open');
       ui.acc = 0;
@@ -645,14 +650,17 @@ function titlePage() {
   app()
     .querySelector('[data-a=new]')
     ?.addEventListener('click', () => {
-      if (saved) app().querySelector<HTMLElement>('.new-confirm')!.hidden = false;
+      if (saved)
+        requiredUiValue(app().querySelector<HTMLElement>('.new-confirm'), 'new-game confirmation').hidden =
+          false;
       else fresh();
     });
   app().querySelector('[data-a=yes-new]')?.addEventListener('click', fresh);
   app()
     .querySelector('[data-a=no-new]')
     ?.addEventListener('click', () => {
-      app().querySelector<HTMLElement>('.new-confirm')!.hidden = true;
+      requiredUiValue(app().querySelector<HTMLElement>('.new-confirm'), 'new-game confirmation').hidden =
+        true;
     });
   app()
     .querySelector('[data-a=other]')
@@ -684,12 +692,18 @@ function titlePage() {
       });
       dialog.querySelectorAll<HTMLElement>('[data-morning]').forEach((b) => {
         b.addEventListener('click', () => {
-          dialog.querySelector<HTMLElement>(`[data-confirm="${b.dataset.morning}"]`)!.hidden = false;
+          requiredUiValue(
+            dialog.querySelector<HTMLElement>(`[data-confirm="${b.dataset.morning}"]`),
+            'morning confirmation',
+          ).hidden = false;
         });
       });
       dialog.querySelectorAll<HTMLElement>('[data-no]').forEach((b) => {
         b.addEventListener('click', () => {
-          dialog.querySelector<HTMLElement>(`[data-confirm="${b.dataset.no}"]`)!.hidden = true;
+          requiredUiValue(
+            dialog.querySelector<HTMLElement>(`[data-confirm="${b.dataset.no}"]`),
+            'morning confirmation',
+          ).hidden = true;
         });
       });
       dialog.querySelectorAll<HTMLElement>('[data-yes]').forEach((b) => {
@@ -732,7 +746,7 @@ function dayView(s: GameState, full: boolean) {
   let root = app().querySelector<HTMLElement>('.day');
   if (!root || full) {
     app().innerHTML = `<div class="day game tab-here">${topbar('')}<div class="state-strip"><div class="order-pips"></div><span class="next-due"></span><span class="clock-rate"></span></div><section class="scene" aria-label="Building view"><div class="scene-drawing"></div><div class="speech-overlay" aria-live="polite"></div></section><div class="play-panel"><nav class="sheet-tabs" aria-label="Views"><button data-tab="none">Here</button><button data-tab="orders">Orders</button><button data-tab="residents">Residents</button><button data-tab="notebook" aria-label="Read the residents’ notebook">Notebook</button></nav><section class="sheet" aria-label="Neighbour or orders"></section><section class="journal" aria-label="Journal"></section></div><div class="action-bar"></div></div>`;
-    root = app().querySelector<HTMLElement>('.day')!;
+    root = requiredUiValue(app().querySelector<HTMLElement>('.day'), 'day root');
     stage?.destroy();
     stage = null;
     mountMenu(root.querySelector('.menu-slot'), s);
@@ -761,9 +775,9 @@ function dayView(s: GameState, full: boolean) {
   }
   const d = dayOf(s.minute);
   const faces = faceToFace(s);
-  root.querySelector('.topbar-words')!.textContent =
+  requiredUiValue(root.querySelector('.topbar-words'), 'day topbar words').textContent =
     `${dayLabel(s)} ${clockOf(s.minute)} · ${s.k.walk ? `→ ${placeName(s.k.walk.to)}` : placeName(s.k.at)}`;
-  root.querySelector('.info-content')!.innerHTML = infoContent(s);
+  requiredUiValue(root.querySelector('.info-content'), 'day information content').innerHTML = infoContent(s);
   const ctx = pacingContext(s);
   const who = ui.sheetFor ?? faces[0];
   const slowed = ctx.inspecting
@@ -775,16 +789,18 @@ function dayView(s: GameState, full: boolean) {
       : !s.k.walk && s.k.busyUntil <= s.minute && openTasks(s).length
         ? 'Orders waiting · 0.6 game minutes/second'
         : `${clockPlayback(s).rate} game minutes/second`;
-  root.querySelector('.clock-rate')!.textContent = slowed;
+  requiredUiValue(root.querySelector('.clock-rate'), 'day clock rate').textContent = slowed;
   const tasks = openTasks(s).sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
-  root.querySelector('.order-pips')!.innerHTML = s.tasks
+  requiredUiValue(root.querySelector('.order-pips'), 'day order pips').innerHTML = s.tasks
     .filter((t) => dayOf(t.by) === d)
     .map(
       (t) =>
         `<span class="pip ${t.done ? 'done' : ''} ${!t.done && s.minute > t.by ? 'late' : ''}">${t.done ? '■' : '□'}</span>`,
     )
     .join('');
-  root.querySelector('.next-due')!.textContent = tasks.length ? `next by ${clockOf(tasks[0]!.by)}` : '';
+  requiredUiValue(root.querySelector('.next-due'), 'day next deadline').textContent = tasks.length
+    ? `next by ${clockOf(requiredUiValue(tasks[0], 'first open task').by)}`
+    : '';
   for (const b of root.querySelectorAll<HTMLElement>('[data-tab]')) {
     const active =
       b.dataset.tab === ui.sheet ||
@@ -804,7 +820,7 @@ function dayView(s: GameState, full: boolean) {
   root.classList.toggle('tab-here', !['orders', 'residents', 'notebook'].includes(ui.sheet));
   root.classList.toggle('decision', ['tell', 'invent'].includes(ui.sheet));
   root.classList.toggle('travelling', !!s.k.walk || s.k.busyTask !== null);
-  root.querySelector('.scene-drawing')!.innerHTML = sceneSvg(s);
+  requiredUiValue(root.querySelector('.scene-drawing'), 'day scene drawing').innerHTML = sceneSvg(s);
   for (const hit of root.querySelectorAll<SVGElement>('.scene [data-go]')) {
     hit.setAttribute('tabindex', s.k.walk || s.k.busyTask !== null ? '-1' : '0');
     hit.setAttribute('role', 'button');
@@ -812,10 +828,10 @@ function dayView(s: GameState, full: boolean) {
     hit.setAttribute('aria-pressed', String(selection?.to === hit.getAttribute('data-go')));
   }
   const voice = [...s.said].reverse().find((x) => x.kind === 'voice');
-  root.querySelector<HTMLElement>('.speech-overlay')!.textContent =
+  requiredUiValue(root.querySelector<HTMLElement>('.speech-overlay'), 'day speech overlay').textContent =
     voice && performance.now() < ui.readUntil ? `${nameOf(voice.who)}: ${voice.text}` : '';
-  const panel = root.querySelector<HTMLElement>('.sheet')!;
-  const action = root.querySelector<HTMLElement>('.action-bar')!;
+  const panel = requiredUiValue(root.querySelector<HTMLElement>('.sheet'), 'day sheet');
+  const action = requiredUiValue(root.querySelector<HTMLElement>('.action-bar'), 'day action bar');
   const previousVerbs = action.querySelector('.verbs');
   if (previousVerbs && panel.classList.contains('conversation')) panel.append(previousVerbs);
   const expectedSubmenu = `${ui.sheetFor ?? faces[0] ?? null}:${ui.sheet}:${ui.inventAbout}`;
@@ -851,7 +867,7 @@ function dayView(s: GameState, full: boolean) {
     if (commit) action.append(commit);
   } else if (ui.sheet === 'notebook') action.innerHTML = '';
   else tripActions(s, action);
-  journal(s, root.querySelector<HTMLElement>('.journal')!, position);
+  journal(s, requiredUiValue(root.querySelector<HTMLElement>('.journal'), 'day journal'), position);
 }
 
 function choose(s: GameState, to: Place, person: Rid | null = null, task: number | null = null) {
@@ -891,7 +907,7 @@ function tripActions(s: GameState, el: HTMLElement) {
       : person
         ? `${RESIDENTS[person].name} · flat ${RESIDENTS[person].flat}`
         : placeName(to);
-    el.innerHTML = `<div class="trip-line"><b>${esc(title)}</b><span>${esc(placeName(to))} · ${first} min walk${second ? `, then ${esc(placeName(task!.place))} · ${second} min walk` : ''} · there about ${clockOf(arrive)}${task ? ` · due ${clockOf(task.by)}` : ''}${task && arrive > task.by ? `<strong class="late"> · about ${arrive - task.by} min late</strong>` : ''}${!task && to.startsWith('door:') && rOf(s, to.slice(5) as Rid).where === 'work' ? ` · ${RESIDENTS[to.slice(5) as Rid].name} is out` : ''}</span></div><button class="primary" data-a="go">Go to ${esc(placeName(to))}</button>${selection && !task ? '<button data-a="clear-trip">Back</button>' : ''}`;
+    el.innerHTML = `<div class="trip-line"><b>${esc(title)}</b><span>${esc(placeName(to))} · ${first} min walk${second ? `, then ${esc(placeName(requiredUiValue(task, 'second trip task').place))} · ${second} min walk` : ''} · there about ${clockOf(arrive)}${task ? ` · due ${clockOf(task.by)}` : ''}${task && arrive > task.by ? `<strong class="late"> · about ${arrive - task.by} min late</strong>` : ''}${!task && to.startsWith('door:') && rOf(s, to.slice(5) as Rid).where === 'work' ? ` · ${RESIDENTS[to.slice(5) as Rid].name} is out` : ''}</span></div><button class="primary" data-a="go">Go to ${esc(placeName(to))}</button>${selection && !task ? '<button data-a="clear-trip">Back</button>' : ''}`;
     el.querySelector('[data-a=go]')?.addEventListener('click', () => {
       const p = selection?.person ?? null;
       selection = null;
@@ -1086,7 +1102,7 @@ function taskLine(s: GameState, t: Task, current: boolean): string {
   const when = t.kind === 'bins' ? 'by 20:45' : `by ${clockOf(t.by)}`;
   return `<button class="task${current ? ' current' : ''}${late ? ' late' : ''}${t.carried ? ' carried' : ''}" data-t="${t.id}" aria-pressed="${current}">
     <span class="t">${t.carried ? '◼ ' : ''}${esc(who)}</span> <span>${esc(what)}</span>
-    <span class="hand soft">${t.custody ? `safe with ${esc(nameOf(t.custody))}; waiting for both residents to be home` : where}, ${when}${late ? ' · late' : ''} · ${travelMinutes(s, s.k.at, t.carried || !t.pickup ? t.place : t.pickup)}${!t.carried && t.pickup ? ` + ${travelMinutes(s, t.pickup, t.place)}` : ''} min${t.kind === 'bins' ? ` · ${esc(binsWarning(s, t.carried ? 'step' : t.pickup!))}` : ''}</span></button>`;
+    <span class="hand soft">${t.custody ? `safe with ${esc(nameOf(t.custody))}; waiting for both residents to be home` : where}, ${when}${late ? ' · late' : ''} · ${travelMinutes(s, s.k.at, t.carried || !t.pickup ? t.place : t.pickup)}${!t.carried && t.pickup ? ` + ${travelMinutes(s, t.pickup, t.place)}` : ''} min${t.kind === 'bins' ? ` · ${esc(binsWarning(s, t.carried ? 'step' : requiredUiValue(t.pickup, 'bins pickup')))}` : ''}</span></button>`;
 }
 
 function saidLine(x: Said): string {
