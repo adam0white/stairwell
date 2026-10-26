@@ -170,6 +170,9 @@ importers:
 
   .:
     dependencies:
+      '@adam0white/hearsay-garden-replay':
+        specifier: file:vendor/hearsay-garden-replay-0.0.0-task2.tgz
+        version: file:vendor/hearsay-garden-replay-0.0.0-task2.tgz(@adam0white/human-framework@3.0.0)(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.11.tgz)
       '@adam0white/human-framework':
         specifier: 3.0.0
         version: 3.0.0
@@ -203,6 +206,13 @@ importers:
         version: 4.152.0(@types/node@26.6.5)
 
 packages:
+
+  '@adam0white/hearsay-garden-replay@file:vendor/hearsay-garden-replay-0.0.0-task2.tgz':
+    resolution: {integrity: sha512-ZNarfYnfelmx5F8Ui1r6MKZbu3jfNQsqH1Rw6chZeCwTLBW14CmU17ovUoZYInZ98Aa09oDzTG4H3cx12T99pw==, tarball: file:vendor/hearsay-garden-replay-0.0.0-task2.tgz}
+    version: 0.0.0-task2
+    peerDependencies:
+      '@adam0white/human-framework': 3.0.0
+      '@adam0white/lab-client': 0.4.11
 
   '@adam0white/human-framework@3.0.0':
     resolution: {integrity: sha512-O0t7AytAqP3ZKNdNbyfJk4sSpeniQRJ6M29IPxXe9YQOaQVnr7C8VZ945PTkc6mao/zZpxPAjK0Cuuvz/0uR1A==}
@@ -1292,6 +1302,11 @@ packages:
     resolution: {integrity: sha512-rLfVLB4FgQneDr0dv1oddCVZmKjcJ6yX6mS4pU82Mq/Dt9a3cLZQ62pDBL4AUO+uVrCvtWz3ZFUL2HFAFJ/BXQ==}
 
 snapshots:
+
+  '@adam0white/hearsay-garden-replay@file:vendor/hearsay-garden-replay-0.0.0-task2.tgz(@adam0white/human-framework@3.0.0)(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.11.tgz)':
+    dependencies:
+      '@adam0white/human-framework': 3.0.0
+      '@adam0white/lab-client': file:vendor/adam0white-lab-client-0.4.11.tgz
 
   '@adam0white/human-framework@3.0.0': {}
 

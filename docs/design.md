@@ -275,3 +275,32 @@ Edition9/11 Go and journals stay unchanged. Edition12 remains the finite aligned
 Character admission and publication for edition13 are unsupported and refuse before shelf writes. Native run download and local replay remain available. No edition11 passport is fabricated. Adoption engineering remains OPEN for2026-10-27. F1571 parcel delivery is not proved to share the tap cause. F1569 completed-work acknowledgment, F1570/F1572 story/reply repetition and F1573 waiting remain separate engineering.
 
 No upload under db491 hold through2026-10-27T19:45 or actual B handback. Future actual QA uses Recording/linking ON, no API quarantine, and a disclosed public SDK localhost option; unsupported agent attribution and historic recording limits remain explicit.
+
+
+## Finite headless source return — Task3, 2026-10-26
+
+Remaining: one parent-arranged independent source review and integration. Target: 2026-10-27.
+Task4 trusted controller, ownership, publication/CAS and ordinary entry remain separate.
+Actual db491 release hold persists. No owned journey, browser/player acceptance or deployment is claimed.
+
+The opt-in `aligned-visit.ts` native chapter can return the original unsubmitted dirty51ec
+capture from the immutable Garden Task2 artifact. It retains the original packet and pins.
+It replays the complete external Garden input through the package public root, checks source
+bindings, advances the paused nested11 world from930 to990 through sixty ordinary steps,
+then installs the exact validated Garden closing raw. Only Derya's host pause and declared
+presence fields change. All other world fields match independently replayed original legacy11
+with the same prefix and oneCast. Default9, month11, work13 and departure-only12 stay inert
+with respect to return; canReplay12 remains false. No UI or general save dispatcher exposes it.
+
+This headless native file is not a Shelf transfer. Measured full chapter is326794 UTF8 bytes,
+19535 value nodes, depth14; compact is192136 bytes,10948 nodes,depth14. Metadata alone is26454
+bytes,1114 nodes,depth11. The full chapter exceeds the256KiB Persona transfer bound. The native
+format keeps4MiB/depth64/60000-container/480000-token guards, checks plain finite JSON and unsafe
+keys on direct and JSON paths, bounds metadata with unchanged SDK256KiB/depth24/20000-node
+limits, and validates the finite Garden graph through the published module. Garden full and
+compact are252548/165601 bytes. No SDK bound is raised and no resource is truncated.
+
+The detached continuation reaches1170 through ordinary steps. At1170 Derya is still in the
+meal interval begun at1141; the existing host waits for that interval before offering night
+work. The control then reaches the ordinary work offer and HF begin without forcing assent,
+editing a private clock/body, waiving duty or changing the returned990 world.

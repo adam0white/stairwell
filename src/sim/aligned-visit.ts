@@ -1,9 +1,14 @@
-/** Task1 only: controlled headless source12 departure, over an immutable edition11 prefix.
- * No shelf writes, ownership, garden, return or ordinary player entry. Complete raw stays exact.
+/** Finite headless source12 departure and Task3 return over an immutable edition11 prefix.
+ * No shelf writes, ownership or ordinary player entry. Complete raw stays exact.
  * INERT finite-capture prototype, not ordinary-player admission or arbitrary seeds/owned heads.
  * Task4 must separately implement a trusted current-controller/native publication contract
- * before exposing a general source entry. Garden and return remain pending.
+ * before exposing a general source entry. General admission remains pending.
  */
+import {
+  exportGardenVisit,
+  type GardenVisitSave,
+  replayGardenVisit,
+} from '@adam0white/hearsay-garden-replay';
 import { DEFAULT_NORMS, restore, snapshot } from '@adam0white/human-framework';
 import {
   boundedPersonaJson,
@@ -16,7 +21,7 @@ import {
 } from '@adam0white/lab-client';
 import { isSaved, type Saved } from '../ui/save.ts';
 import { CALENDAR_ACTIONS, sourceTransfer } from './cast-life.ts';
-import { type GameState, personOf, replay, rOf } from './game.ts';
+import { type GameState, personOf, replay, rOf, step } from './game.ts';
 
 export const ALIGNED_GAME = 'stairwell@12';
 export const ALIGNED_CHAPTER = 'stairwell-aligned-visit/1';
@@ -42,7 +47,13 @@ export interface AlignedVisitState {
   prefix: Saved;
   predecessor: PersonaEnvelope;
   provenance: AlignedBuild;
-  inputs: [{ at: 930; kind: 'aligned-visit-depart' }];
+  inputs:
+    | [{ at: 930; kind: 'aligned-visit-depart' }]
+    | [
+        { at: 930; kind: 'aligned-visit-depart' },
+        { at: 990; kind: 'aligned-visit-return'; gardenRef: string },
+      ];
+  external?: Record<string, GardenVisitSave>;
   departure: PersonaEnvelope;
   submitted: false;
   accepted: false;
@@ -271,12 +282,122 @@ export function exportAlignedVisit(state: AlignedVisitState, compact = false): A
   const { world, ...chapter } = structuredClone(state);
   return compact ? chapter : { ...chapter, state: { world } };
 }
-/** Reconstruct the entire predecessor with old11 rules, then validate the new12 input and packet. */
+/** This is a finite native file, not a Shelf transfer. Metadata keeps the SDK's
+ * 256KiB/depth24/node20000 limits; Garden validates its own finite resource graph.
+ * The complete chapter (including derived world) keeps the native 4MiB guard.
+ */
+function nativeValue(value: unknown): unknown {
+  let nodes = 0;
+  const walk = (child: unknown, depth: number): void => {
+    if (++nodes > 480000 || depth > 64) fail('native data is too complex');
+    if (child === null || typeof child === 'boolean' || typeof child === 'string') return;
+    if (typeof child === 'number' && Number.isFinite(child)) return;
+    if (Array.isArray(child)) {
+      for (const item of child) walk(item, depth + 1);
+      return;
+    }
+    if (
+      !child ||
+      typeof child !== 'object' ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(child))
+    )
+      throw new Error('Aligned visit: native data must be plain JSON');
+    for (const [key, item] of Object.entries(child)) {
+      if (['__proto__', 'constructor', 'prototype'].includes(key)) fail('unsafe JSON key');
+      walk(item, depth + 1);
+    }
+  };
+  walk(value, 0);
+  const text = JSON.stringify(value);
+  if (typeof text !== 'string' || !checkRun(text)) fail('native file exceeds size/depth/complexity bounds');
+  return JSON.parse(text, (key, child) => {
+    if (['__proto__', 'constructor', 'prototype'].includes(key)) fail('unsafe JSON key');
+    return child;
+  });
+}
+/** Install only a validated, independently replayed finite Garden closing. */
+async function installReturn(expected: AlignedVisitState, garden: unknown): Promise<AlignedVisitState> {
+  const run = await replayGardenVisit(garden);
+  if (run.phase !== 'closed' || run.actualEnd !== 990 || run.minute !== 990 || !run.closing)
+    return fail('unsupported finite return boundary');
+  const resources = run.resources;
+  // Rehydrate the published normalized graph, never tick that normalized world.
+  const packet = structuredClone(resources[run.source.packet]) as PersonaEnvelope;
+  const complete = packet.transfer.complete as { rawRef?: string; raw?: unknown };
+  if (complete.rawRef !== run.source.raw || packet.transfer.lifeRef !== run.source.life)
+    fail('source references mismatch');
+  delete complete.rawRef;
+  complete.raw = structuredClone(resources[run.source.raw]);
+  delete packet.transfer.lifeRef;
+  packet.transfer.life = structuredClone(resources[run.source.life]);
+  const predecessor = structuredClone(resources[run.source.predecessor]) as PersonaEnvelope;
+  if (predecessor.transfer.lifeRef !== run.source.life) fail('predecessor life mismatch');
+  delete predecessor.transfer.lifeRef;
+  predecessor.transfer.life = structuredClone(resources[run.source.life]);
+  const sourceWorld = structuredClone(resources[run.source.world]) as { people: unknown[] };
+  let refs = 0;
+  sourceWorld.people = sourceWorld.people.map((row) => {
+    const ref = row as { rawRef?: string };
+    if (ref.rawRef === undefined) return row;
+    if (Object.keys(ref).join(',') !== 'rawRef' || ref.rawRef !== run.source.raw)
+      fail('source actor reference mismatch');
+    refs++;
+    return structuredClone(resources[run.source.raw]);
+  });
+  if (refs !== 1) fail('expected one source Derya reference');
+  equal(packet, expected.departure, 'original departure binding mismatch');
+  equal(predecessor, expected.predecessor, 'original predecessor binding mismatch');
+  equal(resources[run.source.prefix], expected.prefix, 'original prefix binding mismatch');
+  equal(sourceWorld, expected.world, 'original full world binding mismatch');
+  const claim = resources[run.closing] as { rawRef: string };
+  const raw = snapshot(run.people.derya);
+  equal(raw, resources[claim.rawRef], 'closing complete raw mismatch');
+  equal(snapshot(restore(raw)), raw, 'closing snapshot/restore mismatch');
+  if (raw.now !== 990 || raw.id !== 'derya' || raw.engine !== '2.23.0' || raw.activity)
+    fail('unsupported closing actor boundary');
+  const compact = await exportGardenVisit(run, true);
+  const gardenRef = await sha(compact);
+  const world = expected.world;
+  const frozen = snapshot(personOf(world, 'derya'));
+  for (let minute = START + 1; minute <= 990; minute++) {
+    step(world);
+    if (world.minute !== minute || world.phase !== 'day' || world.castPauses?.derya !== 'paused')
+      fail('source absence did not advance normally');
+    equal(snapshot(personOf(world, 'derya')), frozen, 'source Derya changed while absent');
+  }
+  if (
+    world.people.filter((person) => person.id === 'derya').length !== 1 ||
+    world.residents.filter((resident) => resident.id === 'derya').length !== 1
+  )
+    fail('expected exactly one return slot');
+  const slot = world.people.findIndex((person) => person.id === 'derya');
+  world.people[slot] = restore(raw);
+  if (world.castPauses) delete world.castPauses.derya;
+  Object.assign(rOf(world, 'derya'), { where: 'home', doing: 'home', until: 990, stairsUntil: 0 });
+  return {
+    ...expected,
+    inputs: [
+      { at: START, kind: 'aligned-visit-depart' },
+      { at: 990, kind: 'aligned-visit-return', gardenRef },
+    ],
+    external: { [gardenRef]: compact },
+  };
+}
+/** Append one finite local return. Arguments detach before the first await. */
+export async function returnAlignedVisit(
+  chapter: AlignedVisitSave,
+  garden: unknown,
+): Promise<AlignedVisitState> {
+  const pinned = nativeValue({ chapter, garden }) as { chapter: AlignedVisitSave; garden: unknown };
+  const expected = await replayAlignedVisit(pinned.chapter);
+  if (expected.external) fail('duplicate return');
+  return installReturn(expected, pinned.garden);
+}
+/** Reconstruct the exact old11 prefix, validate all external input, then derive world. */
 export async function replayAlignedVisit(value: unknown): Promise<AlignedVisitState> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) fail('invalid native chapter');
-  const save = structuredClone(value) as AlignedVisitSave;
-  const { state, ...chapter } = save;
-  // The passport's public bounds apply to the complete packet, not the much larger source world.
+  const save = nativeValue(value) as AlignedVisitSave;
+  if (!save || typeof save !== 'object' || Array.isArray(save)) fail('invalid native chapter');
+  const { state, external, ...chapter } = save;
   boundedPersonaJson(chapter);
   if (
     Object.keys(chapter).sort().join(',') !==
@@ -288,17 +409,45 @@ export async function replayAlignedVisit(value: unknown): Promise<AlignedVisitSt
     save.origin !== 'controlled-local'
   )
     fail('unsupported dialect or ownership claim');
-  equal(save.inputs, [{ at: START, kind: 'aligned-visit-depart' }], 'unsupported phase/input');
+  const returning = external !== undefined;
+  if (!returning)
+    equal(save.inputs, [{ at: START, kind: 'aligned-visit-depart' }], 'unsupported phase/input');
+  else {
+    const input = save.inputs[1];
+    if (!input || !('gardenRef' in input) || !/^[a-f0-9]{64}$/.test(input.gardenRef))
+      return fail('missing return reference');
+    equal(
+      save.inputs,
+      [
+        { at: START, kind: 'aligned-visit-depart' },
+        { at: 990, kind: 'aligned-visit-return', gardenRef: input.gardenRef },
+      ],
+      'unsupported return input',
+    );
+    if (
+      !external ||
+      typeof external !== 'object' ||
+      Array.isArray(external) ||
+      Object.keys(external).join(',') !== input.gardenRef
+    )
+      fail('missing or extra external Garden resource');
+    if ((await sha(external[input.gardenRef])) !== input.gardenRef) fail('external Garden digest mismatch');
+  }
   await validatePersona(save.departure);
-  const expected = await departAlignedVisit(save.prefix, save.predecessor, save.provenance);
+  let expected = await departAlignedVisit(save.prefix, save.predecessor, save.provenance);
   equal(save.departure, expected.departure, 'complete packet or source binding mismatch');
+  if (external) {
+    const input = save.inputs[1];
+    if (!input || !('gardenRef' in input)) return fail('missing return');
+    expected = await installReturn(expected, external[input.gardenRef]);
+    equal(expected.external, external, 'noncanonical external Garden');
+  }
   if (state !== undefined) equal(state, { world: expected.world }, 'native full state mismatch');
   return expected;
 }
-/** File bounds are explicit; malformed/unsafe JSON is rejected before any Person is restored. */
+/** File and direct replay use identical finite and unsafe-key guards. */
 export async function importAlignedVisit(text: string): Promise<AlignedVisitState> {
-  if (new TextEncoder().encode(text).length > 4 * 1024 * 1024 || !checkRun(text))
-    fail('native file exceeds size/depth/complexity bounds');
+  if (!checkRun(text)) fail('native file exceeds size/depth/complexity bounds');
   const parsed: unknown = JSON.parse(text, (key, value) => {
     if (['__proto__', 'constructor', 'prototype'].includes(key)) fail('unsafe JSON key');
     return value;
