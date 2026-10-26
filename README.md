@@ -33,8 +33,10 @@ Default-week notebooks use `stairwell@9`; the optional month uses `stairwell@11`
 
 [Human Framework](https://github.com/adam0white/human-framework) supplies the simulated people: their beliefs, trust, relationships, memory and decisions. Stairwell supplies the building, errands, schedules, stories and consequences. Source pins `@adam0white/human-framework` exactly to `3.0.0` (engine `2.23.0`), with immutable lab client `0.4.11` and kit `0.5.12` artifacts. App version `0.1.0`, notebook editions9/11 and engine version are separate identifiers. The package requires TypeScript 7 or later; this repository uses `7.0.2`.
 
-Use Node 24 or later with `/opt/homebrew/bin` first on PATH. `npm run dev` starts development. `npm run check:lane` runs lint, typecheck and tests. Wrap the full lane once with HF’s `scripts/suite-lock.ts`; Stairwell does not acquire that lock itself. `npm run measure` runs headless policies. `npm run deploy` checks, builds and deploys; follow [AGENTS.md](AGENTS.md) for delivery gates.
+Use shared Node 26.12.0 (`.node-version` and `.nvmrc`) with `/opt/homebrew/bin` first on PATH and pnpm 12.14.0. Install with `pnpm install --frozen-lockfile`. `npm run dev` starts development. `npm run check:lane` runs lint, typecheck and tests. Wrap the full lane once with HF’s `scripts/suite-lock.ts`; Stairwell does not acquire that lock itself. `npm run measure` runs headless policies. `npm run deploy` checks, builds and deploys; follow [AGENTS.md](AGENTS.md) for delivery gates.
 
 Design and open work: [docs/design.md](docs/design.md). HF requests: [docs/hf-requests.md](docs/hf-requests.md). Historical playtests: [docs/playtests/](docs/playtests/). Technical delivery does not establish owner acceptance. Owner review remains 2026-11-03.
 
 MIT licence.
+
+Dependency changes use pnpm and the committed `pnpm-lock.yaml`. The npm lock was imported with exact dependency versions preserved. Do not regenerate an npm lock or install a separate runtime per worktree. The pnpm policy uses strict engines/peers, no hoisting, hardlinks, a 24-hour third-party release delay and a scoped exemption for owned `@adam0white/*` packages.

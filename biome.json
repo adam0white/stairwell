@@ -9,7 +9,8 @@
       "!test/fixtures/*.json",
       "!scratch",
       "!docs/playtests/*.json",
-      "!.claude"
+      "!.claude",
+      "!pnpm-lock.yaml"
     ]
   },
   "formatter": {

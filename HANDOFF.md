@@ -1,5 +1,9 @@
 # Stairwell — current handoff
 
+## Dependency installation — 2026-10-26
+
+The dependency configuration uses pnpm 12.14.0 and shared Node 26.12.0. Install with `pnpm install --frozen-lockfile`; `npm run` still runs existing scripts. `pnpm-lock.yaml` imports the npm lock without intended dependency changes. Overrides and exact native build permissions live in `pnpm-workspace.yaml`. Do not regenerate an npm lock or install a runtime per worktree. Configuration delivery requires the full lane, unchanged raw build outputs against the npm baseline, signed source and exact green CI. This conversion does not deploy the app or establish game-readiness acceptance.
+
 ## What remains
 
 Owner acceptance of the cross-game feel remains separate, with review on 2026-11-03. Design and Deferred work belong to the games-deferred owner. Docsweb starts no playtest rounds. The playtest director may run lab-panel rounds on HF3 builds; friends’ playtests and Show HN remain paused. No new owner acceptance or completed lab cycle is claimed here.
