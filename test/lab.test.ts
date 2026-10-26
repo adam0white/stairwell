@@ -194,3 +194,50 @@ for (const checked of [false, true]) {
     }
   });
 }
+
+it('quiet feedback labels send nothing until Submit, then retain run/privacy and the stored receipt', async () => {
+  const page = await feedbackPage();
+  try {
+    const results = await page.evaluate(async () => {
+      const { lab, openFeedback } = (window as unknown as { testLab: typeof import('../src/ui/lab.ts') })
+        .testLab;
+      const calls: { note: string; run: unknown; sharePlay: unknown }[] = [];
+      lab.sendFeedback = async (note, options) => {
+        calls.push({ note, run: options?.run, sharePlay: options?.sharePlay });
+        return 'label-receipt';
+      };
+      const output = [];
+      for (const off of [false, true]) {
+        lab.setEventsOff(off);
+        const run = { seed: 9, inputs: [], minute: 450 };
+        const dialog = openFeedback(() => run);
+        const button = [...dialog.querySelectorAll('button')].find((b) => b.textContent === "I'm confused");
+        if (!button) throw new Error('Missing released feedback choice');
+        const before = calls.length;
+        button.click();
+        const afterChoice = calls.length;
+        dialog.querySelector<HTMLTextAreaElement>('textarea')!.value = 'I could not find the parcel.';
+        dialog.querySelector('form')!.requestSubmit();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        output.push({
+          off,
+          before,
+          afterChoice,
+          note: calls.at(-1)?.note,
+          run: calls.at(-1)?.run,
+          receipt: dialog.querySelector('[role=status]')?.textContent,
+        });
+        dialog.close();
+      }
+      return output;
+    });
+    for (const result of results) {
+      expect(result.afterChoice).toBe(result.before);
+      expect(result.note).toBe("I'm confused\n\nI could not find the parcel.");
+      expect(result.run).toEqual({ seed: 9, inputs: [], minute: 450 });
+      expect(result.receipt).toContain('label-receipt');
+    }
+  } finally {
+    await page.close();
+  }
+});

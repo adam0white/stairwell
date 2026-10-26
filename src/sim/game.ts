@@ -11,7 +11,8 @@
  * telling two stories, truths coming out (`confirm` recalibrates every source), three arcs (the paper model, the boiler
  * fund, the late visitor), small pranks (the newspapers, the cat, a parcel at the wrong door), and the Sunday vote
  * on the kapıcı's tea money (each resident's own `decide`).
- * Does not cover: weeks after the first, the residents' meeting seating, weather, residents' families outside.
+ * Edition10 opts into an authored four-week month, meeting invitations, storm and private errands.
+ * Does not cover: residents’ families outside, generic planning or private publication.
  */
 import {
   type Affordance,
@@ -19,6 +20,7 @@ import {
   begin,
   bodyForecast,
   confirm,
+  contradicted,
   converse,
   credence,
   type DecisionRecord,
@@ -41,6 +43,7 @@ import {
 } from '@adam0white/human-framework';
 import { lifeAdmission } from '@adam0white/lab-client';
 import { CALENDAR_ACTIONS, type CastChapter } from './cast-life.ts';
+import { MONTH_VERSION, type MonthState, newMonth, PRIVATE_WORK, RELAY_POLICY } from './month.ts';
 import { applyDeryaReturn, type DeryaContinuity, type DeryaReturnAdmission } from './one-cast.ts';
 import {
   FACTS,
@@ -131,6 +134,10 @@ export interface Task {
   done?: number;
   /** Left at the wrong door (a misdelivery) with this resident. */
   wrongDoor?: Rid;
+  custody?: Rid;
+  custodyAt?: number;
+  custodyMissed?: boolean;
+  storyFor?: Rid;
   /** A parcel's label says something: the proposition the kapıcı learns by carrying it. */
   label2?: { prop: string; text: string };
   /** Left on the door hook (nobody answered). */
@@ -211,6 +218,7 @@ export interface Kapici {
 }
 
 export interface GameState {
+  month?: MonthState;
   castChapter?: CastChapter;
   castPauses?: Partial<Record<Rid, 'requested' | 'paused'>>;
   lifeNotes?: Partial<Record<Rid, string>>;
@@ -264,7 +272,10 @@ export type Input =
   | { at: number; kind: 'word'; who: Rid }
   | { at: number; kind: 'cast-pause'; who: Rid }
   | { at: number; kind: 'sit'; who: Rid; topic?: 'boundaries' }
-  | { at: number; kind: 'misdeliver'; who: Rid; task: number }
+  | { at: number; kind: 'misdeliver' | 'entrust'; who: Rid; task: number }
+  | { at: number; kind: 'help-story'; who: Rid }
+  | { at: number; kind: 'repayment' }
+  | { at: number; kind: 'seat'; who: Rid; beside: Rid }
   | { at: number; kind: 'knock'; who: Rid }
   | { at: number; kind: 'prank'; what: 'swap' | 'gate' }
   | { at: number; kind: 'next' }
@@ -280,7 +291,12 @@ export const rOf = (s: GameState, id: Rid): RState => s.residents.find((r) => r.
 export const nameOf = (id: string) => (id in RESIDENTS ? RESIDENTS[id as Rid].name : id);
 const today = (s: GameState) => dayOf(s.minute);
 const tod = (s: GameState) => s.minute - dayStart(today(s));
-const weekday = (s: GameState) => today(s); // day 1 = Monday
+const weekday = (s: GameState) => (s.month ? ((today(s) - 1) % 7) + 1 : today(s)); // day1 Monday
+export const dayName = (day: number) => DAY_NAMES[(day - 1) % 7]!;
+export const dayLabel = (s: GameState) =>
+  `${s.month ? `Week ${Math.ceil(today(s) / 7)} · ` : ''}${dayName(today(s))}`;
+const sunday = (s: GameState) => (s.month ? Math.ceil(today(s) / 7) * 7 : 7);
+export const raining = (s: GameState) => !!s.month && today(s) === 9 && tod(s) >= 960 && tod(s) < 1000;
 
 function say(s: GameState, who: string, text: string, kind: Said['kind'] = 'journal') {
   s.said.push({ at: s.minute, who, text, kind, n: s.lineNo++ });
@@ -403,7 +419,7 @@ export function planDay(s: GameState, day: number) {
   // Bread and newspapers: everyone wants them early. Derya's hangs on her door while she sleeps.
   for (const [i, id] of RIDS.entries()) {
     if (s.castPauses?.[id] === 'paused') continue;
-    if (id === 'burak' && day === 6) continue;
+    if (id === 'burak' && (s.month ? ((day - 1) % 7) + 1 : day) === 6) continue;
     const loaves = 1 + Math.floor(r(DRAW.bread, i) * 2);
     const by = d + 7 * 60 + 55 + Math.floor(r(DRAW.bread, i + 20) * 35);
     addTask(s, {
@@ -451,7 +467,7 @@ export function planDay(s: GameState, day: number) {
     if (used.has(j) || (s.jobsUsed.includes(j) && s.jobsUsed.length < JOBS.length - 2)) continue;
     const job = JOBS[j];
     if (!job || s.castPauses?.[job.for] === 'paused') continue;
-    if (job.for === 'burak' && day === 6) continue;
+    if (job.for === 'burak' && (s.month ? ((day - 1) % 7) + 1 : day) === 6) continue;
     used.add(j);
     s.jobsUsed.push(j);
     const from = d + job.window[0] - 60 + Math.floor(r(DRAW.jobAt, i) * 60);
@@ -549,7 +565,8 @@ export function newGame(seed: number, edition = GAME_VERSION, chapter?: CastChap
     knocks: 0,
   };
   if (edition !== LEGACY_GAME_VERSION) s.stories = newStories();
-  if (edition === GAME_VERSION) {
+  if (edition === MONTH_VERSION) s.month = newMonth();
+  if (canReplay(edition)) {
     s.oneCast = { rows: [] };
     const nurse = personOf(s, 'derya');
     const work = offer('derya-night-work', {
@@ -638,6 +655,7 @@ export function travelMinutes(s: GameState, from: Place, to: Place): number {
   if (outside(from)) m += OUT_MIN[from] ?? 4;
   if (outside(to)) m += OUT_MIN[to] ?? 4;
   if (outside(to) && outside(from)) m -= 3;
+  if (raining(s) && (outside(from) || outside(to))) m += 6;
   return Math.max(1, Math.round(m));
 }
 
@@ -750,6 +768,16 @@ function freeOffers(s: GameState, r: RState): Affordance[] {
         advertises: { leisure: 0.2, beauty: 0.15 } as never,
       }),
     );
+  if (raining(s))
+    list.push(
+      offer('shelter', {
+        action: 'sit',
+        label: 'wait under the shop awning',
+        duration: 1000 - t,
+        advertises: { rest: 0.3, belonging: 0.15 },
+        with: atStep(s).filter((x) => x !== r.id),
+      }),
+    );
   if (s.castChapter?.initial[r.id]) {
     const p = personOf(s, r.id);
     for (const c of p.agenda.commitments)
@@ -767,6 +795,7 @@ function freeOffers(s: GameState, r: RState): Affordance[] {
           );
       }
   }
+  if (s.month) list.push(...monthVisitOffers(s, r));
   return list;
 }
 
@@ -800,6 +829,7 @@ function moveTo(s: GameState, r: RState, w: Where, doing: string, minutes: numbe
 
 function residentMinute(s: GameState, r: RState) {
   if (s.castPauses?.[r.id] === 'paused') return;
+  if (s.month?.visits.some((v) => v.done === undefined && (v.actor === r.id || v.other === r.id))) return;
   if (r.id === 'derya' && s.oneCast?.departure && !s.oneCast.admission) return;
   const t = tod(s);
   if (s.minute < r.until) return;
@@ -856,12 +886,12 @@ function residentMinute(s: GameState, r: RState) {
   }
   if (info.nights) {
     if (r.where === 'work' && t < 12 * 60) {
-      if (s.version === GAME_VERSION && s.oneCast?.departureRequested && s.minute === 480) {
+      if (canReplay(s.version) && s.oneCast?.departureRequested && s.minute === 480) {
         pauseDeryaRota(s);
         return;
       }
       moveTo(s, r, 'asleep', 'sleep', 15 * 60 + 30 - t);
-      if (s.version === GAME_VERSION) {
+      if (canReplay(s.version)) {
         const sleep = offer('derya-day-sleep', {
           action: 'sleep',
           mode: 'sleep',
@@ -875,7 +905,7 @@ function residentMinute(s: GameState, r: RState) {
       return;
     }
     if (t < 15 * 60) {
-      if (s.version === GAME_VERSION && !p.activity) {
+      if (canReplay(s.version) && !p.activity) {
         const sleep = offer('derya-day-sleep', {
           action: 'sleep',
           mode: 'sleep',
@@ -891,7 +921,7 @@ function residentMinute(s: GameState, r: RState) {
     }
     if (wd <= 5 && t >= 19 * 60 + 30) {
       moveTo(s, r, 'work', 'work', DAY_END + 60 - t);
-      if (s.version === GAME_VERSION) {
+      if (canReplay(s.version)) {
         const work = offer('derya-night-work', {
           action: 'work',
           label: 'Complete the night rota',
@@ -919,11 +949,18 @@ function residentMinute(s: GameState, r: RState) {
   const rec: DecisionRecord = decide(p, offers, { now: s.minute });
   const aff = offers.find((o) => o.id === rec.chosenAffordanceId) ?? offers[0];
   if (!aff) return;
+  if (s.month && (aff.id.startsWith('parcel-handover:') || aff.id === 'dues-payment')) {
+    startMonthVisit(s, r, aff, rec);
+    return;
+  }
   begin(p, aff, rec);
   const mins = aff.duration;
   if (aff.id === 'home' || aff.id === 'meal' || aff.id.startsWith('calendar:')) {
     if (r.where !== 'home') moveTo(s, r, 'home', aff.id, mins);
     else r.until = s.minute + mins;
+  } else if (aff.id === 'shelter') {
+    moveTo(s, r, 'step', 'shelter', mins);
+    say(s, 'narrator', `${nameOf(r.id)} chose to wait under the awning.`, 'event');
   } else if (aff.id === 'step') moveTo(s, r, 'step', 'step', mins);
   else if (aff.id === 'shop') moveTo(s, r, 'shop', 'shop', mins);
   else if (aff.id === 'roof') moveTo(s, r, 'roof', 'roof', mins);
@@ -986,6 +1023,7 @@ export function talk(s: GameState, a: Rid, b: Rid, where: string, maxClaims?: nu
   }
   const props: string[] = [];
   const heard: string[] = [];
+  const received: { from: Rid; to: Rid; prop: string; value: boolean; originAt: number; lie: boolean }[] = [];
   for (const [sp, li] of [
     [pa, pb],
     [pb, pa],
@@ -995,14 +1033,52 @@ export function talk(s: GameState, a: Rid, b: Rid, where: string, maxClaims?: nu
     const res = converse(sp, li, {
       at: s.minute,
       traits: TRAITS,
+      ...(s.month ? { provenance: true, loyalWarning: true, confidentMin: RELAY_POLICY[sp.id as Rid] } : {}),
       ...(maxClaims !== undefined ? { maxClaims } : {}),
     });
-    for (const c of res.claims) props.push(c.prop);
+    for (const c of res.claims) {
+      props.push(c.prop);
+      if (s.month) {
+        const previous = s.month.testimony.findLast(
+          (x) => x.to === sp.id && x.prop === c.prop && x.value === c.value,
+        );
+        const retained = sp.memory.beliefs
+          .find((x) => x.prop === c.prop)
+          ?.sources.some((x) => x.id === previous?.from && x.value === c.value);
+        const actuallyTold = res.told.some((pc) =>
+          pc.claims?.some((x) => x.prop === c.prop && x.value === c.value),
+        );
+        const caretaker = retained && actuallyTold && !c.deceit ? previous?.caretaker : undefined;
+        if (caretaker)
+          received.push({
+            from: sp.id as Rid,
+            to: li.id as Rid,
+            prop: c.prop,
+            value: c.value,
+            originAt: caretaker.at,
+            lie: caretaker.lie,
+          });
+        s.month.testimony.push({
+          from: sp.id,
+          to: li.id as Rid,
+          prop: c.prop,
+          value: c.value,
+          at: s.minute,
+          ...(caretaker ? { caretaker } : {}),
+        });
+        if (
+          c.about === li.id &&
+          caretaker &&
+          !rOf(s, li.id as Rid).grudges.some((g) => g.prop === c.prop && g.from === sp.id)
+        )
+          wordGetsBack(s, li.id as Rid, sp.id as Rid, c.prop, c.value, caretaker.lie);
+      }
+    }
     const before = res.told.flatMap((pc) =>
       (pc.claims ?? []).map((c) => ({ prop: c.prop, b: credence(li, c.prop) })),
     );
-    perceive(li, res.told);
-    customReputation(li, before, s.minute);
+    perceive(li, res.told, s.month ? { reputationTraits: TRAITS } : undefined);
+    if (!s.month) customReputation(li, before, s.minute);
     for (const ev of res.socialEvents.speaker) socialEvent(sp, ev);
     for (const ev of res.socialEvents.listener) socialEvent(li, ev);
     for (const c of res.told.flatMap((pc) => pc.claims ?? []))
@@ -1020,20 +1096,30 @@ export function talk(s: GameState, a: Rid, b: Rid, where: string, maxClaims?: nu
     [b, a],
   ] as const) {
     for (const x of rOf(s, sp).told) {
-      if (!props.includes(x.prop)) continue;
+      if (!props.includes(x.prop) || s.month) continue;
       const c = credence(personOf(s, li), x.prop);
       if ((x.value ? 1 - c : c) >= 0.75 && !rOf(s, li).caught.some((m) => s.minute - m < 600)) {
         doubtKapici(s, li, sp, x.prop, x.value);
       }
     }
   }
+  if (s.month)
+    for (const receipt of received) {
+      const listener = personOf(s, receipt.to);
+      const c = credence(listener, receipt.prop);
+      const key = `${receipt.to}:${receipt.prop}:${receipt.value}:${receipt.originAt}`;
+      if ((receipt.value ? 1 - c : c) >= 0.75 && !s.month.accusations.includes(key)) {
+        s.month.accusations.push(key);
+        doubtKapici(s, receipt.to, receipt.from, receipt.prop, receipt.value);
+      }
+    }
   // Word gets back: a friend of the subject who heard a story about them from you tells them who said it.
   for (const [x, subj] of [
     [a, b],
     [b, a],
   ] as const) {
     const px = personOf(s, x);
-    if (relationshipWith(px, subj).affection <= 0.2) continue;
+    if (s.month || relationshipWith(px, subj).affection <= 0.2) continue;
     for (const told of rOf(s, x).told) {
       if (!told.prop.startsWith(`${subj}:`) || rOf(s, subj).grudges.some((g) => g.prop === told.prop))
         continue;
@@ -1055,7 +1141,7 @@ export function talk(s: GameState, a: Rid, b: Rid, where: string, maxClaims?: nu
     if (!spoken.has(x.prop)) continue;
     if (cb.told.some((y) => y.prop === x.prop && y.value !== x.value)) caught = true;
   }
-  if (caught) {
+  if (caught && (!s.month || comparisonNew(s, a, b, received))) {
     t.caught = true;
     catchKapici(s, a, b);
   }
@@ -1158,7 +1244,7 @@ function catchKapici(s: GameState, a: Rid, b: Rid) {
       applyReputationBelief(p, 'kapici:dishonest', before, credence(p, 'kapici:dishonest'), s.minute);
     // Preserve v3's fixed loss on each comparison. HF contradicted requires a retained
     // opposite account and caps loss per source/proposition (docs/hf-requests.md, 2).
-    seedSourceTrust(p, KAPICI, trustOf(p, KAPICI) * 0.75);
+    if (!s.month) seedSourceTrust(p, KAPICI, trustOf(p, KAPICI) * 0.75);
     rOf(s, id).caught.push(s.minute);
   }
   stamp(s, 'caught');
@@ -1197,7 +1283,7 @@ export function claimWords(prop: string, value: boolean, edition = LEGACY_GAME_V
   const privateWords = Object.hasOwn(PRIVATE_WORDS, prop) ? PRIVATE_WORDS[prop] : undefined;
   if (privateWords) return privateWords[value ? 0 : 1];
   const story =
-    (edition === GAME_VERSION || edition === PREVIOUS_GAME_VERSION) && Object.hasOwn(STORY_WORDS, prop)
+    (canReplay(edition) || edition === PREVIOUS_GAME_VERSION) && Object.hasOwn(STORY_WORDS, prop)
       ? STORY_WORDS[prop]
       : undefined;
   if (story) return story[value ? 0 : 1];
@@ -1301,7 +1387,7 @@ function deliverAt(s: GameState, pl: Place, onlyHome = false) {
 
 function pickupAt(s: GameState, pl: Place) {
   for (const t of s.tasks) {
-    if (t.done || t.carried || t.pickup !== pl || t.from > s.minute) continue;
+    if (t.done || t.carried || t.custody || t.pickup !== pl || t.from > s.minute) continue;
     t.carried = true;
     if (t.label2) {
       perceive(s.kapici, [
@@ -1378,6 +1464,11 @@ const LATE_LINES: Record<Rid, string[]> = {
 };
 
 function complete(s: GameState, t: Task, hook: boolean) {
+  if (s.month && t.storyFor && s.minute <= t.by) {
+    s.month.helped[t.storyFor] = true;
+    say(s, 'narrator', PRIVATE_WORK[t.storyFor].outcome, 'event');
+    stamp(s, `private_${t.storyFor}`);
+  }
   t.done = s.minute;
   t.hook = hook;
   const late = s.minute > t.by;
@@ -1579,7 +1670,9 @@ function applyInput(s: GameState, inp: Input) {
           inp.who,
           inp.who === 'burak'
             ? 'I still need to keep the building accounts. We have not agreed who would take over the accounts in this chapter.'
-            : 'I still owe my building payments. Pausing this chapter does not settle them.',
+            : s.month?.duesPaid
+              ? 'I made the agreed payments. I am keeping this chapter’s building records here.'
+              : 'I still owe my building payments. Pausing this chapter does not settle them.',
           'voice',
         );
         return;
@@ -1596,7 +1689,7 @@ function applyInput(s: GameState, inp: Input) {
       }
       return;
     case 'one-cast-depart': {
-      if (s.version !== GAME_VERSION || s.oneCast?.departure || s.minute > 480) return;
+      if (!canReplay(s.version) || s.oneCast?.departure || s.minute > 480) return;
       s.oneCast = { ...s.oneCast, rows: s.oneCast?.rows ?? [], departureRequested: true };
       if (s.minute === 480) pauseDeryaRota(s);
       else
@@ -1626,7 +1719,12 @@ function applyInput(s: GameState, inp: Input) {
       }
       const up = floorOf(inp.to) > floorOf(s.k.at);
       s.k.walk = { from: s.k.at, to: inp.to, at0: s.minute, at1: s.minute + mins };
-      kapiciDoes(s, 'walk', mins, up ? 0.85 : 0.35);
+      kapiciDoes(
+        s,
+        'walk',
+        mins,
+        up ? 0.85 : raining(s) && (outside(s.k.at) || outside(inp.to)) ? 0.55 : 0.35,
+      );
       return;
     }
     case 'news':
@@ -1647,6 +1745,18 @@ function applyInput(s: GameState, inp: Input) {
         return;
       }
       return sit(s, inp.who, inp.topic);
+    case 'entrust':
+      if (s.month) return entrust(s, inp.who, inp.task);
+      return;
+    case 'repayment':
+      if (s.month) arrangeRepayment(s);
+      return;
+    case 'help-story':
+      if (s.month) return helpStory(s, inp.who);
+      return;
+    case 'seat':
+      if (s.month) return inviteSeat(s, inp.who, inp.beside);
+      return;
     case 'misdeliver':
       return misdeliver(s, inp.who, inp.task);
     case 'knock':
@@ -1737,7 +1847,12 @@ function askNews(s: GameState, who: Rid) {
     say(s, who, 'I have no news for you today.', 'voice');
     return;
   }
-  const res = converse(p, s.kapici, { at: s.minute, traits: TRAITS, maxClaims: aff > 0.25 ? 3 : 2 });
+  const res = converse(p, s.kapici, {
+    at: s.minute,
+    traits: TRAITS,
+    maxClaims: aff > 0.25 ? 3 : 2,
+    ...(s.month ? { provenance: true, confidentMin: RELAY_POLICY[who] } : {}),
+  });
   perceive(s.kapici, res.told);
   for (const ev of res.socialEvents.speaker) socialEvent(p, ev);
   const claims = res.told.flatMap((pc) => pc.claims ?? []);
@@ -1867,22 +1982,34 @@ function deliverClaim(s: GameState, who: Rid, prop: string, value: boolean, conf
   const before = credence(p, prop);
   const subject = prop.split(':')[0] as string;
   const trait = prop.split(':')[1] ?? '';
-  perceive(p, [
-    {
-      at: s.minute,
-      channel: 'told',
-      kind: 'gossip',
-      actorId: KAPICI,
-      targetId: who,
-      salience: 0.75,
-      summary: claimWords(prop, value, s.version),
-      claims: [{ prop, value, confidence: conf }],
-    },
-  ]);
-  customReputation(p, [{ prop, b: before }], s.minute);
+  perceive(
+    p,
+    [
+      {
+        at: s.minute,
+        channel: 'told',
+        kind: 'gossip',
+        actorId: KAPICI,
+        targetId: who,
+        salience: 0.75,
+        summary: claimWords(prop, value, s.version),
+        claims: [{ prop, value, confidence: conf }],
+      },
+    ],
+    s.month ? { reputationTraits: TRAITS } : undefined,
+  );
+  if (!s.month) customReputation(p, [{ prop, b: before }], s.minute);
   const after = credence(p, prop);
   r.told.push({ prop, value, at: s.minute, lie });
-  if (r.told.length > 40) r.told.splice(0, r.told.length - 40);
+  s.month?.testimony.push({
+    from: KAPICI,
+    to: who,
+    prop,
+    value,
+    at: s.minute,
+    caretaker: { at: s.minute, lie },
+  });
+  if (!s.month && r.told.length > 40) r.told.splice(0, r.told.length - 40);
   const moved = (after - before) * (value ? 1 : -1);
   const already = (value ? before : 1 - before) >= 0.75;
   const effect = TRAITS[trait];
@@ -1985,7 +2112,7 @@ export function wordOffers(): Affordance[] {
 export const wordAsk: Suggestion = { voiceId: KAPICI, affordanceId: 'promise_word', strength: 0.5 };
 
 export function wordHint(s: GameState, who: Rid): string {
-  if (today(s) < 4) return 'Ask from Thursday.';
+  if (weekday(s) < 4) return 'Ask from Thursday at 07:00, face to face.';
   const p = personOf(s, who);
   const r = predict(p, wordOffers(), wordAsk);
   return r.verdict === 'assented'
@@ -2001,7 +2128,7 @@ function askWord(s: GameState, who: Rid) {
     say(s, who, r.word === 'yes' ? 'I said I would. Don’t ask twice.' : 'I told you already.', 'voice');
     return;
   }
-  if (today(s) < 4) {
+  if (weekday(s) < 4) {
     say(
       s,
       who,
@@ -2023,8 +2150,8 @@ function askWord(s: GameState, who: Rid) {
       label: 'my word for the kapıcı',
       actions: ['help'],
       targetId: KAPICI,
-      from: dayStart(7) + MEETING - 30,
-      until: dayStart(7) + MEETING + 60,
+      from: dayStart(sunday(s)) + MEETING - 30,
+      until: dayStart(sunday(s)) + MEETING + 60,
       importance: 0.04 + 0.2 * Math.max(0, relationshipWith(p, KAPICI).affection),
       normId: 'keep-promise',
     });
@@ -2283,9 +2410,20 @@ function storyNews(s: GameState, who: Rid): boolean {
   }
   if (!fund.bookRead || !fund.consentPassed || fund.agreed) return false;
   // The engineer can still come on Saturday evening; later requests stay unresolved this week.
-  if (today(s) > 6 || (today(s) === 6 && tod(s) > 18 * 60)) return false;
+  if (!s.month && (today(s) > 6 || (today(s) === 6 && tod(s) > 18 * 60))) return false;
   fund.agreed = true;
-  fund.repairAt = today(s) < 6 ? dayStart(today(s) + 1) + 10 * 60 : dayStart(6) + 19 * 60;
+  if (s.month)
+    s.month.repaymentAt = dayStart(Math.max(12, today(s) + ((5 - weekday(s) + 7) % 7 || 7))) + 10 * 60;
+  fund.repairAt = s.month
+    ? dayStart(today(s) + 1) + 10 * 60
+    : today(s) < 6
+      ? dayStart(today(s) + 1) + 10 * 60
+      : dayStart(6) + 19 * 60;
+  if (s.month) {
+    s.month.supplierBalance = 600;
+    s.month.invoiceDueAt = s.month.repaymentAt;
+    promiseDues(s);
+  }
   say(s, who, STORY_LINES.agreement, 'voice');
   return true;
 }
@@ -2299,7 +2437,7 @@ function storyEvents(s: GameState) {
     !feud.reconciled &&
     feud.hacerPassed &&
     feud.sevimPassed &&
-    today(s) === 6 &&
+    (s.month ? weekday(s) === 6 : today(s) === 6) &&
     tod(s) >= 17 * 60
   ) {
     feud.reconciled = true;
@@ -2449,7 +2587,18 @@ function ringEvening(s: GameState) {
 
 function meeting(s: GameState) {
   // Sunday 11:00 in flat 3. Burak opens the fund book: the money is all there, and short, and he will not say why.
-  s.minute = dayStart(7) + MEETING;
+  s.minute = dayStart(sunday(s)) + MEETING;
+  if (s.month) {
+    finishMonthVisits(s);
+    meetingSeats(s);
+    const bookAt = s.minute + 10;
+    for (; s.minute < bookAt; s.minute++) {
+      for (const r of s.residents) residentMinute(s, r);
+      monthCaretakerQuiet(s);
+      finishMonthVisits(s);
+    }
+  }
+  if (s.month) tick(s.kapici, Math.max(s.kapici.now, s.minute));
   say(
     s,
     'narrator',
@@ -2503,7 +2652,10 @@ function meeting(s: GameState) {
     const offers = [
       offer('vote_yes', {
         action: 'help',
-        label: 'raise the kapıcı’s tea money',
+        label:
+          s.month && today(s) === 28
+            ? 'keep the caretaker for another month'
+            : 'raise the kapıcı’s tea money',
         duration: 2,
         targetId: KAPICI,
         tags: ['help'],
@@ -2530,20 +2682,37 @@ function meeting(s: GameState) {
       no++;
     }
   }
-  const raise = yes >= 4;
+  const approved = yes >= 4;
+  const final = !!s.month && today(s) === 28;
+  const raise = approved && !final;
   s.meeting = { done: true, yes, no, raise };
+  if (s.month) {
+    s.month.meetings.push({ day: today(s), ...s.meeting });
+    if (today(s) === 28) {
+      s.month.stay = approved;
+      say(
+        s,
+        'narrator',
+        approved
+          ? 'The residents vote to keep you as caretaker. Burak writes the renewed agreement in the book.'
+          : 'The residents do not renew your caretaker agreement. You keep your notebook and the money you earned.',
+        'event',
+      );
+    }
+  }
   if (raise) {
     s.k.money += 300;
     stamp(s, 'raise');
   }
-  say(
-    s,
-    'narrator',
-    raise
-      ? `Your tea money increases after ${yes} votes in favour. Mr Burak counts ₺300 into your tin.`
-      : `Your tea money stays the same. Votes in favour: ${yes}. Votes against: ${no}.`,
-    'event',
-  );
+  if (!final)
+    say(
+      s,
+      'narrator',
+      raise
+        ? `Your tea money increases after ${yes} votes in favour. Mr Burak counts ₺300 into your tin.`
+        : `Your tea money stays the same. Votes in favour: ${yes}. Votes against: ${no}.`,
+      'event',
+    );
 }
 
 // ---------- the day ----------
@@ -2551,61 +2720,96 @@ function meeting(s: GameState) {
 function turnPage(s: GameState) {
   if (s.phase === 'night') {
     const next = today(s) + 1;
-    if (next === 7) {
+    if (s.month ? next % 7 === 0 : next === 7) {
+      if (s.month) monthBeforeMeeting(s, next);
       s.phase = 'sunday';
       meeting(s);
       return;
     }
+    if (s.month) monthNightBodies(s, next);
     s.minute = dayStart(next) + DAY_START;
     s.phase = 'day';
     morning(s, next);
     return;
   }
-  if (s.phase === 'sunday') s.phase = 'end';
+  if (s.phase === 'sunday') {
+    if (s.month && today(s) < 28) {
+      // Sunday is not a thirty-four-hour fast. Resolve the off-duty afternoon on
+      // the same minute clock; meals and sleep remain actual HF activities.
+      const sundayDay = today(s);
+      s.k.at = 'room';
+      s.k.walk = null;
+      s.k.busyTask = null;
+      for (; s.minute < dayStart(sundayDay) + DAY_END; s.minute++) {
+        for (const r of s.residents) residentMinute(s, r);
+        monthCaretakerQuiet(s);
+        finishMonthVisits(s);
+      }
+      const nextDay = today(s) + 1;
+      monthNightBodies(s, nextDay);
+      s.minute = dayStart(nextDay) + DAY_START;
+      s.phase = 'day';
+      for (const r of s.residents) {
+        r.word = null;
+        delete r.vote;
+      }
+      s.month.seats = {};
+      morning(s, today(s));
+    } else s.phase = 'end';
+  }
 }
 
 function morning(s: GameState, day: number) {
   for (const r of s.residents) {
     if (s.castPauses?.[r.id] === 'paused') continue;
     const info = RESIDENTS[r.id];
-    r.where = info.nights && day <= 6 ? 'work' : 'home';
+    r.where = s.month
+      ? personOf(s, r.id).activity?.action === 'work'
+        ? 'work'
+        : 'home'
+      : info.nights && day <= 6
+        ? 'work'
+        : 'home';
     r.until = s.minute + 15 + ((RIDS.indexOf(r.id) * 11 + day * 5) % 40);
-    if (info.nights && day > 1 && day <= 6) r.until = s.minute + 60;
+    if (info.nights && day > 1 && (s.month ? personOf(s, r.id).activity?.action === 'work' : day <= 6))
+      r.until = s.minute + 60;
     r.stairsUntil = 0;
   }
   s.k.at = 'room';
   s.k.walk = null;
   s.k.busyTask = null;
-  // Sleep on it: everyone (and the kapıcı's legs) through the night.
-  for (const p of [...s.people, s.kapici]) {
-    if (s.castPauses?.[p.id as Rid] === 'paused') continue;
-    if (s.version === GAME_VERSION && p.id === 'derya') {
-      if (s.oneCast?.departure && !s.oneCast.admission) continue;
-      tick(p, Math.max(p.now, s.minute));
-      continue;
-    }
-    if (p.activity)
-      finish(p, {
-        affordanceId: p.activity.affordanceId,
-        action: p.activity.action,
-        status: 'completed',
-        at: Math.max(p.now, p.activity.startedAt),
+  // Edition10 resolved this night before moving the world clock.
+  // Edition9 keeps its exact existing sleep path.
+  if (!s.month)
+    for (const p of [...s.people, s.kapici]) {
+      if (s.castPauses?.[p.id as Rid] === 'paused') continue;
+      if (canReplay(s.version) && p.id === 'derya') {
+        if (s.oneCast?.departure && !s.oneCast.admission) continue;
+        tick(p, Math.max(p.now, s.minute));
+        continue;
+      }
+      if (p.activity)
+        finish(p, {
+          affordanceId: p.activity.affordanceId,
+          action: p.activity.action,
+          status: 'completed',
+          at: Math.max(p.now, p.activity.startedAt),
+        });
+      hostMeal(p, Math.max(p.now, s.minute - 10 * 60 - 30));
+      const sleep = offer('sleep', {
+        action: 'sleep',
+        mode: 'sleep',
+        duration: Math.max(60, s.minute - p.now - 30),
+        advertises: { sleep: 0.8, rest: 0.5 },
       });
-    hostMeal(p, Math.max(p.now, s.minute - 10 * 60 - 30));
-    const sleep = offer('sleep', {
-      action: 'sleep',
-      mode: 'sleep',
-      duration: Math.max(60, s.minute - p.now - 30),
-      advertises: { sleep: 0.8, rest: 0.5 },
-    });
-    const rec = decide(p, [sleep], { now: Math.max(p.now, s.minute - 9 * 60) });
-    if (rec.chosenAffordanceId === 'sleep' && begin(p, sleep, rec)) {
-      tick(p, s.minute - 5);
-      finish(p, { affordanceId: 'sleep', action: 'sleep', status: 'completed', at: s.minute - 5 });
+      const rec = decide(p, [sleep], { now: Math.max(p.now, s.minute - 9 * 60) });
+      if (rec.chosenAffordanceId === 'sleep' && begin(p, sleep, rec)) {
+        tick(p, s.minute - 5);
+        finish(p, { affordanceId: 'sleep', action: 'sleep', status: 'completed', at: s.minute - 5 });
+      }
+      hostMeal(p, s.minute - 30);
+      tick(p, s.minute);
     }
-    hostMeal(p, s.minute - 30);
-    tick(p, s.minute);
-  }
   planDay(s, day);
   const lines: Record<number, string> = {
     2: 'It is Tuesday. A courier is due before noon.',
@@ -2614,7 +2818,29 @@ function morning(s: GameState, day: number) {
     5: 'It is Friday. Mr Tarık walks slowly downstairs for Friday prayer at 12:30.',
     6: 'It is Saturday. Burak is home all day and has ironed a shirt.',
   };
-  say(s, 'narrator', lines[day] ?? DAY_NAMES[day - 1] ?? '', 'journal');
+  say(
+    s,
+    'narrator',
+    lines[day] ??
+      (s.month
+        ? `${dayLabel(s)}. The bakery opens at seven. The building still needs its daily work.`
+        : (DAY_NAMES[day - 1] ?? '')),
+    'journal',
+  );
+  if (s.month && day === 8)
+    say(
+      s,
+      'riza',
+      'Rain is forecast for Tuesday afternoon. The shop awning keeps the front step dry. Leave time for wet streets.',
+      'margin',
+    );
+  if (s.month && day === 15)
+    say(
+      s,
+      'riza',
+      'If someone trusted you with unfinished private work, ask whether they would like a hand. They may say no.',
+      'margin',
+    );
   if (day === 3)
     say(s, 'riza', 'If the boiler breaks, look at the pump first. Then look at Burak’s face.', 'margin');
   if (day === 4 && s.castPauses?.hacer !== 'paused')
@@ -2677,6 +2903,23 @@ function endDay(s: GameState) {
         continue;
       }
       rep.missed++;
+      if (s.month && t.custody) {
+        t.custodyMissed = true;
+        say(
+          s,
+          'narrator',
+          `${nameOf(t.for)}’s parcel is still sealed at ${nameOf(t.custody)}’s flat. It missed today’s deadline and must still be handed over.`,
+          'journal',
+        );
+        socialEvent(personOf(s, t.for), {
+          at: s.minute,
+          kind: 'harm',
+          otherId: KAPICI,
+          byMe: false,
+          magnitude: 0.15,
+        });
+        continue;
+      }
       const p = personOf(s, t.for);
       socialEvent(p, { at: s.minute, kind: 'harm', otherId: KAPICI, byMe: false, magnitude: 0.15 });
       believeSelf(p, 'kapici:reliable', false, 0.65, s.minute);
@@ -2752,7 +2995,7 @@ function endDay(s: GameState) {
       'event',
     );
   }
-  if (day === 6) {
+  if ((s.month ? weekday(s) : day) === 6) {
     const likely = s.residents.filter((r) => handsLean(s, r.id) === 'likely').map((r) => nameOf(r.id));
     const maybe = s.residents.filter((r) => handsLean(s, r.id) === 'maybe').map((r) => nameOf(r.id));
     say(
@@ -2784,6 +3027,7 @@ export function step(s: GameState): void {
   for (const r of s.residents) residentMinute(s, r);
   kapiciMinute(s);
   storyEvents(s);
+  if (s.month) monthEvents(s);
   if (t >= DAY_END) endDay(s);
 }
 
@@ -2852,7 +3096,8 @@ export function replay(
   return s;
 }
 
-export const canReplay = (game: string | undefined): boolean => game === GAME_VERSION;
+export const canReplay = (game: string | undefined): boolean =>
+  game === GAME_VERSION || game === MONTH_VERSION;
 
 export function fingerprint(s: GameState): string {
   const people = s.people.map((p) => ({
@@ -2914,3 +3159,611 @@ export function openTasks(s: GameState): Task[] {
 }
 
 export { INVENTABLE };
+
+/** Bounded month scenes. No guessed consent: each invitation uses an HF decision.
+ * Private work becomes an ordinary timed errand only after the resident assents.
+ */
+function assent(
+  s: GameState,
+  who: Rid,
+  id: string,
+  label: string,
+  minutes: number,
+  target = KAPICI,
+): boolean {
+  const p = personOf(s, who);
+  tick(p, Math.max(p.now, s.minute));
+  const accept = offer(id, {
+    action: 'help',
+    label,
+    targetId: target,
+    duration: minutes,
+    tags: ['help'],
+    advertises: { belonging: 0.12 },
+    material: 0.15,
+  });
+  const refuse = offer('decline', {
+    action: 'wait',
+    label: 'keep my own plans',
+    duration: 2,
+    advertises: { autonomy: 0.1 },
+  });
+  const rec = decide(p, [accept, refuse], {
+    now: s.minute,
+    suggestion: { voiceId: KAPICI, affordanceId: id, strength: 0.5 },
+  });
+  return rec.chosenAffordanceId === id;
+}
+function entrust(s: GameState, who: Rid, id: number) {
+  const t = s.tasks.find((x) => x.id === id);
+  if (!t || t.done || !t.carried || t.kind !== 'parcel' || t.for === who || !canTalk(s, who)) return;
+  if (s.castPauses?.[t.for] === 'paused') return;
+  kapiciDoes(s, 'arrange-parcel', 5, 0.1);
+  s.k.walk = { from: s.k.at, to: s.k.at, at0: s.minute, at1: s.minute + 5 };
+  if (
+    !assent(
+      s,
+      who,
+      'keep_parcel',
+      `keep ${nameOf(t.for)}’s parcel sealed until they can collect it`,
+      5,
+      t.for,
+    )
+  ) {
+    say(s, who, 'I cannot take responsibility for that today. Keep it with you.', 'voice');
+    return;
+  }
+  t.carried = false;
+  t.custody = who;
+  t.custodyAt = s.minute;
+  promise(personOf(s, who), {
+    kind: 'promise',
+    toId: t.for,
+    label: 'hand over the sealed parcel',
+    actions: ['handover-parcel'],
+    targetId: t.for,
+    from: s.minute,
+    until: t.by,
+    importance: 0.3,
+    normId: 'keep-promise',
+  });
+  say(
+    s,
+    who,
+    `Tell ${nameOf(t.for)} it is safe with me. I will hand it over when we are both home. If we miss each other, it will still be waiting.`,
+    'voice',
+  );
+}
+function helpStory(s: GameState, who: Rid) {
+  const month = s.month!;
+  if (
+    s.k.at !== `door:${who}` ||
+    s.k.walk ||
+    s.k.busyTask !== null ||
+    !canTalk(s, who) ||
+    today(s) < 15 ||
+    s.secrets[PRIVATE_FACTS[who]] === undefined ||
+    !trustedStoryListener(s, who)
+  )
+    return;
+  if (tod(s) + PRIVATE_WORK[who].minutes > 19 * 60) {
+    say(s, who, 'We need time before seven. Ask me tomorrow at home.', 'voice');
+    return;
+  }
+  if (month.helped[who] || s.tasks.some((t) => t.storyFor === who && !t.done)) return;
+  const work = PRIVATE_WORK[who];
+  if (!assent(s, who, 'private_help', work.label, work.minutes)) {
+    kapiciDoes(s, 'ask-private-help', 2, 0.05);
+    s.k.walk = { from: s.k.at, to: s.k.at, at0: s.minute, at1: s.minute + 2 };
+    say(s, who, 'I would rather leave that alone today.', 'voice');
+    return;
+  }
+  const task = addTask(s, {
+    kind: 'job',
+    for: who,
+    place: `door:${who}`,
+    label: work.label,
+    work: work.minutes,
+    from: s.minute,
+    by: dayStart(today(s)) + 19 * 60,
+    storyFor: who,
+  });
+  s.k.busyTask = task.id;
+  s.k.busyUntil = s.minute + work.minutes;
+  rOf(s, who).until = Math.max(rOf(s, who).until, s.k.busyUntil);
+  kapiciDoes(s, 'work', work.minutes, 0.3);
+  say(s, who, 'Yes. We can do that here before seven. It stays between us.', 'voice');
+}
+function inviteSeat(s: GameState, who: Rid, beside: Rid) {
+  if (who === beside || !canTalk(s, who) || s.castPauses?.[beside] === 'paused' || weekday(s) > 6) return;
+  kapiciDoes(s, 'ask-seating', 2, 0.05);
+  s.k.walk = { from: s.k.at, to: s.k.at, at0: s.minute, at1: s.minute + 2 };
+  if (!assent(s, who, 'sit_beside', `sit beside ${nameOf(beside)} at Sunday’s meeting`, 10, beside)) {
+    say(s, who, `I would rather choose my own chair. Please do not move it for me.`, 'voice');
+    return;
+  }
+  s.month!.seats[who] = beside;
+  say(s, who, `I can sit beside ${nameOf(beside)}. Ask them too. I will not speak for them.`, 'voice');
+}
+function meetingSeats(s: GameState) {
+  const used = new Set<Rid>();
+  for (const [who, beside] of Object.entries(s.month!.seats) as [Rid, Rid][]) {
+    if (used.has(who) || used.has(beside) || s.month!.seats[beside] !== who) continue;
+    if (s.castPauses?.[who] === 'paused' || s.castPauses?.[beside] === 'paused') continue;
+    if ([who, beside].includes('derya') && s.oneCast?.departure && !s.oneCast.admission) continue;
+    used.add(who);
+    used.add(beside);
+    say(
+      s,
+      'narrator',
+      `${nameOf(who)} and ${nameOf(beside)} chose neighbouring chairs. They spent ten minutes talking before Burak opened the book. Their votes are still their own.`,
+      'event',
+    );
+    // Both accepted this particular company. A quiet conversation is not reconciliation.
+    for (const [a, b] of [
+      [who, beside],
+      [beside, who],
+    ] as const)
+      socialEvent(personOf(s, a), { at: s.minute, kind: 'chat', otherId: b, byMe: false, magnitude: 0.2 });
+  }
+}
+function monthEvents(s: GameState) {
+  const month = s.month!;
+  if (raining(s) && !month.rain.started) {
+    month.rain.started = true;
+    say(
+      s,
+      'narrator',
+      'Heavy rain drums on the shop awning above the front step. The street is slow to cross. People can wait under it or go home; the errands still need doing.',
+      'event',
+    );
+  }
+  if (today(s) === 9 && tod(s) >= 1000 && !month.rain.ended) {
+    month.rain.ended = true;
+    say(s, 'narrator', 'The rain eases. Water runs from the awning. The street is passable again.', 'event');
+  }
+  finishMonthVisits(s);
+  if (!month.pensionReceived && s.minute >= dayStart(12) + 9 * 60) {
+    month.pensionReceived = true;
+    month.tarikCash += 600;
+    if (canTalk(s, 'tarik'))
+      say(
+        s,
+        'tarik',
+        'My pension has arrived. I put ₺600 aside for the agreed building payments. I will take each weekly payment to Burak privately.',
+        'voice',
+      );
+  }
+  if (
+    month.invoiceDueAt !== undefined &&
+    s.minute > month.invoiceDueAt + 9 * 60 &&
+    month.supplierBalance > 0 &&
+    !month.supplierLate
+  ) {
+    month.supplierLate = true;
+    say(
+      s,
+      'narrator',
+      'The supplier’s remaining invoice is overdue. Burak kept the unpaid balance open in the building account. The first instalment did not settle it.',
+      'event',
+    );
+  }
+  if (
+    month.repaymentAt !== undefined &&
+    s.minute > month.repaymentAt + 9 * 60 &&
+    month.duesBalance > 0 &&
+    month.missedPaymentAt !== month.repaymentAt
+  ) {
+    month.missedPaymentAt = month.repaymentAt;
+    say(
+      s,
+      'narrator',
+      'Burak left the repayment line open in the private book. The agreed date passed without a payment. The supplier is still waiting for the outstanding balance.',
+      'event',
+    );
+  }
+}
+/** HF penalties require actual retained opposite source accounts; the full host ledger remains intact. */
+function comparisonNew(
+  s: GameState,
+  a: Rid,
+  b: Rid,
+  receipts: { from: Rid; to: Rid; prop: string; value: boolean }[],
+): boolean {
+  let applied = false;
+  for (const receipt of receipts) {
+    if (!((receipt.from === a && receipt.to === b) || (receipt.from === b && receipt.to === a))) continue;
+    const listener = personOf(s, receipt.to);
+    applied =
+      contradicted(listener, { sourceId: KAPICI, prop: receipt.prop, value: receipt.value, at: s.minute })
+        .applied || applied;
+  }
+  return applied;
+}
+/** Preview uses actual travel cost, including loaded legs; the truck never waits. */
+export function binsWarning(s: GameState, to: Place): string {
+  const bins = openTasks(s).find((t) => t.kind === 'bins');
+  if (!bins) return '';
+  const pickup = bins.pickup!;
+  const arrival =
+    s.minute +
+    travelMinutes(s, s.k.at, to) +
+    (bins.carried
+      ? to === 'step'
+        ? 0
+        : travelMinutes(s, to, 'step')
+      : (to === pickup ? 0 : travelMinutes(s, to, pickup)) + travelMinutes(s, pickup, 'step'));
+  return arrival > bins.by
+    ? 'The truck leaves at 20:45. This route will reach the street after it leaves.'
+    : 'The truck leaves at 20:45. Take the bins to the street before then.';
+}
+
+/** Edition10 boundaries resolve actual HF meals/sleep. No resource or health reset. */
+function monthNightBodies(s: GameState, day: number) {
+  const dawn = dayStart(day) + DAY_START;
+  for (const p of [...s.people, s.kapici]) {
+    if (
+      s.castPauses?.[p.id as Rid] === 'paused' ||
+      (p.id === 'derya' && s.oneCast?.departure && !s.oneCast.admission)
+    )
+      continue;
+    tick(p, Math.max(p.now, s.minute));
+    if (p.activity && (p.activity.action === 'work' || p.activity.action === 'sleep')) {
+      tick(p, Math.max(p.now, Math.min(dawn, p.activity.endsAt)));
+      if (p.now < p.activity.endsAt) continue; // A carried duty is not cancelled to attend.
+    }
+    if (p.activity)
+      finish(p, {
+        affordanceId: p.activity.affordanceId,
+        action: p.activity.action,
+        status: p.activity.endsAt <= p.now ? 'completed' : 'interrupted',
+        at: p.now,
+      });
+    hostMeal(p, p.now);
+    if (p.now < dawn - 30) {
+      const sleep = offer('month-night-sleep', {
+        action: 'sleep',
+        mode: 'sleep',
+        label: 'sleep before Sunday',
+        duration: dawn - 30 - p.now,
+        advertises: { sleep: 0.8, rest: 0.5 },
+      });
+      const rec = decide(p, [sleep], { now: p.now });
+      if (rec.chosenAffordanceId === sleep.id && begin(p, sleep, rec)) {
+        tick(p, dawn - 30);
+        finish(p, { affordanceId: sleep.id, action: 'sleep', status: 'completed', at: p.now });
+      }
+    }
+    hostMeal(p, Math.max(p.now, dawn - 30));
+    tick(p, Math.max(p.now, dawn));
+  }
+}
+function monthBeforeMeeting(s: GameState, day: number) {
+  monthNightBodies(s, day);
+  const dawn = dayStart(day) + DAY_START;
+  s.minute = dawn;
+  s.k.at = 'room';
+  s.k.walk = null;
+  s.k.busyTask = null;
+  for (const r of s.residents) {
+    if (
+      s.castPauses?.[r.id] === 'paused' ||
+      (r.id === 'derya' && s.oneCast?.departure && !s.oneCast.admission)
+    )
+      continue;
+    const activity = personOf(s, r.id).activity;
+    r.where = activity?.action === 'work' ? 'work' : 'home';
+    r.until = activity?.endsAt ?? s.minute;
+    r.stairsUntil = 0;
+  }
+  for (; s.minute < dayStart(day) + MEETING; s.minute++) {
+    for (const r of s.residents) residentMinute(s, r);
+    monthCaretakerQuiet(s);
+    finishMonthVisits(s);
+  }
+  // Advance every body to the actual seating/vote boundary, including the caretaker.
+  for (const p of [...s.people, s.kapici])
+    if (
+      s.castPauses?.[p.id as Rid] !== 'paused' &&
+      !(p.id === 'derya' && s.oneCast?.departure && !s.oneCast.admission)
+    )
+      tick(p, Math.max(p.now, s.minute));
+}
+function monthCaretakerQuiet(s: GameState) {
+  const p = s.kapici;
+  tick(p, Math.max(p.now, s.minute));
+  const mealTime = tod(s) === 12 * 60 || tod(s) === 18 * 60;
+  if (p.activity && (p.activity.endsAt <= s.minute || mealTime)) {
+    const activity = p.activity;
+    finish(p, {
+      affordanceId: activity.affordanceId,
+      action: activity.action,
+      status: activity.endsAt <= s.minute ? 'completed' : 'interrupted',
+      at: p.now,
+      ...(activity.action === 'eat' ? { needs: { food: 0.6, water: 0.6 } } : {}),
+    });
+  }
+  if (!p.activity) {
+    const aff = mealTime
+      ? offer('month-sunday-meal', {
+          action: 'eat',
+          label: 'eat at home on Sunday',
+          duration: 20,
+          advertises: { food: 0.6, water: 0.5 },
+        })
+      : offer('month-sunday-rest', {
+          action: 'rest',
+          label: 'rest at home on Sunday',
+          duration: 30,
+          advertises: { rest: 0.3 },
+        });
+    const rec = decide(p, [aff], { now: p.now });
+    if (rec.chosenAffordanceId === aff.id) begin(p, aff, rec);
+  }
+}
+/** Only a free home interval can hold an authored handover. Meals, sleep, work and calendar duties win. */
+function monthVisitFits(s: GameState, id: Rid, minutes: number): boolean {
+  const r = rOf(s, id),
+    p = personOf(s, id);
+  if (
+    !p.body.alive ||
+    s.castPauses?.[id] ||
+    r.where !== 'home' ||
+    (p.activity && p.activity.action !== 'rest')
+  )
+    return false;
+  const t = tod(s),
+    info = RESIDENTS[id];
+  if (t + minutes >= DAY_END || t < 9 * 60) return false;
+  if (info.work && weekday(s) <= 5 && t < info.work[1] && t + minutes >= info.work[0]) return false;
+  if (info.nights && (t < 15 * 60 + 30 || (weekday(s) <= 5 && t + minutes >= 19 * 60 + 30))) return false;
+  return !p.agenda.commitments.some(
+    (c) =>
+      c.status === 'pending' &&
+      c.from <= s.minute + minutes &&
+      c.until > s.minute &&
+      c.kind !== 'abstain' &&
+      !c.actions.every((a) => a === 'rest' || a === 'handover-parcel' || a === 'pay-dues'),
+  );
+}
+function monthVisitOffers(s: GameState, r: RState): Affordance[] {
+  const month = s.month!;
+  if (month.visits.some((v) => v.done === undefined && (v.actor === r.id || v.other === r.id))) return [];
+  const result: Affordance[] = [];
+  for (const t of s.tasks) {
+    if (t.done || t.custody !== r.id) continue;
+    const minutes = Math.max(1, Math.abs(RESIDENTS[r.id].floor - RESIDENTS[t.for].floor) * 3) + 3;
+    if (monthVisitFits(s, r.id, minutes) && monthVisitFits(s, t.for, minutes))
+      result.push(
+        offer(`parcel-handover:${t.id}`, {
+          action: 'handover-parcel',
+          label: `take the sealed parcel to ${nameOf(t.for)}`,
+          targetId: t.for,
+          with: [t.for],
+          duration: minutes,
+          effort: 0.35,
+          tags: ['help'],
+          advertises: { belonging: 0.15 },
+          material: 0.15,
+        }),
+      );
+  }
+  if (
+    r.id === 'tarik' &&
+    month.repaymentAt !== undefined &&
+    s.minute >= month.repaymentAt &&
+    month.duesBalance > 0 &&
+    month.tarikCash >= Math.min(200, month.duesBalance)
+  ) {
+    const minutes = Math.max(1, Math.abs(RESIDENTS.tarik.floor - RESIDENTS.burak.floor) * 3) + 3;
+    if (monthVisitFits(s, r.id, minutes) && monthVisitFits(s, 'burak', minutes))
+      result.push(
+        offer('dues-payment', {
+          action: 'pay-dues',
+          label: 'take the agreed weekly payment to Burak privately',
+          targetId: 'burak',
+          with: ['burak'],
+          duration: minutes,
+          effort: 0.35,
+          tags: ['help'],
+          advertises: { autonomy: 0.18, belonging: 0.18 },
+          material: -0.1,
+        }),
+      );
+  }
+  return result;
+}
+function startMonthVisit(s: GameState, r: RState, aff: Affordance, rec: DecisionRecord) {
+  const month = s.month!,
+    parcel = aff.id.startsWith('parcel-handover:')
+      ? s.tasks.find((t) => t.id === Number(aff.id.split(':')[1]))
+      : undefined;
+  const other = parcel?.for ?? 'burak';
+  if ((aff.id !== 'dues-payment' && !parcel) || !monthVisitFits(s, other, aff.duration)) return;
+  const receiver = personOf(s, other);
+  tick(receiver, Math.max(receiver.now, s.minute));
+  const receive = offer('receive-building-handover', {
+    action: 'help',
+    label: 'wait at home for the agreed handover',
+    targetId: r.id,
+    with: [r.id],
+    duration: aff.duration,
+    tags: ['help'],
+    advertises: { belonging: 0.1 },
+    material: 0.1,
+  });
+  const decline = offer('keep-plans', {
+    action: 'rest',
+    label: 'keep my plans',
+    duration: 10,
+    advertises: { autonomy: 0.1 },
+  });
+  const consent = decide(receiver, [receive, decline], { now: s.minute });
+  if (consent.chosenAffordanceId !== receive.id) {
+    const wait = offer('handover-declined', {
+      action: 'rest',
+      label: 'leave the handover for later',
+      duration: 5,
+      advertises: { rest: 0.1 },
+    });
+    const actor = personOf(s, r.id),
+      decision = decide(actor, [wait], { now: s.minute });
+    if (decision.chosenAffordanceId === wait.id) begin(actor, wait, decision);
+    r.until = s.minute + 5;
+    return;
+  }
+  if (receiver.activity)
+    finish(receiver, {
+      affordanceId: receiver.activity.affordanceId,
+      action: receiver.activity.action,
+      status: 'interrupted',
+      at: Math.max(receiver.now, s.minute),
+    });
+  const actor = personOf(s, r.id);
+  if (actor.activity)
+    finish(actor, {
+      affordanceId: actor.activity.affordanceId,
+      action: actor.activity.action,
+      status: 'interrupted',
+      at: Math.max(actor.now, s.minute),
+    });
+  if (!begin(actor, aff, rec) || !begin(receiver, receive, consent)) return;
+  month.visits.push({
+    actor: r.id,
+    other,
+    kind: parcel ? 'parcel' : 'dues',
+    ...(parcel ? { task: parcel.id } : { amount: Math.min(200, month.duesBalance) }),
+    startedAt: s.minute,
+    arrivesAt: s.minute + aff.duration - 3,
+    finishesAt: s.minute + aff.duration,
+  });
+  moveTo(s, r, `visit:${other}`, aff.id, aff.duration);
+  r.stairsUntil = s.minute + aff.duration - 3;
+  rOf(s, other).until = s.minute + aff.duration;
+  say(s, 'narrator', `${nameOf(r.id)} set off for ${nameOf(other)}’s flat for an agreed handover.`, 'event');
+}
+function finishMonthVisits(s: GameState) {
+  const month = s.month!;
+  for (const visit of month.visits) {
+    if (visit.done !== undefined || s.minute < visit.finishesAt) continue;
+    const actor = personOf(s, visit.actor),
+      receiver = personOf(s, visit.other);
+    if (!actor.body.alive || !receiver.body.alive || rOf(s, visit.other).where !== 'home') {
+      visit.done = s.minute;
+      visit.outcome = 'interrupted';
+      for (const p of [actor, receiver])
+        if (p.activity)
+          finish(p, {
+            affordanceId: p.activity.affordanceId,
+            action: p.activity.action,
+            status: 'interrupted',
+            at: Math.max(p.now, s.minute),
+          });
+      rOf(s, visit.actor).until = s.minute + 1;
+      rOf(s, visit.other).until = s.minute + 1;
+      continue;
+    }
+    tick(actor, Math.max(actor.now, s.minute));
+    tick(receiver, Math.max(receiver.now, s.minute));
+    for (const p of [actor, receiver])
+      if (p.activity)
+        finish(p, {
+          affordanceId: p.activity.affordanceId,
+          action: p.activity.action,
+          status: 'completed',
+          at: p.now,
+        });
+    visit.done = s.minute;
+    visit.outcome = 'completed';
+    rOf(s, visit.actor).until = s.minute + 1;
+    rOf(s, visit.other).until = s.minute + 1;
+    if (visit.kind === 'parcel') {
+      const t = s.tasks.find((t) => t.id === visit.task);
+      if (!t || t.done || t.custody !== visit.actor) continue;
+      say(
+        s,
+        'narrator',
+        `${nameOf(visit.actor)} arrived and handed the sealed parcel to ${nameOf(visit.other)}. ${s.minute > t.by ? 'It arrived late.' : 'It arrived before the deadline.'}`,
+        'event',
+      );
+      complete(s, t, false);
+      delete t.custody;
+      stamp(s, 'safe_parcel');
+    } else {
+      const amount = visit.amount ?? 0;
+      if (month.tarikCash < amount) continue;
+      month.tarikCash -= amount;
+      month.duesBalance -= amount;
+      month.fundCash += amount;
+      let supplierPaid = 0;
+      if (month.fundCash >= month.supplierBalance) {
+        supplierPaid = month.supplierBalance;
+        month.fundCash -= supplierPaid;
+        month.supplierBalance = 0;
+      }
+      month.paymentLedger.push({ at: s.minute, amount, supplierPaid, remaining: month.duesBalance });
+      month.duesPaid = month.duesBalance === 0;
+      month.repaymentAt = dayStart(dayOf(month.repaymentAt!) + 7) + 10 * 60;
+      if (month.duesBalance > 0) promiseDues(s);
+      say(
+        s,
+        'narrator',
+        `Tarık arrived at Burak’s table. They recorded a ₺${amount} payment privately.${supplierPaid ? ` Burak transferred ₺${supplierPaid} to the pump supplier and kept the receipt.` : ''} ${month.duesPaid ? 'The agreed dues and the pump balance are paid.' : 'The next weekly payment is still due. The supplier is waiting for the remaining balance.'}`,
+        'event',
+      );
+      if (month.duesPaid) {
+        stamp(s, 'kept_dates');
+        confirm(actor, FACTS.dues, false, s.minute);
+        confirm(receiver, FACTS.dues, false, s.minute);
+      }
+    }
+  }
+}
+
+function promiseDues(s: GameState) {
+  const month = s.month;
+  if (!month || month.repaymentAt === undefined || month.duesBalance <= 0) return;
+  promise(personOf(s, 'tarik'), {
+    kind: 'promise',
+    toId: 'burak',
+    label: 'make the agreed weekly building payment privately',
+    actions: ['pay-dues'],
+    targetId: 'burak',
+    from: month.repaymentAt,
+    until: dayStart(dayOf(month.repaymentAt)) + DAY_END,
+    importance: 0.35,
+    normId: 'keep-promise',
+  });
+}
+
+/** The caretaker can arrange this one authored encounter, never a general payment plan. */
+function arrangeRepayment(s: GameState) {
+  if (!s.month || !s.stories?.fund.agreed || !canTalk(s, 'tarik') || s.k.walk || s.k.busyTask !== null)
+    return;
+  const offer_ = monthVisitOffers(s, rOf(s, 'tarik')).find((a) => a.id === 'dues-payment');
+  if (!offer_) {
+    say(
+      s,
+      'tarik',
+      'We need the agreed money and a free interval at home for both Burak and me. Please try after work.',
+      'voice',
+    );
+    return;
+  }
+  const p = personOf(s, 'tarik');
+  tick(p, Math.max(p.now, s.minute));
+  const keep = offer('repayment-later', {
+    action: 'rest',
+    label: 'leave the payment for later',
+    duration: 5,
+    advertises: { autonomy: 0.1 },
+  });
+  const rec = decide(p, [offer_, keep], {
+    now: s.minute,
+    suggestion: { voiceId: KAPICI, affordanceId: offer_.id, strength: 0.5 },
+  });
+  if (rec.chosenAffordanceId === offer_.id) startMonthVisit(s, rOf(s, 'tarik'), offer_, rec);
+  else say(s, 'tarik', 'Not now. I will keep the money aside and choose another time.', 'voice');
+  kapiciDoes(s, 'arrange-private-payment', 2, 0.05);
+  s.k.walk = { from: s.k.at, to: s.k.at, at0: s.minute, at1: s.minute + 2 };
+}

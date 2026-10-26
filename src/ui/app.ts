@@ -7,9 +7,11 @@
 import { type phoneStage, telemetryNotice } from '@adam0white/lab-kit';
 import {
   act,
+  binsWarning,
   canReplay,
   clockOf,
-  DAY_NAMES,
+  dayLabel,
+  dayName,
   dayOf,
   dayStart,
   faceToFace,
@@ -35,8 +37,9 @@ import {
   travelMinutes,
   wordHint,
 } from '../sim/game.ts';
+import { MONTH_VERSION, PRIVATE_WORK } from '../sim/month.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
-import { PRIVATE_SECRETS, STORY_SECRETS } from '../sim/stories.ts';
+import { PRIVATE_FACTS, PRIVATE_SECRETS, STORY_SECRETS } from '../sim/stories.ts';
 import {
   AdmissionFailure,
   acceptedCastRecoveries,
@@ -350,13 +353,13 @@ async function holdLoad<T>(run: () => Promise<T>): Promise<T> {
     pendingLoads--;
   }
 }
-async function startFresh(authored = false) {
+async function startFresh(authored = false, month = false) {
   return holdLoad(async () => {
     const serial = ++loadSerial;
     invalidateContinuity();
     let s: GameState;
     try {
-      s = await arrive((Date.now() % 1_000_000) + 1, authored);
+      s = await arrive((Date.now() % 1_000_000) + 1, authored, month ? MONTH_VERSION : undefined);
     } catch (error) {
       showLoadError(error, 'The new game could not start.');
       return;
@@ -449,8 +452,9 @@ function loop(t: number) {
     !document.hidden &&
     !document.querySelector('dialog[open], [role=dialog][aria-modal=true]')
   ) {
-    const { rate } = clockPlayback(s);
-    if (rate === 0 || t < ui.readUntil) ui.acc = 0;
+    const timing = clockPlayback(s);
+    const rate = s.month && t < ui.readUntil ? Math.min(0.6, timing.rate) : timing.rate;
+    if (rate === 0 || (!s.month && t < ui.readUntil)) ui.acc = 0;
     else ui.acc += dt * rate;
     let n = 0;
     while (ui.acc >= 1 && n < 30 && s.phase === 'day') {
@@ -582,8 +586,7 @@ function mountMenu(target: Element | null, s: GameState | null) {
   if (s?.phase === 'day') {
     const controls = document.createElement('details');
     controls.className = 'clock-controls';
-    controls.innerHTML =
-      '<summary>Clock speed</summary><p>Reading and conversation pause time. Waiting orders slow time. Choose the speed for travel, work and quiet time.</p>';
+    controls.innerHTML = `<summary>Clock speed</summary><p>Reading and conversation ${s.month ? 'slow' : 'pause'} time. Waiting orders slow time. Choose the speed for travel, work and quiet time.</p>`;
     for (const [label, value] of [
       ['Automatic', null],
       ['Slow', 3],
@@ -626,8 +629,8 @@ function titlePage() {
   infoOpen = false;
   const saved = loadSaved();
   const savedState = saved ? restoreNotebook(saved) : null;
-  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${olderNotebook() ? '<p role="status">This notebook is from a different version of the game. Start a new game.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div>${labTools ? '<button data-a="other">Lab tools ▸</button>' : ''}<div class="title-spacer"></div></main><div class="action-bar">
-    ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${DAY_NAMES[dayOf(savedState.minute) - 1]} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${olderNotebook() ? '<p role="status">This notebook is from a different version of the game. Start a new game.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label>${labTools ? '<button data-a="other">Lab tools ▸</button>' : ''}<div class="title-spacer"></div></main><div class="action-bar">
+    ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${dayLabel(savedState)} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
     <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'New game' : 'Begin on Monday'}</button><div class="new-confirm" hidden>The old notebook will be replaced.<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
   mountNotice();
   mountMenu(app().querySelector('.menu-slot'), savedState);
@@ -637,7 +640,8 @@ function titlePage() {
       if (savedState)
         void begin(savedState).catch((error) => showLoadError(error, 'The saved game could not open.'));
     });
-  const fresh = () => startFresh();
+  const fresh = () =>
+    startFresh(false, app().querySelector<HTMLInputElement>('[data-month]')?.checked === true);
   app()
     .querySelector('[data-a=new]')
     ?.addEventListener('click', () => {
@@ -659,7 +663,7 @@ function titlePage() {
         !saved?.oneCast ||
         (Object.keys(saved.oneCast).every((key) => key === 'rows') && saved.oneCast.rows.length === 0);
       const ms = saved && unlinked && !saved.castChapter ? mornings(saved) : [];
-      dialog.innerHTML = `<div class="who"><b>Lab tools</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body">${ms.length > 1 ? ms.map((m, i) => `<div><button data-morning="${i}">Turn back to ${DAY_NAMES[m.day - 1]} morning</button><div data-confirm="${i}" hidden>Your progress after that morning will be removed.<div class="row"><button data-yes="${i}">Yes, turn back</button><button data-no="${i}">No</button></div></div></div>`).join('') : ''}<label class="file-button">Load a playtest run<input type="file" accept="application/json"></label></div>`;
+      dialog.innerHTML = `<div class="who"><b>Lab tools</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body">${ms.length > 1 ? ms.map((m, i) => `<div><button data-morning="${i}">Turn back to ${dayName(m.day)} morning</button><div data-confirm="${i}" hidden>Your progress after that morning will be removed.<div class="row"><button data-yes="${i}">Yes, turn back</button><button data-no="${i}">No</button></div></div></div>`).join('') : ''}<label class="file-button">Load a playtest run<input type="file" accept="application/json"></label></div>`;
       document.body.append(dialog);
       dialog.showModal();
       const authored = document.createElement('button');
@@ -758,14 +762,16 @@ function dayView(s: GameState, full: boolean) {
   const d = dayOf(s.minute);
   const faces = faceToFace(s);
   root.querySelector('.topbar-words')!.textContent =
-    `${DAY_NAMES[d - 1]?.slice(0, 3)} ${clockOf(s.minute)} · ${s.k.walk ? `→ ${placeName(s.k.walk.to)}` : placeName(s.k.at)}`;
+    `${dayLabel(s)} ${clockOf(s.minute)} · ${s.k.walk ? `→ ${placeName(s.k.walk.to)}` : placeName(s.k.at)}`;
   root.querySelector('.info-content')!.innerHTML = infoContent(s);
   const ctx = pacingContext(s);
   const who = ui.sheetFor ?? faces[0];
   const slowed = ctx.inspecting
-    ? 'You are reading. Time is paused.'
+    ? s.month
+      ? 'You are reading. Time moves slowly.'
+      : 'You are reading. Time is paused.'
     : ctx.talking
-      ? `${who ? RESIDENTS[who].name : 'Someone'} is talking. Time is paused.`
+      ? `${who ? RESIDENTS[who].name : 'Someone'} is talking. Time ${s.month ? 'moves slowly' : 'is paused'}.`
       : !s.k.walk && s.k.busyUntil <= s.minute && openTasks(s).length
         ? 'Orders waiting · 0.6 game minutes/second'
         : `${clockPlayback(s).rate} game minutes/second`;
@@ -1080,7 +1086,7 @@ function taskLine(s: GameState, t: Task, current: boolean): string {
   const when = t.kind === 'bins' ? 'by 20:45' : `by ${clockOf(t.by)}`;
   return `<button class="task${current ? ' current' : ''}${late ? ' late' : ''}${t.carried ? ' carried' : ''}" data-t="${t.id}" aria-pressed="${current}">
     <span class="t">${t.carried ? '◼ ' : ''}${esc(who)}</span> <span>${esc(what)}</span>
-    <span class="hand soft">${where}, ${when}${late ? ' · late' : ''} · ${travelMinutes(s, s.k.at, t.carried || !t.pickup ? t.place : t.pickup)}${!t.carried && t.pickup ? ` + ${travelMinutes(s, t.pickup, t.place)}` : ''} min</span></button>`;
+    <span class="hand soft">${t.custody ? `safe with ${esc(nameOf(t.custody))}; waiting for both residents to be home` : where}, ${when}${late ? ' · late' : ''} · ${travelMinutes(s, s.k.at, t.carried || !t.pickup ? t.place : t.pickup)}${!t.carried && t.pickup ? ` + ${travelMinutes(s, t.pickup, t.place)}` : ''} min${t.kind === 'bins' ? ` · ${esc(binsWarning(s, t.carried ? 'step' : t.pickup!))}` : ''}</span></button>`;
 }
 
 function saidLine(x: Said): string {
@@ -1444,13 +1450,26 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
   return `${title}<div class="door-context">${tabs}<div class="soft small">flat ${info.flat} · ${esc(read.warmth)} ${esc(read.word)}</div>
     ${present ? (lastLine ? spoken : `<div class="soft small">${esc(info.blurb)}</div>`) : `<div class="hand departure">${esc(departure)}</div>`}
     ${grudge ? `<div class="hand rope">“I hear you’ve been saying things about me.”</div>` : ''}
+    ${present && s.month ? carriedOther.map((t) => `<button data-entrust="${t.id}">Ask ${esc(info.name)} to keep ${esc(nameOf(t.for))}’s parcel sealed</button>`).join('') : ''}
     ${present ? carriedOther.map((t) => `<button class="prank" data-mis="${t.id}">Leave ${esc(RESIDENTS[t.for].name)}’s ${esc(t.label.replace(/^a /, ''))} here</button>`).join('') : ''}</div>
     <div class="verbs lk-commit">
       <button data-a="news" ${asked || !present ? 'disabled' : ''}>Anything new?${asked ? '<span class="h">You asked today. Ask again tomorrow.</span>' : ''}</button>
       <button data-a="tell" ${!present ? 'disabled' : ''}>Tell…</button>
       <button data-a="sit" ${sat || !present ? 'disabled' : ''}>Sit together${sat ? '<span class="h">You sat together today. Return tomorrow.</span>' : ''}</button>
       ${who === 'derya' ? `<button data-a="sit-boundaries" ${sat || !present ? 'disabled' : ''}>Ask about work boundaries and training${sat ? '<span class="h">You sat together today. Return tomorrow.</span>' : ''}</button>` : ''}
-      <button data-a="word" ${r.word || !present ? 'disabled' : ''}>Will you support my raise on Sunday?<span class="h">${r.word ? (r.word === 'yes' ? 'promised' : 'said no') : wordHint(s, who)}</span></button>
+${s.month && dayOf(s.minute) >= 15 && s.secrets[PRIVATE_FACTS[who]] !== undefined && !s.month.helped[who] ? `<button data-help-story ${!present || s.k.at !== `door:${who}` ? 'disabled' : ''}>Offer to ${esc(PRIVATE_WORK[who].label)}<span class="h">A private confidence and their agreement are needed. It takes time before seven.</span></button>` : ''}
+      ${
+        s.month
+          ? `<details><summary>Ask about Sunday seating</summary>${RIDS.filter((id) => id !== who)
+              .map(
+                (id) =>
+                  `<button data-seat="${id}" ${!present ? 'disabled' : ''}>Would you sit beside ${esc(nameOf(id))}?</button>`,
+              )
+              .join('')}<p>Both residents must agree. Their votes stay their own.</p></details>`
+          : ''
+      }
+${s.month && who === 'tarik' && s.stories?.fund.agreed && s.month.duesBalance > 0 ? `<button data-repayment ${!present ? 'disabled' : ''}>Offer to arrange the private repayment<span class="h">Tarık needs the agreed money. Both residents must be free at home.</span></button>` : ''}
+      <button data-a="word" ${r.word || !present ? 'disabled' : ''}>${s.month && dayOf(s.minute) >= 22 ? 'Will you support renewing my agreement on Sunday?' : 'Will you support my raise on Sunday?'}<span class="h">${r.word ? (r.word === 'yes' ? 'promised' : 'said no') : wordHint(s, who)}</span></button>
     </div>`;
 }
 
@@ -1523,6 +1542,10 @@ function wireDoor(s: GameState, el: HTMLElement, who: Rid) {
     ui.sheet = 'none';
     send({ kind: 'tell', who, prop: t.prop, value: t.value, sure: b.dataset.sure === '1' });
   });
+  on('[data-entrust]', (b) => send({ kind: 'entrust', who, task: Number(b.dataset.entrust) }));
+  on('[data-help-story]', () => send({ kind: 'help-story', who }));
+  on('[data-repayment]', () => send({ kind: 'repayment' }));
+  on('[data-seat]', (b) => send({ kind: 'seat', who, beside: b.dataset.seat as Rid }));
   on('[data-mis]', (b) => send({ kind: 'misdeliver', who, task: Number(b.dataset.mis) }));
 }
 
@@ -1549,6 +1572,13 @@ function notebookHtml(s: GameState): string {
 }
 
 const STAMPS: Record<string, string> = {
+  safe_parcel: 'A sealed parcel reached its owner',
+  kept_dates: 'Tarık completed the agreed building payments',
+  private_hacer: 'Held the walls of Hacer’s paper room',
+  private_sevim: 'Helped with Sevim’s unnamed lesson example',
+  private_burak: 'Helped Burak finish his moving ferry',
+  private_derya: 'Helped Derya arrange her private letters',
+  private_tarik: 'Helped Tarık listen to his chosen bird recording',
   two_cups: 'Two cups',
   warm_stairs: 'Warm stairs',
   caught: 'Caught telling different stories',
@@ -1573,8 +1603,12 @@ function nightPage(s: GameState) {
   const heard = s.said.filter((x) => dayOf(x.at) === d && x.kind === 'heard').slice(-3);
   const talks = s.talks.filter((t) => dayOf(t.at) === d && t.props.length > 0).length;
   const margin = nightMargin(s, d);
-  const open = OPEN_Q[d] ?? '';
-  app().innerHTML = `<div class="page night">${topbar(`${DAY_NAMES[d - 1]}, night`)}<div class="state-strip"><div class="order-pips">${s.tasks
+  const open =
+    OPEN_Q[d] ??
+    (s.month && d % 7 === 6
+      ? 'Tomorrow at eleven, the residents meet again. Everyone keeps their own vote.'
+      : '');
+  app().innerHTML = `<div class="page night">${topbar(`${dayLabel(s)}, night`)}<div class="state-strip"><div class="order-pips">${s.tasks
     .filter((t) => dayOf(t.by) === d)
     .map(
       (t) =>
@@ -1592,7 +1626,7 @@ function nightPage(s: GameState) {
     }).join('')}</div>
     ${margin ? `<div class="margin hand">${esc(margin)} <span class="soft">— R.</span></div>` : ''}
     ${open ? `<p class="open hand">${esc(open)}</p>` : ''}
-    </main><div class="action-bar"><button class="primary" data-a="next">${d === 6 ? 'Sunday: the meeting' : `Turn the page: ${DAY_NAMES[d]}`}</button>
+    </main><div class="action-bar"><button class="primary" data-a="next">${d % 7 === 6 ? 'Sunday: the meeting' : `Turn the page: ${dayName(d + 1)}`}</button>
     </div>
   </div>`;
   mountMenu(app().querySelector('.menu-slot'), s);
@@ -1647,28 +1681,28 @@ function weekTallyHtml(s: GameState): string {
 function sundayPage(s: GameState) {
   labScreen('ending');
   const m = s.meeting;
-  const lines = s.said.filter((x) => dayOf(x.at) === 7);
+  const lines = s.said.filter((x) => dayOf(x.at) === dayOf(s.minute));
   const total = s.reports.reduce((a, x) => a + x.tips, 0);
   const secrets = Object.keys(s.secrets).length;
   const caught = s.residents.reduce((a, r) => a + r.caught.length + r.grudges.length, 0);
-  const share = `In my first week in The Stairwell, I saved ₺${s.k.money} and found ${secrets} of ${secretProps(s).length} secrets. I was caught telling stories ${caught} ${caught === 1 ? 'time' : 'times'}. My tea money ${m?.raise ? 'went up' : 'stayed the same'}, with ${m?.yes ?? 0} ${m?.yes === 1 ? 'vote' : 'votes'} for a raise.${s.ring.answer === 'yes' ? ' I helped with a paper ferry.' : ''}${s.catHome ? ' A cat lives on the step.' : ''}`;
-  app().innerHTML = `<div class="page sunday">${topbar('Sunday · the meeting')}<main class="page-body">
+  const share = `In my ${s.month ? 'month' : 'first week'} in The Stairwell, I saved ₺${s.k.money} and found ${secrets} of ${secretProps(s).length} secrets. I was caught telling stories ${caught} ${caught === 1 ? 'time' : 'times'}. My tea money ${m?.raise ? 'went up' : 'stayed the same'}, with ${m?.yes ?? 0} ${m?.yes === 1 ? 'vote' : 'votes'} for a raise.${s.ring.answer === 'yes' ? ' I helped with a paper ferry.' : ''}${s.catHome ? ' A cat lives on the step.' : ''}`;
+  app().innerHTML = `<div class="page sunday">${topbar(`${dayLabel(s)} · the meeting`)}<main class="page-body">
     ${lines.map(saidLine).join('')}
     <div class="votes">${RIDS.map((id) => {
       const r = rOf(s, id);
       const p = personOf(s, id);
       const kept = r.word === 'yes' && r.vote === 'yes';
       const broke = r.word === 'yes' && r.vote === 'no';
-      return `<div class="flatline"><b>${RESIDENTS[id].name}</b> <span class="hand ${r.vote === 'yes' ? 'moss' : 'soft'}">${r.vote === 'yes' ? 'voted for your raise' : r.vote === 'away' ? 'did not come' : 'voted against your raise'}</span>${kept ? ' <span class="soft small">as promised</span>' : broke ? ' <span class="rope small">despite a promise</span>' : ''}${p ? '' : ''}</div>`;
+      return `<div class="flatline"><b>${RESIDENTS[id].name}</b> <span class="hand ${r.vote === 'yes' ? 'moss' : 'soft'}">${r.vote === 'yes' ? (s.month?.stay !== null && s.month ? 'voted to renew your agreement' : 'voted for your raise') : r.vote === 'away' ? 'did not come' : (s.month?.stay !== null && s.month ? 'voted against renewing your agreement' : 'voted against your raise')}</span>${kept ? ' <span class="soft small">as promised</span>' : broke ? ' <span class="rope small">despite a promise</span>' : ''}${p ? '' : ''}</div>`;
     }).join('')}</div>
-    <p>You received <span class="money">₺${total}</span> in tips over six days.${m?.raise ? ' Your tea money will increase.' : ''} You have <span class="money">₺${s.k.money}</span> in your tin.</p>
+    <p>You received <span class="money">₺${total}</span> in tips ${s.month ? 'so far this month' : 'over six days'}.${m?.raise ? ' Your tea money will increase.' : ''} You have <span class="money">₺${s.k.money}</span> in your tin.</p>
     <p>${s.ring.answer === 'yes' ? 'Burak showed his moving paper ferry. ' : s.ring.answer === 'not yet' ? 'Burak kept his paper project private. ' : 'Burak has his own unfinished work. '}${s.catHome ? 'Pamuk sleeps on the step.' : ''}</p>
     <p class="story-outcomes">${s.stories?.feud.reconciled ? 'Hacer and Sevim rewrote the notice over tea. ' : ''}${s.stories?.fund.repaired ? 'The new pump is running. The repair is recorded in the fund book.' : ''}</p>
-    <div class="margin hand">${m?.raise ? 'You did well in your first week. They will want more next week.' : 'Your first week is over. Next week they will know you better.'} <span class="soft">— R.</span></div>
+    <div class="margin hand">${s.month ? (s.month.stay === null ? 'There is another working week ahead. The building remembers this one.' : s.month.stay ? 'Your agreement is renewed. The building still needs its daily work.' : 'The agreement ends here. Your work and the people you met remain in this notebook.') : m?.raise ? 'You did well in your first week. They will want more next week.' : 'Your first week is over. Next week they will know you better.'} <span class="soft">— R.</span></div>
     <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
     <p class="soft small">Your notebook is saved.</p>
-    </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button>${labTools ? '<button data-a="download">Download this run</button>' : ''}</div><button class="primary" data-a="title">Close the notebook</button></div>
+    </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button>${labTools ? '<button data-a="download">Download this run</button>' : ''}</div>${s.month && s.month.stay === null ? '<button class="primary" data-a="next">Begin the next week</button>' : '<button class="primary" data-a="title">Close the notebook</button>'}</div>
   </div>`;
   mountMenu(app().querySelector('.menu-slot'), s);
   app()
@@ -1689,6 +1723,9 @@ function sundayPage(s: GameState) {
     .querySelector('[data-a="download"]')
     ?.addEventListener('click', () => downloadRun(runOf(s)));
   app().querySelector('[data-a="title"]')?.addEventListener('click', titlePage);
+  app()
+    .querySelector('[data-a="next"]')
+    ?.addEventListener('click', () => send({ kind: 'next' }));
 }
 
 export const _debug = {

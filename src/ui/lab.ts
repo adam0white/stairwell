@@ -1,4 +1,4 @@
-import { createLab, PRIVACY_URL } from '@adam0white/lab-client';
+import { createLab, FEEDBACK_LABELS, type FeedbackLabel, PRIVACY_URL } from '@adam0white/lab-client';
 import { feedbackPersonaControl, feedbackSharePlay } from '@adam0white/lab-kit';
 import './lab.css';
 
@@ -155,6 +155,23 @@ export function openFeedback(
   body.className = 'sw-feedback-body';
   const lead = document.createElement('p');
   lead.textContent = 'Send a note about this game.';
+  const labels = document.createElement('div');
+  labels.className = 'row';
+  labels.setAttribute('aria-label', 'What is happening?');
+  let feedbackLabel: FeedbackLabel | undefined;
+  for (const key of Object.keys(FEEDBACK_LABELS) as FeedbackLabel[]) {
+    const label = document.createElement('button');
+    label.type = 'button';
+    label.textContent = FEEDBACK_LABELS[key];
+    label.setAttribute('aria-pressed', 'false');
+    label.addEventListener('click', () => {
+      if (sending || sent) return;
+      feedbackLabel = feedbackLabel === key ? undefined : key;
+      for (const node of labels.querySelectorAll('button'))
+        node.setAttribute('aria-pressed', String(node === label && feedbackLabel === key));
+    });
+    labels.append(label);
+  }
   const verdicts = document.createElement('fieldset');
   verdicts.className = 'sw-feedback-verdict';
   const legend = document.createElement('legend');
@@ -215,6 +232,7 @@ export function openFeedback(
   const copy = button('Keep a copy of this run', () => downloadRun(getRun()));
   body.append(
     lead,
+    labels,
     verdicts,
     noteLabel,
     nameDetails,
@@ -243,7 +261,13 @@ export function openFeedback(
     sending = true;
     update();
     const chosen = form.querySelector<HTMLInputElement>('input[name=verdict]:checked');
-    const text = [chosen ? `Verdict: ${chosen.value}` : '', note.value.trim()].filter(Boolean).join('\n\n');
+    const text = [
+      feedbackLabel ? FEEDBACK_LABELS[feedbackLabel] : '',
+      chosen ? `Verdict: ${chosen.value}` : '',
+      note.value.trim(),
+    ]
+      .filter(Boolean)
+      .join('\n\n');
     const submittedName = name.value.trim().slice(0, 60);
     try {
       const sharePlay = feedbackSharePlay(choice);

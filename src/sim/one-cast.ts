@@ -12,7 +12,7 @@ import {
   type PersonaEnvelope,
   validatePersona,
 } from '@adam0white/lab-client';
-import { GAME_VERSION, type GameState, type Input, personOf, replay } from './game.ts';
+import { canReplay, type GameState, type Input, personOf, replay } from './game.ts';
 
 export const DERYA_CAST = 'hf.cast.derya.stairwell';
 export const ONE_CAST_ADAPTER = 'stairwell-one-cast/1';
@@ -75,7 +75,7 @@ export async function createDeryaCheckpoint(
   options: { build: string; branchId: string; parentRevision: string | null },
 ): Promise<PersonaEnvelope> {
   const departure = s.oneCast?.departure;
-  if (s.version !== GAME_VERSION || !departure)
+  if (!canReplay(s.version) || !departure)
     return fail('Derya must finish her shift and leave this game before you can save her journey.');
   const person = personOf(s, 'derya');
   const episode = person.memory.episodes.find(
@@ -94,7 +94,12 @@ export async function createDeryaCheckpoint(
     castRevision: '2',
     branchId: options.branchId,
     parentRevision: options.parentRevision,
-    source: { game: 'stairwell', build: options.build, engine: person.engine, rules: '9' },
+    source: {
+      game: 'stairwell',
+      build: options.build,
+      engine: person.engine,
+      rules: s.version.split('@')[1]!,
+    },
     transfer: {
       person: projection,
       history: [
@@ -144,7 +149,7 @@ export async function prepareDeryaReturn(
     projection.episodes.length > 1
   )
     return fail('This file cannot bring Derya back into this version of the game.');
-  if (!prefix.oneCast?.departure || prefix.oneCast.admission || prefix.version !== GAME_VERSION)
+  if (!prefix.oneCast?.departure || prefix.oneCast.admission || !canReplay(prefix.version))
     return fail('Derya’s saved departure is unavailable on this device. You can start a new game.');
   const sourceHead = prefix.oneCast.head;
   if (!sourceHead || sourceHead.branchId !== envelope.branchId)
@@ -303,7 +308,11 @@ export async function validateDeryaContinuity(s: GameState): Promise<void> {
     if (head.castId !== DERYA_CAST || head.castRevision !== '2')
       return fail('The saved character does not match Derya in this version.');
     if (!s.oneCast.admission) {
-      if (head.source.game !== 'stairwell' || head.source.rules !== '9' || head.source.engine !== '2.23.0')
+      if (
+        head.source.game !== 'stairwell' ||
+        head.source.rules !== s.version.split('@')[1] ||
+        head.source.engine !== '2.23.0'
+      )
         return fail('The saved departure comes from an unsupported game or version.');
       const checkpoint = s.oneCast.lastCheckpoint ?? personOf(s, 'derya');
       const stamp = head.transfer.checkpoint as ReturnTypeShape;

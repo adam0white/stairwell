@@ -53,10 +53,16 @@ function isInput(value: unknown): value is Input {
       );
     case 'invent':
       return isResident(value.who) && isResident(value.about) && typeof value.trait === 'string';
+    case 'help-story':
+      return isResident(value.who);
+    case 'seat':
+      return isResident(value.who) && isResident(value.beside) && value.who !== value.beside;
+    case 'entrust':
     case 'misdeliver':
       return isResident(value.who) && Number.isInteger(value.task);
     case 'prank':
       return value.what === 'swap' || value.what === 'gate';
+    case 'repayment':
     case 'next':
     case 'one-cast-depart':
       return true;

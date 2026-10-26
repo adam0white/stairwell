@@ -7,6 +7,11 @@ export function playback(
   inspecting: boolean,
   selectedSpeed: number | null = null,
 ): { rate: number; reason: string } {
+  if (state.month && (inspecting || talking))
+    return {
+      rate: 0.6,
+      reason: inspecting ? 'You are reading. Time moves slowly.' : 'You are talking. Time moves slowly.',
+    };
   if (inspecting) return { rate: 0, reason: 'You are reading. Time is paused.' };
   if (talking) return { rate: 0, reason: 'You are talking. Time is paused.' };
   if (state.k.walk || state.k.busyUntil > state.minute)

@@ -14,7 +14,7 @@ import {
   watchPersonaCheckpoint,
 } from '@adam0white/lab-client';
 import { ALLOCATION, admitCast, type CastChapter, roleFor, sourceTransfer } from '../sim/cast-life.ts';
-import { act, GAME_VERSION, type GameState, newGame, personOf, replay } from '../sim/game.ts';
+import { act, canReplay, GAME_VERSION, type GameState, newGame, personOf, replay } from '../sim/game.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
 import { lab } from './lab.ts';
 export const shelf = personaChannel();
@@ -45,11 +45,11 @@ let resumeGame: ((g: GameState) => Promise<void>) | undefined;
 let selected: Rid = 'hacer';
 let status = '';
 let pending = Promise.resolve();
-const source = () => ({
+const source = (edition = GAME_VERSION) => ({
   game: 'stairwell',
   build: lab.build().c ?? 'development',
   engine: '2.23.0',
-  rules: '9',
+  rules: edition.split('@')[1]!,
 });
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message : 'Character history is unavailable. Download a copy of your game.';
@@ -126,7 +126,7 @@ export function acceptedCastRecoveries(): Recovery[] {
     const keys = JSON.parse(localStorage.getItem(recoveryIndex) ?? '[]') as string[];
     return keys.slice(0, 8).flatMap((key) => {
       const value = JSON.parse(localStorage.getItem(key) ?? 'null');
-      return value?.accepted === true && value.notebook?.game === GAME_VERSION
+      return value?.accepted === true && canReplay(value.notebook?.game)
         ? [{ key, notebook: value.notebook }]
         : [];
     });
@@ -166,14 +166,14 @@ export class AdmissionFailure extends Error {
     this.name = 'AdmissionFailure';
   }
 }
-export async function arrive(seed: number, fresh = false): Promise<GameState> {
+export async function arrive(seed: number, fresh = false, edition = GAME_VERSION): Promise<GameState> {
   const serial = generation;
   lab.setPersonaRecording('pending-cast-group');
   lab.allowPersonaRecording(false);
   await shelf.ready;
   requireCurrent(serial);
-  if (fresh || !shelf.enabled) return newGame(seed);
-  const opening = newGame(seed);
+  if (fresh || !shelf.enabled) return newGame(seed, edition);
+  const opening = newGame(seed, edition);
   let draftInputs: CastChapter['inputs'] = [];
   let draftInitial: CastChapter['initial'] = {};
   const recoveryKey = `stairwell-cast-recovery:${seed}:admission`;
@@ -190,7 +190,7 @@ export async function arrive(seed: number, fresh = false): Promise<GameState> {
         claims: request.envelopes ?? [],
         expectedHeads: request.expectedHeads ?? {},
       };
-      const draft = newGame(seed, GAME_VERSION, chapter);
+      const draft = newGame(seed, edition, chapter);
       const owned = Object.fromEntries(chapter.claims.map((h) => [h.castId, h]));
       const notebook = recoveryNotebook(draft, owned);
       persistRecovery(recoveryKey, notebook, false);
@@ -204,7 +204,7 @@ export async function arrive(seed: number, fresh = false): Promise<GameState> {
   const prepared = await claimCastChapterBatch(
     transport,
     ALLOCATION.map((c) => c.castId),
-    source(),
+    source(edition),
     async (inputs) => {
       const initial: CastChapter['initial'] = {};
       for (const input of inputs) {
@@ -237,7 +237,7 @@ export async function arrive(seed: number, fresh = false): Promise<GameState> {
     initial: prepared?.initial ?? {},
     claims: prepared?.claims ?? [],
   };
-  const g = newGame(seed, GAME_VERSION, chapter);
+  const g = newGame(seed, edition, chapter);
   const r = runtime(g);
   r.owned = Object.fromEntries(chapter.claims.map((h) => [h.castId, h]));
   r.authored = chapter.inputs.length === 0;
@@ -266,7 +266,7 @@ export async function validateContinuity(g: GameState): Promise<void> {
       throw new Error(
         'There is a mismatch between the character histories saved with this chapter and the histories it expects.',
       );
-    const opening = newGame(g.seed);
+    const opening = newGame(g.seed, g.version);
     for (const input of header.inputs) {
       await validatePersona(input.parent);
       const id = roleFor(input.parent.castId);
@@ -287,7 +287,7 @@ export async function validateContinuity(g: GameState): Promise<void> {
         claim.parentRevision !== input.parent.revision ||
         claim.branchId !== input.parent.branchId ||
         claim.source.game !== 'stairwell' ||
-        claim.source.rules !== '9' ||
+        claim.source.rules !== g.version.split('@')[1] ||
         claim.source.engine !== '2.23.0' ||
         canonicalPersona(claim.transfer.life) !== canonicalPersona(input.life)
       )
@@ -305,7 +305,7 @@ export async function validateContinuity(g: GameState): Promise<void> {
         head.castId !== id ||
         head.castRevision !== RESIDENTS[roleFor(id)].castRevision ||
         head.source.game !== 'stairwell' ||
-        head.source.rules !== '9' ||
+        head.source.rules !== g.version.split('@')[1] ||
         head.source.engine !== '2.23.0'
       )
         throw new Error('The saved record of this game’s control of the character history is invalid.');
@@ -346,7 +346,7 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
     );
   if (!actual.body.alive || actual.body.health <= 0) {
     if (!old) throw new Error('This game does not control a character history it can close.');
-    const closed = await closePersonaBranch(old, source(), actual.now);
+    const closed = await closePersonaBranch(old, source(g.version), actual.now);
     requireCurrent(serial);
     const recoveryKey = `stairwell-cast-recovery:${old.branchId}:${id}`;
     const notebook = recoveryNotebook(
@@ -407,7 +407,7 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
     castRevision: RESIDENTS[id].castRevision,
     branchId,
     parentRevision: fork ? null : (old?.revision ?? null),
-    source: source(),
+    source: source(g.version),
     transfer: { ...projected.transfer, life },
     limitations: projected.transfer.person.person.limitations,
   });

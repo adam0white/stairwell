@@ -1066,3 +1066,50 @@ it('keeps full journal and conversation lines readable with the phone footer', a
     await page.close();
   }
 });
+
+it.each([
+  [360, 690],
+  [1280, 800],
+])(
+  'keeps optional month controls and later pages reachable at %ix%i (controlled WebKit on Mac)',
+  async (width, height) => {
+    const page = await testPage({ viewport: { width, height } });
+    try {
+      await gotoGame(page);
+      await page.locator('[data-month]').check();
+      await page.locator('[data-a=new]').click();
+      await page.waitForSelector('.day');
+      expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@10');
+      await page.clock.install();
+      await page.clock.pauseAt(new Date());
+      // Controlled fixture uses real headless day actions. No shared head or owner save is read.
+      const { newGame, act, dayOf } = await import('../src/sim/game.ts');
+      const { playDay } = await import('../scripts/policy.ts');
+      const state = newGame(11, 'stairwell@10');
+      const samples: GameState[] = [];
+      while (state.phase !== 'end') {
+        if (state.phase === 'day') playDay(state, 'honest');
+        else act(state, { kind: 'next' });
+        if (
+          (state.phase === 'night' && [6, 15, 27].includes(dayOf(state.minute))) ||
+          state.phase === 'sunday'
+        )
+          samples.push(structuredClone(state));
+      }
+      for (const sample of samples) {
+        await page.evaluate((s) => {
+          Object.assign((window as unknown as { __st: { s: object; render: () => void } }).__st.s, s);
+          (window as unknown as { __st: { render: () => void } }).__st.render();
+        }, sample);
+        expect(await page.locator('body').evaluate((el) => el.scrollWidth <= innerWidth)).toBe(true);
+        if (sample.phase === 'sunday' && dayOf(sample.minute) < 28) {
+          expect(await page.locator('[data-a=next]').innerText()).toBe('Begin the next week');
+          await visibleInViewport(page, '[data-a=next]');
+        }
+        expect(await page.locator('body').innerText()).not.toContain('undefined');
+      }
+    } finally {
+      await page.close();
+    }
+  },
+);
