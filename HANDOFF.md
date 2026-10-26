@@ -6,17 +6,39 @@ Owner acceptance of the cross-game feel remains separate, with review on 2026-11
 
 ## Current source and deployed receipt — 2026-10-25
 
-Fetched `origin/main` and this documentation baseline both identify signed `270e625f9eaa81e186fa324196098c09355ea50a`. Independently fetched live `/release.json` identifies that same commit, app0.1.0, framework3.0.0 and `dirty:false`. The prior delivery report records exact green CI40235833549, 168 tests, 105 lint warnings and browser controls; those are delivery receipts, not a new docsweb test or human journey.
+Current signed source is `7902fe25ace3dce8596ef4dc017ab991a158ba20`. The games-deferred
+report records exact green CI40251706840, 192 passing tests in 17 files, and clean live
+app0.1.0/HF3.0.0/dirty:false at that commit (Cloudflare
+`a4261890-ee9c-44b8-944f-566fd3a62059`). Served JS/CSS matched the clean build.
+Existing-Chrome checks used a controlled exact-live-asset mirror at 360×690 and
+1280×800 with production services blocked. No Begin, owner save access, recording or
+production Feedback submission was performed. This is technical evidence, not a human
+journey or owner acceptance. Current maintenance candidates are not part of that receipt.
 
-Source pins HF3.0.0/engine2.23.0, immutable client0.4.10/kit0.5.11 and TypeScript7.0.2. Current notebook edition9 refuses older notebooks rather than changing their replay engine. The five canonical lives remain Derya44 revision2, Burak31, Sevim69, Tarık81 and Hacer58, introduced in edition7. App, package, engine, cast revision and notebook edition are distinct identifiers.
+Earlier source `270e625f9eaa81e186fa324196098c09355ea50a` had exact green
+CI40235833549, 168 tests and 105 lint warnings. Those remain earlier delivery receipts.
 
-The real native Hacer edition9/engine2.23 source fixture and finite central receiver have controlled exact-replay evidence in `~/code/.lab-scratch/v3/stairwell/report.md`. The receiver also retains the exact historical8/2.21 pair. This proves bounded source/receiving replay, not a new production human ownership journey. Current Hearsay mounts its garden, not the retired Derya shell. Do not infer a current Derya route from synthetic historical controls.
+Source pins HF3.0.0/engine2.23.0, immutable client0.4.11/kit0.5.12 and TypeScript7.0.2. Default week9 remains unchanged; the explicit unchecked month option starts edition11. Intermediate whole-game10 and older unsupported notebooks refuse with Start fresh rather than silently changing their rules. The five canonical lives remain Derya44 revision2, Burak31, Sevim69, Tarık81 and Hacer58, introduced in edition7. App, package, engine, cast revision and notebook edition are distinct identifiers.
+
+The real native Hacer edition9/engine2.23 source fixture and finite central receiver have controlled exact-replay evidence in `~/code/.lab-scratch/v3/stairwell/report.md`. Finite actor admission retains historical8/2.21 and9–11/2.23 tuples with its other guards. Edition10 actor-calendar admission does not make an edition10 game replayable. Other hosts still need actual11 source/receiving evidence. This proves bounded source/receiving replay, not a new production human ownership journey. Current Hearsay mounts its garden, not the retired Derya shell. Do not infer a current Derya route from synthetic historical controls.
 
 ## Current controls and storage
 
-The caretaker delivers supplies through Saturday, then attends Sunday’s vote on extra pay. Orders and building destinations preview trips; Go starts travel and arrival handles pickups/deliveries. Conversation offers news, stories and sitting together; support requests begin Thursday. Notebook and Clock speed are gameplay controls. The menu pauses play and contains Resume, Feedback, Full screen, All games, Recording and confirmed New game.
+The default week delivers supplies through Saturday, then ends with Sunday’s vote on
+extra pay. The unchecked title option “Play four weeks, ending with a vote on whether
+you stay.” selects month11. It adds private work, a storm, reciprocal Sunday seating,
+actual sealed-parcel handovers and conserved private dues payments. Invitations require
+HF assent; helper/recipient outcomes invent no material pay. Payments require actual
+funds and cash/ledger transfer. Missing funds, actors or parcels interrupt without a
+payment or completion stamp. Actual nights and Sunday morning precede the votes;
+Derya’s carried night shift still ends at08:00. The fourth week ends with an HF renewal
+vote. Reading and conversation slow time in the month and pause it in the default week. Orders and building destinations preview trips; Go starts travel and arrival handles pickups/deliveries. Conversation offers news, stories and sitting together; support requests begin Thursday. Notebook and Clock speed are gameplay controls. The menu pauses play and contains Resume, Feedback, Full screen, All games, Recording and confirmed New game.
 
-The notebook saves locally in this browser, including timed inputs, minute and pinned continuity state. Continue restores it. Imports do not grant source ownership. Current exports replay deterministically; exact-parent checks and explicit alternatives preserve history. Recording links play across games on this device while enabled. Feedback shares an available run when Recording is on or Share is chosen. The source does not yet expose the newly authorized “I'm stopping” and “I'm confused” choices; do not describe them as shipped.
+The notebook saves locally in this browser, including timed inputs, minute and pinned continuity state. Continue restores the recorded week or month. Imports do not grant source ownership. Current exports replay deterministically; exact-parent checks and explicit alternatives preserve history. Recording links play across games on this device while enabled. Feedback shares an available run when Recording is on or Share is chosen. The ordinary Feedback form now exposes the SDK’s “I'm stopping” and “I'm confused”
+labels. Selection or clearing sends nothing and does not change the edited note.
+Submit combines the selected words, optional verdict and note. The host builds this
+form; shared SDK labels do not mean it uses the SDK dialog or textarea prefill.
+Mocked controls are not a production Feedback receipt.
 
 Exports are diagnostic controls under `?lab=1`: Feedback → Keep a copy of this run, or Download this run at the ending. Title-page Lab tools → Load a playtest run imports a file. Downloads retain replay and continuity data but omit the derived state summary. The old ordinary-menu export description is superseded. The earlier manual download timeout below is historical; the HF3 report records an automated UI download and exact current replay. It does not turn that older manual attempt into a successful receipt.
 
@@ -24,7 +46,7 @@ Exports are diagnostic controls under `?lab=1`: Feedback → Keep a copy of this
 
 Use the managed worktree helper, Node>=24 and `/opt/homebrew/bin` first. Hold HF `scripts/suite-lock.ts` once around the normal full `npm run check:lane` and deployment; Stairwell does not take the lock. New launches require8GB free; stop below5GB. Preserve other workers, saves and shared-profile browser leases. Keep signing enabled and include `Co-Authored-By: Codex <noreply@openai.com>`. Fetch/rebase before push, require exact green CI, and verify the clean live manifest after an app deployment. Source-only documentation needs no app deployment.
 
-Current technical receipts: `~/code/.lab-scratch/v3/stairwell/report.md` and STATUS. Canonical history: [docs/cast-adoption.md](docs/cast-adoption.md). HF3 contract: [docs/hf3-adoption.md](docs/hf3-adoption.md). Preserve owner words and historical receipts below; their package versions, incomplete phases and task-specific round restrictions describe their dates, not current source or current lab-panel authorization.
+Current month/SDK technical receipts: `~/code/.lab-scratch/games-deferred/stairwell-report.md` and `stairwell-handoff-for-docsweb.md`. Earlier HF3 receipts: `~/code/.lab-scratch/v3/stairwell/report.md` and STATUS. Canonical history: [docs/cast-adoption.md](docs/cast-adoption.md). HF3 contract: [docs/hf3-adoption.md](docs/hf3-adoption.md). Preserve owner words and historical receipts below; their package versions, incomplete phases and task-specific round restrictions describe their dates, not current source or current lab-panel authorization.
 
 ## Historical handoff entries — retained 2026-10-25
 

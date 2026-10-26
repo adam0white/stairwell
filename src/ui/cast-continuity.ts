@@ -45,12 +45,17 @@ let resumeGame: ((g: GameState) => Promise<void>) | undefined;
 let selected: Rid = 'hacer';
 let status = '';
 let pending = Promise.resolve();
-const source = (edition = GAME_VERSION) => ({
-  game: 'stairwell',
-  build: lab.build().c ?? 'development',
-  engine: '2.23.0',
-  rules: edition.split('@')[1]!,
-});
+const source = (edition = GAME_VERSION) => {
+  const build = lab.build().c ?? 'development';
+  const rules = edition.split('@')[1];
+  if (rules === undefined) throw new Error('The character chapter has no rules edition.');
+  return {
+    game: 'stairwell',
+    build,
+    engine: '2.23.0',
+    rules,
+  };
+};
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message : 'Character history is unavailable. Download a copy of your game.';
 function recordingKey(r: Runtime): string {

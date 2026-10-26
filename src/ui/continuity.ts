@@ -163,7 +163,11 @@ async function claimArrival(
       game: 'stairwell',
       build: build(),
       engine: '2.23.0',
-      rules: arrival.prefix.version.split('@')[1]!,
+      rules: (() => {
+        const rules = arrival.prefix.version.split('@')[1];
+        if (rules === undefined) throw new Error('The returning chapter has no rules edition.');
+        return rules;
+      })(),
     },
     transfer: {
       ...body.transfer,
@@ -172,8 +176,10 @@ async function claimArrival(
   });
   ensureGeneration(serial);
   const game = applyDeryaReturn(arrival.prefix, admission);
-  game.oneCast!.head = claim;
-  game.oneCast!.scope = arrival.scope;
+  const chapter = game.oneCast;
+  if (!chapter) throw new Error('The accepted return has no character chapter.');
+  chapter.head = claim;
+  chapter.scope = arrival.scope;
   addRow(game, claim, 'admitted');
   // Persist recoverable full state before the atomic claim can leave this origin.
   keepRecovery(claim.revision, { game }, false);
@@ -257,10 +263,12 @@ export function checkpointContinuity(): Promise<void> {
         }
         const owner = current() === game && serial === gateSerial;
         const record = owner ? game : prefix;
-        record.oneCast!.head = envelope;
-        record.oneCast!.scope = scope;
-        record.oneCast!.lastCheckpoint = structuredClone(personOf(prefix, 'derya'));
-        record.oneCast!.sourcePrefix = {
+        const chapter = record.oneCast;
+        if (!chapter) throw new Error('The checkpoint has no character chapter.');
+        chapter.head = envelope;
+        chapter.scope = scope;
+        chapter.lastCheckpoint = structuredClone(personOf(prefix, 'derya'));
+        chapter.sourcePrefix = {
           seed: prefix.seed,
           inputs: structuredClone(prefix.inputs),
           minute: prefix.minute,
@@ -318,8 +326,12 @@ export function continuityPanel(): HTMLElement {
       setEnabled(value) {
         shelf.setEnabled(value);
       },
-      recordingAllowed:
-        !current() || !recordingKey(current()!) || linkageKnown || lab.personaRecordingAllowed,
+      recordingAllowed: (() => {
+        if (!current()) return true;
+        const game = current();
+        if (!game) throw new Error('The game changed while reading character recording settings.');
+        return !recordingKey(game) || linkageKnown || lab.personaRecordingAllowed;
+      })(),
       allowRecording(value) {
         void chooseContinuityRecording(value).catch((e) => {
           status.textContent = message(e);
@@ -371,10 +383,12 @@ export function continuityPanel(): HTMLElement {
       if (current() !== game || serial !== gateSerial) return;
       savePrefix(envelope, prefix);
       await acceptLocalPersona(envelope);
-      game.oneCast!.head = envelope;
-      game.oneCast!.scope = 'file';
-      game.oneCast!.lastCheckpoint = structuredClone(personOf(prefix, 'derya'));
-      game.oneCast!.sourcePrefix = {
+      const chapter = game.oneCast;
+      if (!chapter) throw new Error('The downloaded checkpoint has no character chapter.');
+      chapter.head = envelope;
+      chapter.scope = 'file';
+      chapter.lastCheckpoint = structuredClone(personOf(prefix, 'derya'));
+      chapter.sourcePrefix = {
         seed: prefix.seed,
         inputs: structuredClone(prefix.inputs),
         minute: prefix.minute,
@@ -389,7 +403,9 @@ export function continuityPanel(): HTMLElement {
         if (current() === game) store();
       }
     }
-    downloadEnvelope(game.oneCast!.head!);
+    const head = game.oneCast?.head;
+    if (!head) throw new Error('The character file has no accepted checkpoint.');
+    downloadEnvelope(head);
   });
   add('Open a character file', () => {
     const input = document.createElement('input');
@@ -459,10 +475,12 @@ export function continuityPanel(): HTMLElement {
       valid();
       const scope = held.game.oneCast?.scope ?? 'shared';
       const record = structuredClone(held.prefix);
-      record.oneCast!.head = fork;
-      record.oneCast!.scope = scope;
-      record.oneCast!.lastCheckpoint = structuredClone(personOf(held.prefix, 'derya'));
-      record.oneCast!.sourcePrefix = {
+      const chapter = record.oneCast;
+      if (!chapter) throw new Error('The separate history has no character chapter.');
+      chapter.head = fork;
+      chapter.scope = scope;
+      chapter.lastCheckpoint = structuredClone(personOf(held.prefix, 'derya'));
+      chapter.sourcePrefix = {
         seed: held.prefix.seed,
         inputs: structuredClone(held.prefix.inputs),
         minute: held.prefix.minute,
@@ -479,9 +497,11 @@ export function continuityPanel(): HTMLElement {
       }
       valid();
       Object.assign(held.game, record);
-      held.game.oneCast!.head = fork;
-      held.game.oneCast!.scope = scope;
-      held.game.oneCast!.lastCheckpoint = structuredClone(personOf(held.prefix, 'derya'));
+      const acceptedChapter = held.game.oneCast;
+      if (!acceptedChapter) throw new Error('The accepted separate history has no character chapter.');
+      acceptedChapter.head = fork;
+      acceptedChapter.scope = scope;
+      acceptedChapter.lastCheckpoint = structuredClone(personOf(held.prefix, 'derya'));
       held.prefix.oneCast = structuredClone(held.game.oneCast);
       savePrefix(fork, held.prefix, true);
       conflict = undefined;
