@@ -9,10 +9,45 @@ import {
   seedTie,
   trustOf,
 } from '@adam0white/human-framework';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+
+const materialEvidence = vi.hoisted(() => ({
+  rows: [] as {
+    action: string;
+    status: string;
+    advertised: number;
+    realized: number;
+    cash?: number;
+    ledgerCount?: number;
+  }[],
+  world: undefined as undefined | (() => { cash: number; ledgerCount: number }),
+}));
+vi.mock('@adam0white/human-framework', async (original) => {
+  const actual = await original<typeof import('@adam0white/human-framework')>();
+  return {
+    ...actual,
+    finish: (person: Parameters<typeof actual.finish>[0], outcome: Parameters<typeof actual.finish>[1]) => {
+      if (
+        person.activity?.affordanceId === outcome.affordanceId &&
+        (['handover-parcel', 'pay-dues'].includes(outcome.action) ||
+          outcome.affordanceId === 'receive-building-handover')
+      )
+        materialEvidence.rows.push({
+          action: outcome.action,
+          status: outcome.status,
+          advertised: person.activity.affordance.material ?? 0,
+          realized: outcome.material ?? 0,
+          ...materialEvidence.world?.(),
+        });
+      return actual.finish(person, outcome);
+    },
+  };
+});
+
 import {
   act,
   binsWarning,
+  canReplay,
   dayOf,
   dayStart,
   newGame,
@@ -27,7 +62,7 @@ import {
 import { PRIVATE_FACTS } from '../src/sim/stories.ts';
 import { isSaved } from '../src/ui/save.ts';
 
-const MONTH = 'stairwell@10';
+const MONTH = 'stairwell@11';
 function visit(s: ReturnType<typeof newGame>, who: 'hacer' | 'burak') {
   s.k.at = `door:${who}`;
   rOf(s, who).where = 'home';
@@ -77,6 +112,8 @@ it('makes storm travel cost time and keeps shelter a resident choice', () => {
 });
 
 it('separates honest parcel custody from a completed delivery and from mischief', () => {
+  materialEvidence.rows = [];
+  materialEvidence.world = undefined;
   const s = newGame(11, MONTH);
   visit(s, 'hacer');
   rOf(s, 'burak').where = 'work';
@@ -113,6 +150,9 @@ it('separates honest parcel custody from a completed delivery and from mischief'
   for (let i = 0; i < 120 && !parcel.done; i++) step(s);
   expect(parcel.done).toBeDefined();
   expect(s.stamps.some((x) => x.id === 'safe_parcel')).toBe(true);
+  const handovers = materialEvidence.rows.filter((x) => x.status === 'completed');
+  expect(handovers.length).toBeGreaterThanOrEqual(2);
+  expect(handovers.every((x) => x.advertised === 0 && x.realized === 0)).toBe(true);
 });
 
 it('requires a discovered confidence and assent before private work produces an outcome', () => {
@@ -342,6 +382,7 @@ it('starts the custody trip after the recipient returns instead of crediting the
 });
 
 it('pays the authored weekly dues through actual visits, with conserved pension money and a final supplier receipt', () => {
+  materialEvidence.rows = [];
   const s = newGame(11, MONTH);
   while (dayOf(s.minute) < 3) {
     if (s.phase === 'day') step(s);
@@ -353,9 +394,28 @@ it('pays the authored weekly dues through actual visits, with conserved pension 
   visit(s, 'burak');
   act(s, { kind: 'news', who: 'burak' });
   expect(s.stories?.fund.agreed).toBe(true);
+  materialEvidence.world = () => ({ cash: s.month!.tarikCash, ledgerCount: s.month!.paymentLedger.length });
   expect(s.month?.tarikCash).toBe(0);
   expect(s.month?.paymentLedger).toEqual([]);
+  let exhaustedPurseChecked = false;
   while (s.phase !== 'end') {
+    const underway = s.month!.visits.find((v) => v.kind === 'dues' && v.done === undefined);
+    if (underway && !exhaustedPurseChecked) {
+      // Defensive arrival control branches the real started trip; no player journey is claimed for this modified purse.
+      const exhausted = structuredClone(s);
+      exhausted.month!.tarikCash = 0;
+      const count = exhausted.month!.paymentLedger.length;
+      while (exhausted.minute <= underway.finishesAt) step(exhausted);
+      expect(exhausted.month!.visits.at(-1)?.outcome).toBe('interrupted');
+      expect(exhausted.month!.paymentLedger).toHaveLength(count);
+      expect(exhausted.month!.fundCash).toBe(s.month!.fundCash);
+      expect(
+        materialEvidence.rows.filter((x) => x.action === 'pay-dues' && x.status === 'interrupted').at(-1)
+          ?.realized,
+      ).toBe(0);
+      exhaustedPurseChecked = true;
+      materialEvidence.rows = [];
+    }
     if (s.phase === 'night' && dayOf(s.minute) === 11) {
       expect(s.month?.tarikCash).toBe(0);
       expect(s.month?.paymentLedger).toEqual([]);
@@ -369,6 +429,7 @@ it('pays the authored weekly dues through actual visits, with conserved pension 
     } else act(s, { kind: 'next' });
   }
   const month = s.month!;
+  expect(exhaustedPurseChecked).toBe(true);
   expect(month.paymentLedger).toHaveLength(3);
   expect(month.visits.filter((v) => v.kind === 'dues' && v.done !== undefined)).toHaveLength(3);
   expect(month.duesBalance).toBe(0);
@@ -379,6 +440,18 @@ it('pays the authored weekly dues through actual visits, with conserved pension 
   expect(month.supplierBalance).toBe(0);
   expect(month.supplierLate).toBe(true);
   expect(s.stamps.filter((x) => x.id === 'kept_dates')).toHaveLength(1);
+  const payments = materialEvidence.rows.filter((x) => x.action === 'pay-dues' && x.status === 'completed');
+  expect(payments.map((x) => [x.advertised, x.realized, x.cash, x.ledgerCount])).toEqual([
+    [-0.1, -0.1, 400, 1],
+    [-0.1, -0.1, 200, 2],
+    [-0.1, -0.1, 0, 3],
+  ]);
+  expect(
+    materialEvidence.rows
+      .filter((x) => x.action === 'help' && x.status === 'completed')
+      .every((x) => x.advertised === 0 && x.realized === 0),
+  ).toBe(true);
+  materialEvidence.world = undefined;
 });
 
 it('does not attach old caretaker lineage to an independent later belief of the same value', () => {
@@ -414,4 +487,11 @@ it('keeps Derya’s actual overnight shift through the next morning, then lets i
   expect(
     personOf(s, 'derya').memory.episodes.some((e) => e.summary.includes('finished the night shift')),
   ).toBe(true);
+});
+
+it('refuses the intermediate month10 rather than replaying its changed material rules as month11', () => {
+  expect(() => newGame(11, 'stairwell@10')).toThrow(/Start fresh/);
+  expect(canReplay('stairwell@11')).toBe(true);
+  expect(isSaved({ game: 'stairwell@10', seed: 11, inputs: [], minute: 420 })).toBe(false);
+  expect(canReplay('stairwell@12')).toBe(false);
 });

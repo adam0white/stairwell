@@ -11,7 +11,7 @@
  * telling two stories, truths coming out (`confirm` recalibrates every source), three arcs (the paper model, the boiler
  * fund, the late visitor), small pranks (the newspapers, the cat, a parcel at the wrong door), and the Sunday vote
  * on the kapıcı's tea money (each resident's own `decide`).
- * Edition10 opts into an authored four-week month, meeting invitations, storm and private errands.
+ * Edition11 opts into an authored four-week month, meeting invitations, storm and private errands.
  * Does not cover: residents’ families outside, generic planning or private publication.
  */
 import {
@@ -43,7 +43,14 @@ import {
 } from '@adam0white/human-framework';
 import { lifeAdmission } from '@adam0white/lab-client';
 import { CALENDAR_ACTIONS, type CastChapter } from './cast-life.ts';
-import { MONTH_VERSION, type MonthState, newMonth, PRIVATE_WORK, RELAY_POLICY } from './month.ts';
+import {
+  MONTH_VERSION,
+  type MonthState,
+  type MonthVisit,
+  newMonth,
+  PRIVATE_WORK,
+  RELAY_POLICY,
+} from './month.ts';
 import { applyDeryaReturn, type DeryaContinuity, type DeryaReturnAdmission } from './one-cast.ts';
 import {
   FACTS,
@@ -2778,7 +2785,7 @@ function morning(s: GameState, day: number) {
   s.k.at = 'room';
   s.k.walk = null;
   s.k.busyTask = null;
-  // Edition10 resolved this night before moving the world clock.
+  // Edition11 resolved this night before moving the world clock.
   // Edition9 keeps its exact existing sleep path.
   if (!s.month)
     for (const p of [...s.people, s.kapici]) {
@@ -3180,7 +3187,6 @@ function assent(
     duration: minutes,
     tags: ['help'],
     advertises: { belonging: 0.12 },
-    material: 0.15,
   });
   const refuse = offer('decline', {
     action: 'wait',
@@ -3398,7 +3404,7 @@ export function binsWarning(s: GameState, to: Place): string {
     : 'The truck leaves at 20:45. Take the bins to the street before then.';
 }
 
-/** Edition10 boundaries resolve actual HF meals/sleep. No resource or health reset. */
+/** Edition11 boundaries resolve actual HF meals/sleep. No resource or health reset. */
 function monthNightBodies(s: GameState, day: number) {
   const dawn = dayStart(day) + DAY_START;
   for (const p of [...s.people, s.kapici]) {
@@ -3544,7 +3550,6 @@ function monthVisitOffers(s: GameState, r: RState): Affordance[] {
           effort: 0.35,
           tags: ['help'],
           advertises: { belonging: 0.15 },
-          material: 0.15,
         }),
       );
   }
@@ -3590,7 +3595,6 @@ function startMonthVisit(s: GameState, r: RState, aff: Affordance, rec: Decision
     duration: aff.duration,
     tags: ['help'],
     advertises: { belonging: 0.1 },
-    material: 0.1,
   });
   const decline = offer('keep-plans', {
     action: 'rest',
@@ -3642,56 +3646,42 @@ function startMonthVisit(s: GameState, r: RState, aff: Affordance, rec: Decision
   rOf(s, other).until = s.minute + aff.duration;
   say(s, 'narrator', `${nameOf(r.id)} set off for ${nameOf(other)}’s flat for an agreed handover.`, 'event');
 }
+/** New handovers offer no personal material reward. The fixed ₺200 dues instalment
+ * uses -0.1 host material utility only after its real conserved transfer succeeds.
+ * These are this building's authored amounts, not a general currency conversion.
+ */
 function finishMonthVisits(s: GameState) {
   const month = s.month!;
   for (const visit of month.visits) {
     if (visit.done !== undefined || s.minute < visit.finishesAt) continue;
     const actor = personOf(s, visit.actor),
       receiver = personOf(s, visit.other);
-    if (!actor.body.alive || !receiver.body.alive || rOf(s, visit.other).where !== 'home') {
-      visit.done = s.minute;
-      visit.outcome = 'interrupted';
-      for (const p of [actor, receiver])
-        if (p.activity)
-          finish(p, {
-            affordanceId: p.activity.affordanceId,
-            action: p.activity.action,
-            status: 'interrupted',
-            at: Math.max(p.now, s.minute),
-          });
-      rOf(s, visit.actor).until = s.minute + 1;
-      rOf(s, visit.other).until = s.minute + 1;
-      continue;
-    }
     tick(actor, Math.max(actor.now, s.minute));
     tick(receiver, Math.max(receiver.now, s.minute));
-    for (const p of [actor, receiver])
-      if (p.activity)
-        finish(p, {
-          affordanceId: p.activity.affordanceId,
-          action: p.activity.action,
-          status: 'completed',
-          at: p.now,
-        });
-    visit.done = s.minute;
-    visit.outcome = 'completed';
-    rOf(s, visit.actor).until = s.minute + 1;
-    rOf(s, visit.other).until = s.minute + 1;
-    if (visit.kind === 'parcel') {
-      const t = s.tasks.find((t) => t.id === visit.task);
-      if (!t || t.done || t.custody !== visit.actor) continue;
+    const parcel = visit.kind === 'parcel' ? s.tasks.find((t) => t.id === visit.task) : undefined;
+    const amount = visit.kind === 'dues' ? (visit.amount ?? 0) : 0;
+    if (
+      !actor.body.alive ||
+      !receiver.body.alive ||
+      rOf(s, visit.other).where !== 'home' ||
+      (visit.kind === 'parcel' && (!parcel || parcel.done || parcel.custody !== visit.actor)) ||
+      (visit.kind === 'dues' && (amount <= 0 || month.tarikCash < amount))
+    ) {
+      resolveMonthVisit(s, visit, 'interrupted', 0);
+      continue;
+    }
+    if (visit.kind === 'parcel' && parcel) {
       say(
         s,
         'narrator',
-        `${nameOf(visit.actor)} arrived and handed the sealed parcel to ${nameOf(visit.other)}. ${s.minute > t.by ? 'It arrived late.' : 'It arrived before the deadline.'}`,
+        `${nameOf(visit.actor)} arrived and handed the sealed parcel to ${nameOf(visit.other)}. ${s.minute > parcel.by ? 'It arrived late.' : 'It arrived before the deadline.'}`,
         'event',
       );
-      complete(s, t, false);
-      delete t.custody;
+      complete(s, parcel, false);
+      delete parcel.custody;
       stamp(s, 'safe_parcel');
     } else {
-      const amount = visit.amount ?? 0;
-      if (month.tarikCash < amount) continue;
+      // Debit and retain the transfer before reporting an HF completed outcome or material cost.
       month.tarikCash -= amount;
       month.duesBalance -= amount;
       month.fundCash += amount;
@@ -3717,7 +3707,29 @@ function finishMonthVisits(s: GameState) {
         confirm(receiver, FACTS.dues, false, s.minute);
       }
     }
+    resolveMonthVisit(s, visit, 'completed', visit.kind === 'dues' ? -0.1 : 0);
   }
+}
+function resolveMonthVisit(
+  s: GameState,
+  visit: MonthVisit,
+  status: 'completed' | 'interrupted',
+  actorMaterial: number,
+) {
+  for (const id of [visit.actor, visit.other]) {
+    const p = personOf(s, id);
+    if (p.activity)
+      finish(p, {
+        affordanceId: p.activity.affordanceId,
+        action: p.activity.action,
+        status,
+        at: p.now,
+        material: id === visit.actor ? actorMaterial : 0,
+      });
+    rOf(s, id).until = s.minute + 1;
+  }
+  visit.done = s.minute;
+  visit.outcome = status;
 }
 
 function promiseDues(s: GameState) {

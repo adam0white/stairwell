@@ -64,7 +64,7 @@ export function admitCast(input: LifePreparation, opening: Person): Person {
   const own =
     parent.source.game === 'stairwell' &&
     ((parent.source.rules === '8' && parent.source.engine === '2.21.0') ||
-      (['9', '10'].includes(parent.source.rules) && parent.source.engine === '2.23.0')) &&
+      (['9', '10', '11'].includes(parent.source.rules) && parent.source.engine === '2.23.0')) &&
     parent.transfer.castPassport === 'stairwell-cast/1';
   const voice =
     parent.source.game === 'voice' &&

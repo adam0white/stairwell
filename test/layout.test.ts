@@ -1079,13 +1079,13 @@ it.each([
       await page.locator('[data-month]').check();
       await page.locator('[data-a=new]').click();
       await page.waitForSelector('.day');
-      expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@10');
+      expect(await page.evaluate('window.__st.s.version')).toBe('stairwell@11');
       await page.clock.install();
       await page.clock.pauseAt(new Date());
       // Controlled fixture uses real headless day actions. No shared head or owner save is read.
       const { newGame, act, dayOf } = await import('../src/sim/game.ts');
       const { playDay } = await import('../scripts/policy.ts');
-      const state = newGame(11, 'stairwell@10');
+      const state = newGame(11, 'stairwell@11');
       const samples: GameState[] = [];
       while (state.phase !== 'end') {
         if (state.phase === 'day') playDay(state, 'honest');

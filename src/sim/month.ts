@@ -1,9 +1,9 @@
-/** Optional edition10 authored month. Dates, errands and consequences belong to this building.
+/** Optional edition11 authored month. Dates, errands and consequences belong to this building.
  * HF still owns assent, reputation, body and votes. No general planning, private publication,
  * financial discharge outside this chapter, or changes to edition9 continuation are modelled here.
  */
 import type { Rid } from './people.ts';
-export const MONTH_VERSION = 'stairwell@10';
+export const MONTH_VERSION = 'stairwell@11';
 export interface MonthVisit {
   actor: Rid;
   other: Rid;
