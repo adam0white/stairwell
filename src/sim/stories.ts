@@ -102,18 +102,25 @@ export const PRIVATE_LINES = {
   tarik:
     'Could you help with the tape player? These tapes have bird recordings from different ferry stops. Some also have my wife’s voice. I choose what we listen to. I do not want those voices in a public archive. I do not know every bird’s name.',
 } as const;
+function requiredStoryTitle(value: string | undefined): string {
+  if (value === undefined) throw new Error('The private story has no authored title.');
+  return value;
+}
+
 export const PRIVATE_SECRETS = Object.entries(PRIVATE_FACTS).map(([id, prop]) => ({
   prop,
   value: true,
-  title: (
-    {
-      hacer: 'Hacer makes tiny paper rooms.',
-      sevim: 'Sevim kept a former pupil’s exercise books.',
-      burak: 'Burak makes moving paper models.',
-      derya: 'Derya reported an old scheduling error. She does not know whether it affected her career.',
-      tarik: 'Tarık keeps private bird recordings from ferry stops.',
-    } as Record<string, string>
-  )[id]!,
+  title: requiredStoryTitle(
+    (
+      {
+        hacer: 'Hacer makes tiny paper rooms.',
+        sevim: 'Sevim kept a former pupil’s exercise books.',
+        burak: 'Burak makes moving paper models.',
+        derya: 'Derya reported an old scheduling error. She does not know whether it affected her career.',
+        tarik: 'Tarık keeps private bird recordings from ferry stops.',
+      } as Record<string, string>
+    )[id],
+  ),
 }));
 
 /** These are reports of a confidence, never permission to publish its private contents. */

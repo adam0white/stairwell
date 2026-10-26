@@ -70,6 +70,11 @@ export async function checkpointPerson(person: Person) {
     checkpointDigest: Array.from(new Uint8Array(digest), (n) => n.toString(16).padStart(2, '0')).join(''),
   };
 }
+function requiredCheckpointRules(value: string | undefined): string {
+  if (value === undefined) throw new Error('The character checkpoint has no rules edition.');
+  return value;
+}
+
 export async function createDeryaCheckpoint(
   s: GameState,
   options: { build: string; branchId: string; parentRevision: string | null },
@@ -98,7 +103,7 @@ export async function createDeryaCheckpoint(
       game: 'stairwell',
       build: options.build,
       engine: person.engine,
-      rules: s.version.split('@')[1]!,
+      rules: requiredCheckpointRules(s.version.split('@')[1]),
     },
     transfer: {
       person: projection,

@@ -299,7 +299,13 @@ export const nameOf = (id: string) => (id in RESIDENTS ? RESIDENTS[id as Rid].na
 const today = (s: GameState) => dayOf(s.minute);
 const tod = (s: GameState) => s.minute - dayStart(today(s));
 const weekday = (s: GameState) => (s.month ? ((today(s) - 1) % 7) + 1 : today(s)); // day1 Monday
-export const dayName = (day: number) => DAY_NAMES[(day - 1) % 7]!;
+function requiredSimValue<T>(value: T | null | undefined, message: string): T {
+  if (value === null || value === undefined) throw new Error(message);
+  return value;
+}
+
+export const dayName = (day: number) =>
+  requiredSimValue(DAY_NAMES[(day - 1) % 7], 'The requested day has no weekday name.');
 export const dayLabel = (s: GameState) =>
   `${s.month ? `Week ${Math.ceil(today(s) / 7)} · ` : ''}${dayName(today(s))}`;
 const sunday = (s: GameState) => (s.month ? Math.ceil(today(s) / 7) * 7 : 7);
@@ -617,7 +623,9 @@ export function newGame(seed: number, edition = GAME_VERSION, chapter?: CastChap
           'Some saved characters are missing from this chapter. Keep your file and start a new game.',
         );
       const index = s.people.findIndex((p) => p.id === id);
-      s.people[index] = restore(snapshot(chapter.initial[id]!));
+      s.people[index] = restore(
+        snapshot(requiredSimValue(chapter.initial[id], 'The saved character disappeared from this chapter.')),
+      );
       const life = lifeAdmission(input, 'stairwell');
       s.lifeNotes[id] = life.line;
       const resident = rOf(s, id);
@@ -1849,7 +1857,13 @@ function askNews(s: GameState, who: Rid) {
   tick(s.kapici, Math.max(s.kapici.now, s.minute));
   const aff = relationshipWith(p, KAPICI).affection;
   if (storyNews(s, who)) return;
-  if (s.lifeNotes?.[who]) say(s, who, s.lifeNotes[who]!, 'voice');
+  if (s.lifeNotes?.[who])
+    say(
+      s,
+      who,
+      requiredSimValue(s.lifeNotes[who], 'The resident’s life note disappeared during the greeting.'),
+      'voice',
+    );
   if (aff < -0.2) {
     say(s, who, 'I have no news for you today.', 'voice');
     return;
@@ -3241,7 +3255,7 @@ function entrust(s: GameState, who: Rid, id: number) {
   );
 }
 function helpStory(s: GameState, who: Rid) {
-  const month = s.month!;
+  const month = requiredSimValue(s.month, 'The private work request has no month.');
   if (
     s.k.at !== `door:${who}` ||
     s.k.walk ||
@@ -3288,13 +3302,20 @@ function inviteSeat(s: GameState, who: Rid, beside: Rid) {
     say(s, who, `I would rather choose my own chair. Please do not move it for me.`, 'voice');
     return;
   }
-  s.month!.seats[who] = beside;
+  requiredSimValue(s.month, 'The accepted seating invitation has no month.').seats[who] = beside;
   say(s, who, `I can sit beside ${nameOf(beside)}. Ask them too. I will not speak for them.`, 'voice');
 }
 function meetingSeats(s: GameState) {
   const used = new Set<Rid>();
-  for (const [who, beside] of Object.entries(s.month!.seats) as [Rid, Rid][]) {
-    if (used.has(who) || used.has(beside) || s.month!.seats[beside] !== who) continue;
+  for (const [who, beside] of Object.entries(
+    requiredSimValue(s.month, 'The meeting seating has no month.').seats,
+  ) as [Rid, Rid][]) {
+    if (
+      used.has(who) ||
+      used.has(beside) ||
+      requiredSimValue(s.month, 'The reciprocal seating check has no month.').seats[beside] !== who
+    )
+      continue;
     if (s.castPauses?.[who] === 'paused' || s.castPauses?.[beside] === 'paused') continue;
     if ([who, beside].includes('derya') && s.oneCast?.departure && !s.oneCast.admission) continue;
     used.add(who);
@@ -3314,7 +3335,7 @@ function meetingSeats(s: GameState) {
   }
 }
 function monthEvents(s: GameState) {
-  const month = s.month!;
+  const month = requiredSimValue(s.month, 'The month events have no month.');
   if (raining(s) && !month.rain.started) {
     month.rain.started = true;
     say(
@@ -3390,7 +3411,7 @@ function comparisonNew(
 export function binsWarning(s: GameState, to: Place): string {
   const bins = openTasks(s).find((t) => t.kind === 'bins');
   if (!bins) return '';
-  const pickup = bins.pickup!;
+  const pickup = requiredSimValue(bins.pickup, 'The bins task has no pickup place.');
   const arrival =
     s.minute +
     travelMinutes(s, s.k.at, to) +
@@ -3533,7 +3554,7 @@ function monthVisitFits(s: GameState, id: Rid, minutes: number): boolean {
   );
 }
 function monthVisitOffers(s: GameState, r: RState): Affordance[] {
-  const month = s.month!;
+  const month = requiredSimValue(s.month, 'The resident visit offers have no month.');
   if (month.visits.some((v) => v.done === undefined && (v.actor === r.id || v.other === r.id))) return [];
   const result: Affordance[] = [];
   for (const t of s.tasks) {
@@ -3579,7 +3600,7 @@ function monthVisitOffers(s: GameState, r: RState): Affordance[] {
   return result;
 }
 function startMonthVisit(s: GameState, r: RState, aff: Affordance, rec: DecisionRecord) {
-  const month = s.month!,
+  const month = requiredSimValue(s.month, 'The resident visit departure has no month.'),
     parcel = aff.id.startsWith('parcel-handover:')
       ? s.tasks.find((t) => t.id === Number(aff.id.split(':')[1]))
       : undefined;
@@ -3651,7 +3672,7 @@ function startMonthVisit(s: GameState, r: RState, aff: Affordance, rec: Decision
  * These are this building's authored amounts, not a general currency conversion.
  */
 function finishMonthVisits(s: GameState) {
-  const month = s.month!;
+  const month = requiredSimValue(s.month, 'The resident visit completion has no month.');
   for (const visit of month.visits) {
     if (visit.done !== undefined || s.minute < visit.finishesAt) continue;
     const actor = personOf(s, visit.actor),
@@ -3693,7 +3714,11 @@ function finishMonthVisits(s: GameState) {
       }
       month.paymentLedger.push({ at: s.minute, amount, supplierPaid, remaining: month.duesBalance });
       month.duesPaid = month.duesBalance === 0;
-      month.repaymentAt = dayStart(dayOf(month.repaymentAt!) + 7) + 10 * 60;
+      month.repaymentAt =
+        dayStart(
+          dayOf(requiredSimValue(month.repaymentAt, 'The completed dues visit has no repayment date.')) + 7,
+        ) +
+        10 * 60;
       if (month.duesBalance > 0) promiseDues(s);
       say(
         s,
