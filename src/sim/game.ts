@@ -50,6 +50,7 @@ import {
   newMonth,
   PRIVATE_WORK,
   RELAY_POLICY,
+  WORK_START_VERSION,
 } from './month.ts';
 import { applyDeryaReturn, type DeryaContinuity, type DeryaReturnAdmission } from './one-cast.ts';
 import {
@@ -273,6 +274,7 @@ export interface GameState {
 
 export type Input =
   | { at: number; kind: 'go'; to: Place }
+  | { at: number; kind: 'start-work'; task: number }
   | { at: number; kind: 'news'; who: Rid }
   | { at: number; kind: 'tell'; who: Rid; prop: string; value: boolean; sure: boolean }
   | { at: number; kind: 'invent'; who: Rid; about: Rid; trait: string }
@@ -522,6 +524,10 @@ export function planDay(s: GameState, day: number) {
 export function newGame(seed: number, edition = GAME_VERSION, chapter?: CastChapter): GameState {
   if (!canReplay(edition))
     throw new Error(`This notebook belongs to an older edition. Start fresh. (${edition})`);
+  if (edition === WORK_START_VERSION && chapter)
+    throw new Error(
+      'Character transfer is not available for this work option. Download a copy of your game.',
+    );
   const now = DAY_START;
   // Everyone wakes at 06:20 and has breakfast before the day starts.
   const people = RIDS.map((id) => makeResident(id, seed, now - 40));
@@ -578,7 +584,7 @@ export function newGame(seed: number, edition = GAME_VERSION, chapter?: CastChap
     knocks: 0,
   };
   if (edition !== LEGACY_GAME_VERSION) s.stories = newStories();
-  if (edition === MONTH_VERSION) s.month = newMonth();
+  if (edition === MONTH_VERSION || edition === WORK_START_VERSION) s.month = newMonth();
   if (canReplay(edition)) {
     s.oneCast = { rows: [] };
     const nurse = personOf(s, 'derya');
@@ -1624,6 +1630,38 @@ function kapiciMinute(s: GameState) {
   }
 }
 
+/** Both arrival and the explicit player command use this authored interval and cost. */
+function startOrdinaryWork(s: GameState, job: Task) {
+  const work = job.work as number;
+  s.k.busyTask = job.id;
+  s.k.busyUntil = s.minute + work;
+  kapiciDoes(s, 'work', work, 0.5);
+}
+
+/** Private story work keeps its separate invitation and consent route. */
+export function canStartWork(s: GameState, job: Task): boolean {
+  return (
+    s.version === WORK_START_VERSION &&
+    s.phase === 'day' &&
+    !s.k.walk &&
+    s.k.busyTask === null &&
+    s.k.busyUntil <= s.minute &&
+    s.tasks.includes(job) &&
+    job.done === undefined &&
+    job.kind === 'job' &&
+    !job.pickup &&
+    !job.storyFor &&
+    !job.custody &&
+    !job.carried &&
+    !job.wrongDoor &&
+    job.place === s.k.at &&
+    job.from <= s.minute &&
+    Number.isInteger(job.work) &&
+    (job.work as number) > 0 &&
+    dayOf(job.from) === today(s)
+  );
+}
+
 function arrive(s: GameState) {
   const k = s.k;
   pickupAt(s, k.at);
@@ -1632,11 +1670,8 @@ function arrive(s: GameState) {
   const job = s.tasks.find(
     (t) => !t.done && t.kind === 'job' && t.place === k.at && t.from <= s.minute && !t.pickup,
   );
-  if (job?.work) {
-    k.busyTask = job.id;
-    k.busyUntil = s.minute + job.work;
-    kapiciDoes(s, 'work', job.work, 0.5);
-  } else kapiciDoes(s, 'rest', 15, 0.05);
+  if (job?.work) startOrdinaryWork(s, job);
+  else kapiciDoes(s, 'rest', 15, 0.05);
   // Derya's bread goes on the hook while she sleeps.
   if (
     k.at === 'door:tarik' &&
@@ -1678,6 +1713,11 @@ function pauseDeryaRota(s: GameState) {
 
 function applyInput(s: GameState, inp: Input) {
   switch (inp.kind) {
+    case 'start-work': {
+      const job = s.tasks.find((t) => t.id === inp.task);
+      if (job && canStartWork(s, job)) startOrdinaryWork(s, job);
+      return;
+    }
     case 'cast-pause':
       if (inp.who === 'burak' || inp.who === 'tarik') {
         say(
@@ -3082,6 +3122,7 @@ function applyPending(s: GameState) {
 
 /** Queue an input at the current minute and apply it. */
 export function act(s: GameState, inp: NewInput) {
+  validateInputContract(s.version, inp);
   s.inputs.push({ ...inp, at: s.minute } as Input);
   applyPending(s);
 }
@@ -3094,6 +3135,13 @@ export function replay(
   admission?: DeryaReturnAdmission,
   chapter?: CastChapter,
 ): GameState {
+  if (!canReplay(edition))
+    throw new Error(`This notebook belongs to an older edition. Start fresh. (${edition})`);
+  if (edition === WORK_START_VERSION && (admission || chapter))
+    throw new Error(
+      'Character transfer is not available for this work option. Download a copy of your game.',
+    );
+  for (const input of inputs) validateInputContract(edition, input);
   let s = newGame(seed, edition, chapter);
   let suffix = inputs;
   if (admission) {
@@ -3118,7 +3166,7 @@ export function replay(
 }
 
 export const canReplay = (game: string | undefined): boolean =>
-  game === GAME_VERSION || game === MONTH_VERSION;
+  game === GAME_VERSION || game === MONTH_VERSION || game === WORK_START_VERSION;
 
 export function fingerprint(s: GameState): string {
   const people = s.people.map((p) => ({
@@ -3803,4 +3851,37 @@ function arrangeRepayment(s: GameState) {
   else say(s, 'tarik', 'Not now. I will keep the money aside and choose another time.', 'voice');
   kapiciDoes(s, 'arrange-private-payment', 2, 0.05);
   s.k.walk = { from: s.k.at, to: s.k.at, at0: s.minute, at1: s.minute + 2 };
+}
+
+/** Refuse mixed or unknown command contracts before recording or replay installation. */
+export function validateInputContract(edition: string, input: NewInput | Input): void {
+  const kinds = [
+    'go',
+    'start-work',
+    'news',
+    'tell',
+    'invent',
+    'word',
+    'cast-pause',
+    'sit',
+    'misdeliver',
+    'entrust',
+    'help-story',
+    'repayment',
+    'seat',
+    'knock',
+    'prank',
+    'next',
+    'one-cast-depart',
+  ];
+  if (!canReplay(edition) || !input || !kinds.includes(input.kind))
+    throw new Error('This notebook contains an unsupported command. Keep your file and start a new game.');
+  if (
+    input.kind === 'start-work' &&
+    (edition !== WORK_START_VERSION ||
+      !Number.isInteger(input.task) ||
+      input.task < 0 ||
+      Object.keys(input).some((key) => !['kind', 'task', 'at'].includes(key)))
+  )
+    throw new Error('Start work needs the separate work option in a new game. Keep your existing notebook.');
 }

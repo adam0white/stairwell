@@ -4,6 +4,8 @@
  */
 import type { Rid } from './people.ts';
 export const MONTH_VERSION = 'stairwell@11';
+/** Explicit same-place ordinary work, with unchanged edition11 month rules. */
+export const WORK_START_VERSION = 'stairwell@13';
 export interface MonthVisit {
   actor: Rid;
   other: Rid;

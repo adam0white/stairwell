@@ -262,3 +262,16 @@ The return is a new chapter beginning at the locally saved source boundary. Repl
 ## Canonical edition 7 (2026-10-23)
 
 The canonical adoption document supersedes earlier current-state claims about editions3–5, seven occupied households, old cast biographies, frozen-save compatibility, the engagement and the recipe feud. The original goal, errands, source trust, gossip exposure, fatigue, Sunday vote, dated boiler repair and private repayment permission remain. Current-version replay remains exact; old notebooks explicitly require Start fresh. The released whole-cast integration and its explicit supported/unsupported carry are documented in cast-adoption.md. Deployment/journey receipts remain in the coordinator report.
+
+
+## Explicit ordinary work option — 2026-10-26
+
+Remaining: parent ONE review, actual Chrome QA, normal source integration and permitted delivery. Adam accepts feel separately. This source does not close the six Maya asks.
+
+The default remains week9. The original unchecked month option remains month11. A separate unchecked title option starts month13 without earlier character history. It uses month11 rules and adds a task-specific Start work button for an eligible ordinary job at your current place. The click starts the authored work interval and fatigue cost. Completion and any payment still require the ordinary worked-minute boundary. It does not walk, submit another input or complete the job on click.
+
+Edition9/11 Go and journals stay unchanged. Edition12 remains the finite aligned-visit capsule over exact nested11. The new command refuses in old editions before recording; mixed and unknown input contracts refuse before replay installation. Private help retains its separate invitation and assent path.
+
+Character admission and publication for edition13 are unsupported and refuse before shelf writes. Native run download and local replay remain available. No edition11 passport is fabricated. Adoption engineering remains OPEN for2026-10-27. F1571 parcel delivery is not proved to share the tap cause. F1569 completed-work acknowledgment, F1570/F1572 story/reply repetition and F1573 waiting remain separate engineering.
+
+No upload under db491 hold through2026-10-27T19:45 or actual B handback. Future actual QA uses Recording/linking ON, no API quarantine, and a disclosed public SDK localhost option; unsupported agent attribution and historic recording limits remain explicit.

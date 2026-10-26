@@ -9,6 +9,7 @@ import {
   act,
   binsWarning,
   canReplay,
+  canStartWork,
   clockOf,
   dayLabel,
   dayName,
@@ -37,7 +38,7 @@ import {
   travelMinutes,
   wordHint,
 } from '../sim/game.ts';
-import { MONTH_VERSION, PRIVATE_WORK } from '../sim/month.ts';
+import { MONTH_VERSION, PRIVATE_WORK, WORK_START_VERSION } from '../sim/month.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
 import { PRIVATE_FACTS, PRIVATE_SECRETS, STORY_SECRETS } from '../sim/stories.ts';
 import {
@@ -358,13 +359,17 @@ async function holdLoad<T>(run: () => Promise<T>): Promise<T> {
     pendingLoads--;
   }
 }
-async function startFresh(authored = false, month = false) {
+async function startFresh(authored = false, month = false, workStart = false) {
   return holdLoad(async () => {
     const serial = ++loadSerial;
     invalidateContinuity();
     let s: GameState;
     try {
-      s = await arrive((Date.now() % 1_000_000) + 1, authored, month ? MONTH_VERSION : undefined);
+      s = await arrive(
+        (Date.now() % 1_000_000) + 1,
+        authored || workStart,
+        workStart ? WORK_START_VERSION : month ? MONTH_VERSION : undefined,
+      );
     } catch (error) {
       showLoadError(error, 'The new game could not start.');
       return;
@@ -634,7 +639,7 @@ function titlePage() {
   infoOpen = false;
   const saved = loadSaved();
   const savedState = saved ? restoreNotebook(saved) : null;
-  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${olderNotebook() ? '<p role="status">This notebook is from a different version of the game. Start a new game.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label>${labTools ? '<button data-a="other">Lab tools ▸</button>' : ''}<div class="title-spacer"></div></main><div class="action-bar">
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${olderNotebook() ? '<p role="status">This notebook is from a different version of the game. Start a new game.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label><label><input type="checkbox" data-work-start>Play four weeks with a Start work button for ordinary jobs here. Start without earlier character history; character transfer is unavailable. You can download this run.</label>${labTools ? '<button data-a="other">Lab tools ▸</button>' : ''}<div class="title-spacer"></div></main><div class="action-bar">
     ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${dayLabel(savedState)} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
     <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'New game' : 'Begin on Monday'}</button><div class="new-confirm" hidden>The old notebook will be replaced.<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
   mountNotice();
@@ -646,7 +651,11 @@ function titlePage() {
         void begin(savedState).catch((error) => showLoadError(error, 'The saved game could not open.'));
     });
   const fresh = () =>
-    startFresh(false, app().querySelector<HTMLInputElement>('[data-month]')?.checked === true);
+    startFresh(
+      false,
+      app().querySelector<HTMLInputElement>('[data-month]')?.checked === true,
+      app().querySelector<HTMLInputElement>('[data-work-start]')?.checked === true,
+    );
   app()
     .querySelector('[data-a=new]')
     ?.addEventListener('click', () => {
@@ -872,7 +881,7 @@ function dayView(s: GameState, full: boolean) {
 
 function choose(s: GameState, to: Place, person: Rid | null = null, task: number | null = null) {
   if (s.k.walk || s.k.busyTask !== null) return;
-  if (to === s.k.at) {
+  if (to === s.k.at && !(s.version === WORK_START_VERSION && task !== null)) {
     selection = null;
     goTo(s, to, person);
     return;
@@ -897,6 +906,15 @@ function tripActions(s: GameState, el: HTMLElement) {
       : tasks.find((t) => t.place === selection?.to && (t.carried || !t.pickup))
     : tasks[0];
   const to = selection?.to ?? (task ? (task.carried || !task.pickup ? task.place : task.pickup) : null);
+  if (task && canStartWork(s, task)) {
+    el.innerHTML = `<div class="trip-line"><b>${esc(task.label)}</b><span>${task.work} minutes of work here</span></div><button class="primary" data-start-work>Start work</button>`;
+    el.querySelector('[data-start-work]')?.addEventListener('click', () => {
+      send({ kind: 'start-work', task: task.id });
+      selection = null;
+      render(false);
+    });
+    return;
+  }
   if (to) {
     const first = travelMinutes(s, s.k.at, to);
     const second = task && !task.carried && task.pickup ? travelMinutes(s, to, task.place) : 0;

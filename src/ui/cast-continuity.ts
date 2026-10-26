@@ -15,6 +15,7 @@ import {
 } from '@adam0white/lab-client';
 import { ALLOCATION, admitCast, type CastChapter, roleFor, sourceTransfer } from '../sim/cast-life.ts';
 import { act, canReplay, GAME_VERSION, type GameState, newGame, personOf, replay } from '../sim/game.ts';
+import { WORK_START_VERSION } from '../sim/month.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
 import { lab } from './lab.ts';
 export const shelf = personaChannel();
@@ -45,7 +46,14 @@ let resumeGame: ((g: GameState) => Promise<void>) | undefined;
 let selected: Rid = 'hacer';
 let status = '';
 let pending = Promise.resolve();
+function refuseWorkTransfer(edition: string): void {
+  if (edition === WORK_START_VERSION)
+    throw new Error(
+      'Character transfer is not available for this work option yet. Download a copy of your game, or start without earlier character history.',
+    );
+}
 const source = (edition = GAME_VERSION) => {
+  refuseWorkTransfer(edition);
   const build = lab.build().c ?? 'development';
   const rules = edition.split('@')[1];
   if (rules === undefined) throw new Error('The character chapter has no rules edition.');
@@ -175,6 +183,10 @@ export async function arrive(seed: number, fresh = false, edition = GAME_VERSION
   const serial = generation;
   lab.setPersonaRecording('pending-cast-group');
   lab.allowPersonaRecording(false);
+  if (edition === WORK_START_VERSION) {
+    if (!fresh && shelf.enabled) refuseWorkTransfer(edition);
+    return newGame(seed, edition);
+  }
   await shelf.ready;
   requireCurrent(serial);
   if (fresh || !shelf.enabled) return newGame(seed, edition);
@@ -249,6 +261,11 @@ export async function arrive(seed: number, fresh = false, edition = GAME_VERSION
   return g;
 }
 export async function validateContinuity(g: GameState): Promise<void> {
+  if (g.version === WORK_START_VERSION) {
+    if (g.castChapter || (runtime(g).rawOwned && Object.keys(runtime(g).rawOwned as object).length))
+      refuseWorkTransfer(g.version);
+    return;
+  }
   const header = g.castChapter;
   if (header) {
     if (
@@ -340,6 +357,7 @@ export function acknowledgeContinuity(_g: GameState): void {
   /* Receipt is saved with the current local notebook. */
 }
 async function checkpoint(g: GameState, id: Rid, fork = false) {
+  refuseWorkTransfer(g.version);
   const serial = generation;
   const r = runtime(g);
   const castId = RESIDENTS[id].castId;

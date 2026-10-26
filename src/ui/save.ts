@@ -1,5 +1,13 @@
 import type { CastChapter } from '../sim/cast-life.ts';
-import { canReplay, DAY_START, type Input, type Place, TOP_FLOOR } from '../sim/game.ts';
+import {
+  canReplay,
+  DAY_START,
+  type Input,
+  type Place,
+  TOP_FLOOR,
+  validateInputContract,
+} from '../sim/game.ts';
+import { WORK_START_VERSION } from '../sim/month.ts';
 import type { DeryaContinuity } from '../sim/one-cast.ts';
 import { RIDS, type Rid } from '../sim/people.ts';
 import type { CastReceipts } from './cast-continuity.ts';
@@ -32,6 +40,8 @@ function isPlace(value: unknown): value is Place {
 function isInput(value: unknown): value is Input {
   if (!isRecord(value) || !Number.isInteger(value.at) || (value.at as number) < DAY_START) return false;
   switch (value.kind) {
+    case 'start-work':
+      return Number.isInteger(value.task) && (value.task as number) >= 0;
     case 'go':
       return isPlace(value.to);
     case 'news':
@@ -83,9 +93,24 @@ export function isSaved(value: unknown): value is Saved {
     return false;
   if (value.minute !== undefined && (!Number.isInteger(value.minute) || (value.minute as number) < DAY_START))
     return false;
+  if (
+    value.game === WORK_START_VERSION &&
+    (value.castChapter !== undefined ||
+      (value.oneCast !== undefined &&
+        (!isRecord(value.oneCast) ||
+          value.oneCast.admission !== undefined ||
+          !Array.isArray(value.oneCast.rows) ||
+          value.oneCast.rows.length !== 0)))
+  )
+    return false;
   let previous = DAY_START;
   for (const input of value.inputs) {
     if (!isInput(input) || input.at < previous) return false;
+    try {
+      validateInputContract(value.game, input);
+    } catch {
+      return false;
+    }
     if (typeof value.minute === 'number' && input.at > value.minute) return false;
     previous = input.at;
   }
