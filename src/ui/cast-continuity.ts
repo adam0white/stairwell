@@ -501,24 +501,29 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
   status = `The saved progress for ${RESIDENTS[id].name} in this chapter was accepted.`;
   await gateContinuity(g);
 }
-export function checkpointContinuity(): Promise<void> {
-  if (fileMode === 'file') return Promise.resolve();
+export type PublicationResult =
+  | { ok: true; cancelled?: boolean }
+  | { ok: false; failures: { name: string; error: string }[] };
+export function checkpointContinuity(): Promise<PublicationResult> {
+  if (fileMode === 'file') return Promise.resolve({ ok: true });
   const g = current();
-  if (!g) return Promise.resolve();
+  if (!g || g.version === WORK_START_VERSION) return Promise.resolve({ ok: true });
   const serial = generation;
+  const cancelled = (): PublicationResult => ({ ok: true, cancelled: true });
   const task = pending
     .catch(() => {})
-    .then(async () => {
-      if (serial !== generation || current() !== g) return;
+    .then(async (): Promise<PublicationResult> => {
+      if (serial !== generation || current() !== g) return cancelled();
       await nativeShelf().ready;
-      if (serial !== generation || current() !== g) return;
+      if (serial !== generation || current() !== g) return cancelled();
       if (!nativeShelf().enabled) {
         nativeShelf().setEnabled(true);
         await nativeShelf().ready;
       }
-      if (serial !== generation || current() !== g) return;
+      if (serial !== generation || current() !== g) return cancelled();
+      const failures: { name: string; error: string }[] = [];
       for (const id of RIDS) {
-        if (serial !== generation || current() !== g) return;
+        if (serial !== generation || current() !== g) return cancelled();
         if (
           g.castPauses?.[id] === 'paused' ||
           endedBoundary(g, id) ||
@@ -527,15 +532,21 @@ export function checkpointContinuity(): Promise<void> {
         ) {
           try {
             await checkpoint(g, id);
-            if (serial !== generation || current() !== g) return;
+            if (serial !== generation || current() !== g) return cancelled();
           } catch (e) {
-            if (serial !== generation || current() !== g) return;
+            if (serial !== generation || current() !== g) return cancelled();
             status = errorText(e);
+            failures.push({ name: RESIDENTS[id].name, error: status });
           }
         }
       }
+      return failures.length ? { ok: false, failures } : { ok: true };
+    })
+    .catch((error): PublicationResult => {
+      if (serial !== generation || current() !== g) return cancelled();
+      return { ok: false, failures: [{ name: 'Shared people', error: errorText(error) }] };
     });
-  pending = task;
+  pending = task.then(() => {});
   return task;
 }
 export function installContinuity(
@@ -546,7 +557,10 @@ export function installContinuity(
   current = getGame;
   store = save;
   resumeGame = load;
-  if (fileMode !== 'file') watchPersonaCheckpoint(checkpointContinuity);
+  if (fileMode !== 'file')
+    watchPersonaCheckpoint(async () => {
+      await checkpointContinuity();
+    });
 }
 function button(label: string, run: () => void | Promise<void>) {
   const b = document.createElement('button');

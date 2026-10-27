@@ -54,6 +54,7 @@ import {
   gateContinuity,
   installContinuity,
   invalidateContinuity,
+  type PublicationResult,
   restoreCastReceipts,
   shelf,
   validateContinuity,
@@ -1874,14 +1875,7 @@ function nightPage(s: GameState) {
   app()
     .querySelector('[data-a="next"]')
     ?.addEventListener('click', () => send({ kind: 'next' }));
-  app()
-    .querySelector('[data-a="title"]')
-    ?.addEventListener('click', async (event) => {
-      (event.currentTarget as HTMLButtonElement).disabled = true;
-      // The ordinary closing action records the existing next input before publication.
-      await (s.phase === 'sunday' ? send({ kind: 'next' }) : checkpointContinuity());
-      if (ui.s === s) titlePage();
-    });
+  app().querySelector('[data-a="title"]')?.addEventListener('click', titlePage);
 }
 
 const OPEN_Q: Record<number, string> = {
@@ -1926,6 +1920,29 @@ function weekTallyHtml(s: GameState): string {
   </section>`;
 }
 
+const closingPending = new WeakSet<GameState>();
+const closingFailures = new WeakMap<GameState, string>();
+async function closeNotebook(s: GameState): Promise<void> {
+  if (closingPending.has(s)) return;
+  closingPending.add(s);
+  closingFailures.delete(s);
+  // Record the existing closing input once. A retry only repeats publication.
+  let result: PublicationResult | undefined;
+  try {
+    const publication = s.phase === 'sunday' ? send({ kind: 'next' }) : checkpointContinuity();
+    render(false);
+    result = await publication;
+  } finally {
+    closingPending.delete(s);
+  }
+  if (ui.s !== s) return;
+  if (result && !result.ok) {
+    closingFailures.set(s, result.failures.map((failure) => `${failure.name}: ${failure.error}`).join(' '));
+    render(false);
+  } else if (result?.cancelled) render(false);
+  else titlePage();
+}
+
 function sundayPage(s: GameState) {
   labScreen('ending');
   const m = s.meeting;
@@ -1950,9 +1967,11 @@ function sundayPage(s: GameState) {
     <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
     <p class="soft small">${fileMode === 'file' ? 'Progress stays in this page. Download this run before closing.' : 'Your notebook is saved.'}</p>
-    </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button><button data-a="download">Download this run</button></div>${s.month && s.month.stay === null ? '<button class="primary" data-a="next">Begin the next week</button>' : '<button class="primary" data-a="title">Close the notebook</button>'}</div>
+    ${closingFailures.has(s) ? `<section data-publication-failure><p role="status">Character progress could not be saved to Shared people. Your local notebook is saved. ${esc(closingFailures.get(s) ?? '')} Download this run to keep a copy. Use the recovery controls below if the local recovery archive is full, then retry Close the notebook.</p><a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noopener">Check Shared people</a></section>` : ''}
+    </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button><button data-a="download">Download this run</button></div>${s.month && s.month.stay === null ? '<button class="primary" data-a="next">Begin the next week</button>' : `<button class="primary" data-a="title" ${closingPending.has(s) ? 'disabled' : ''}>Close the notebook</button>`}</div>
   </div>`;
   mountMenu(app().querySelector('.menu-slot'), s);
+  if (closingFailures.has(s)) app().querySelector('[data-publication-failure]')?.append(continuityPanel());
   app()
     .querySelector('[data-a="see-tally"]')
     ?.addEventListener('click', (event) => {
@@ -1972,11 +1991,8 @@ function sundayPage(s: GameState) {
     ?.addEventListener('click', () => downloadRun(runOf(s)));
   app()
     .querySelector('[data-a="title"]')
-    ?.addEventListener('click', async (event) => {
-      (event.currentTarget as HTMLButtonElement).disabled = true;
-      // The ordinary closing action records the existing next input before publication.
-      await (s.phase === 'sunday' ? send({ kind: 'next' }) : checkpointContinuity());
-      if (ui.s === s) titlePage();
+    ?.addEventListener('click', () => {
+      void closeNotebook(s);
     });
   app()
     .querySelector('[data-a="next"]')

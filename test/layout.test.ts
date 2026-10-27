@@ -441,10 +441,8 @@ it('keeps the optional tally outside replay state', async () => {
     expect(fingerprint(replay(s.seed, s.inputs, s.minute))).toBe(fingerprint(s));
     await page.evaluate(`import('/src/ui/cast-continuity.ts').then(({shelf}) => {
       window.closingHeads = [];
-      const request = shelf.request;
       shelf.request = async (message) => {
         if (message.action === 'put') window.closingHeads.push(message.envelope);
-        return request(message);
       };
     })`);
     await page.getByRole('button', { name: 'Close the notebook', exact: true }).click();
@@ -460,6 +458,83 @@ it('keeps the optional tally outside replay state', async () => {
     await page.close();
   }
 });
+
+it.each(['archive', 'conflict'] as const)(
+  'keeps a failed %s publication visible and retries without changing the recorded ending',
+  async (failure) => {
+    const page = await testPage({ viewport: { width: 360, height: 690 } });
+    try {
+      const s = playWeek(11, 'honest');
+      await importNotebook(page, s.minute, s.inputs.slice(0, -1), s.seed);
+      await page.evaluate((kind) => {
+        if (kind === 'archive') {
+          const notebook = JSON.parse(localStorage.getItem('stairwell:notebook') ?? 'null');
+          const keys = Array.from({ length: 8 }, (_, i) => `stairwell-cast-recovery:occupied-${i}`);
+          for (const key of keys) localStorage.setItem(key, JSON.stringify({ accepted: true, notebook }));
+          localStorage.setItem('stairwell-cast-recovery-index', JSON.stringify(keys));
+        }
+      }, failure);
+      await page.evaluate(`import('/src/ui/cast-continuity.ts').then(({shelf}) => {
+      window.publicationCalls = [];
+      window.publicationFailure = ${JSON.stringify(failure)};
+      shelf.request = async (request) => {
+        if (request.action === 'put') {
+          window.publicationCalls.push(request.envelope);
+          if (window.publicationFailure === 'conflict') {
+            if (!window.publicationReleased) await new Promise(resolve => { window.releasePublication = () => { window.publicationReleased = true; resolve(); }; });
+            throw new Error('The exact parent no longer matches shared history.');
+          }
+        }
+      };
+    })`);
+      await page.getByRole('button', { name: 'Close the notebook', exact: true }).click();
+      if (failure === 'conflict') {
+        expect(await page.getByRole('button', { name: 'Close the notebook', exact: true }).isDisabled()).toBe(
+          true,
+        );
+        await expect.poll(() => page.evaluate(`typeof window.releasePublication`)).toBe('function');
+        await page.evaluate(`window.releasePublication()`);
+      }
+      const status = page.locator('[data-publication-failure] [role=status]');
+      await status.waitFor();
+      expect(await status.textContent()).toContain(
+        failure === 'archive' ? 'local recovery archive is full' : 'exact parent no longer matches',
+      );
+      expect(await status.textContent()).toContain('Your local notebook is saved');
+      expect(await page.getByRole('button', { name: 'Download this run', exact: true }).isVisible()).toBe(
+        true,
+      );
+      expect(await page.locator('[data-a=continue]').count()).toBe(0);
+      const saved = await page.evaluate<{ inputs: GameState['inputs']; castReceipts: { owned: object } }>(
+        `JSON.parse(localStorage.getItem('stairwell:notebook'))`,
+      );
+      expect(saved.inputs).toEqual(s.inputs);
+      expect(saved.castReceipts.owned).toEqual({});
+      expect(fingerprint(replay(s.seed, saved.inputs, s.minute))).toBe(fingerprint(s));
+      if (failure === 'archive') {
+        // Real public recovery controls make space without leaving this ending or replacing its notebook.
+        await page
+          .getByRole('button', { name: 'Remove this recovery copy after downloading it', exact: true })
+          .first()
+          .click();
+        await page
+          .getByRole('button', { name: 'Remove this recovery copy after downloading it', exact: true })
+          .nth(1)
+          .click();
+      } else await page.evaluate(`window.publicationFailure = ''`);
+      await page.getByRole('button', { name: 'Close the notebook', exact: true }).click();
+      await page.locator('[data-a=continue]').waitFor();
+      const closed = await page.evaluate<{
+        inputs: GameState['inputs'];
+        castReceipts: { owned: Record<string, unknown> };
+      }>(`JSON.parse(localStorage.getItem('stairwell:notebook'))`);
+      expect(closed.inputs).toEqual(s.inputs);
+      expect(closed.castReceipts.owned['hf.cast.hacer.voice']).toBeDefined();
+    } finally {
+      await page.close();
+    }
+  },
+);
 
 async function actionTarget(page: Page, selector: string) {
   const control = page.locator(selector);
