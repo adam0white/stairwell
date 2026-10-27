@@ -180,8 +180,8 @@ importers:
         specifier: file:vendor/adam0white-lab-client-0.4.11.tgz
         version: file:vendor/adam0white-lab-client-0.4.11.tgz
       '@adam0white/lab-kit':
-        specifier: file:vendor/adam0white-lab-kit-0.5.12.tgz
-        version: file:vendor/adam0white-lab-kit-0.5.12.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.11.tgz)
+        specifier: file:vendor/adam0white-lab-kit-0.5.17.tgz
+        version: file:vendor/adam0white-lab-kit-0.5.17.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.11.tgz)
     devDependencies:
       '@biomejs/biome':
         specifier: 2.6.3
@@ -222,13 +222,13 @@ packages:
     resolution: {integrity: sha512-+52vaTfpqedoq10cwCLrb233Ez2R3yKvrVDIOA0A6M1RmkIoDjXHBBtDpsA+MAUvG+PxksPsjG1XJ9iBqoY18A==, tarball: file:vendor/adam0white-lab-client-0.4.11.tgz}
     version: 0.4.11
 
-  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.12.tgz':
-    resolution: {integrity: sha512-HCGvQbQV1PcEZxazJ4eshW2NgeA4fxF2JinRbBs2Ey4EVvJknTBgVQp856Yg0A/3IbbSdbdnIWsY2YDsiULf2w==, tarball: file:vendor/adam0white-lab-kit-0.5.12.tgz}
-    version: 0.5.12
+  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.17.tgz':
+    resolution: {integrity: sha512-nNPaIhh2nbQvuxGb2S3oUYISI/+OsP4wZvRi0c5o7h5SO2LSahm5g/kegImV/v5SM652u+RN2ooipku2U5pQHg==, tarball: file:vendor/adam0white-lab-kit-0.5.17.tgz}
+    version: 0.5.17
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
-      '@adam0white/lab-client': 0.4.11
+      '@adam0white/lab-client': 0.4.11 || 0.4.12 || 0.4.13 || 0.4.14 || 0.4.15
     peerDependenciesMeta:
       '@adam0white/lab-client':
         optional: true
@@ -1314,7 +1314,7 @@ snapshots:
     dependencies:
       '@adam0white/human-framework': 3.0.0
 
-  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.12.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.11.tgz)':
+  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.17.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.11.tgz)':
     optionalDependencies:
       '@adam0white/lab-client': file:vendor/adam0white-lab-client-0.4.11.tgz
 
