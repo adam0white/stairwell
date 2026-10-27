@@ -8,6 +8,7 @@ import {
   type PersonaEnvelope,
   type PersonaRequest,
   preparePersonaLife,
+  validatePersona,
 } from '@adam0white/lab-client';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { sourceTransfer } from '../src/sim/cast-life.ts';
@@ -16,6 +17,8 @@ import { makeResident } from '../src/sim/people.ts';
 
 const mocks = vi.hoisted(() => ({
   allowed: false,
+  enabled: true,
+  enables: [] as boolean[],
   puts: [] as unknown[],
   batch: [] as unknown[],
   handler: undefined as ((q: unknown) => Promise<unknown>) | undefined,
@@ -24,8 +27,13 @@ vi.mock('@adam0white/lab-client', async (original) => ({
   ...(await original<object>()),
   personaChannel: () => ({
     ready: Promise.resolve(true),
-    enabled: true,
-    setEnabled: () => {},
+    get enabled() {
+      return mocks.enabled;
+    },
+    setEnabled: (value: boolean) => {
+      mocks.enabled = value;
+      mocks.enables.push(value);
+    },
     request: (q: unknown) => mocks.handler!(q),
   }),
   watchPersonaCheckpoint: () => () => {},
@@ -81,6 +89,8 @@ beforeEach(async () => {
   state = { heads: Object.fromEntries(parents.map((p) => [p.castId, p.revision])), revisions: parents };
   current = undefined;
   mocks.allowed = false;
+  mocks.enabled = true;
+  mocks.enables = [];
   mocks.puts = [];
   mocks.batch = [];
   mocks.handler = async (raw) => {
@@ -226,6 +236,8 @@ it('retains a late accepted source receipt and raw capture without changing a re
     act(current, { kind: 'cast-pause', who: 'hacer' });
     while (current.castPauses?.hacer !== 'paused' && current.minute < 1200) step(current);
     const prior = castReceipts(current).owned['hf.cast.hacer.voice']!.revision;
+    const burakHead = state.heads['hf.cast.burak.stairwell'];
+    personOf(current, 'burak').body.alive = false;
     const handler = mocks.handler!;
     mocks.handler = async (q) => {
       const result = await handler(q);
@@ -234,6 +246,8 @@ it('retains a late accepted source receipt and raw capture without changing a re
     };
     await checkpointContinuity();
     expect(castReceipts(current).owned['hf.cast.hacer.voice']!.revision).toBe(prior);
+    expect(mocks.puts).toHaveLength(1);
+    expect(state.heads['hf.cast.burak.stairwell']).toBe(burakHead);
     const recovery = acceptedCastRecoveries().find(
       (r) =>
         (r.notebook as { castReceipts: { owned: Record<string, PersonaEnvelope> } }).castReceipts.owned[
@@ -280,4 +294,51 @@ it('keeps the current receipts after an accepted startup reply becomes uncertain
   expect(mocks.batch).toHaveLength(2);
   expect(JSON.stringify(current)).toBe(previous);
   expect(castReceipts(current)).toEqual(receipts);
+});
+
+it('automatically enables native shared admission independently of Recording', async () => {
+  mocks.enabled = false;
+  const opening = await arrive(42);
+  expect(mocks.enables).toEqual([true]);
+  expect(opening.castChapter?.claims).toHaveLength(2);
+  expect(mocks.allowed).toBe(false);
+  expect(
+    replay(opening.seed, opening.inputs, opening.minute, opening.version, undefined, opening.castChapter),
+  ).toEqual(opening);
+});
+
+it('publishes eligible living people automatically at the ordinary notebook ending without waiving duties', async () => {
+  state = { heads: {}, revisions: [] };
+  current = await arrive(7, true);
+  while (current.phase !== 'end') {
+    if (current.phase === 'day') step(current);
+    else act(current, { kind: 'next' });
+  }
+  expect(current.castPauses).toBeUndefined();
+  const replayed = replay(current.seed, current.inputs, current.minute, current.version);
+  expect(replayed).toEqual(current);
+  const before = structuredClone(personOf(current, 'hacer'));
+  mocks.enabled = false;
+  await checkpointContinuity();
+  expect(mocks.enables).toEqual([true]);
+  expect(personOf(current, 'hacer')).toEqual(before);
+  const receipts = castReceipts(current);
+  const head = receipts.owned['hf.cast.hacer.voice'];
+  if (!head) throw new Error('Expected an accepted Hacer checkpoint');
+  expect(head.parentRevision).toBeNull();
+  expect(await validatePersona(head)).toEqual(head);
+  const projected = await sourceTransfer(before, []);
+  expect(projected.transfer.person.person.limitations.length).toBeGreaterThan(64);
+  expect(head.limitations.length).toBeLessThanOrEqual(64);
+  expect((head.transfer.person as typeof projected.transfer.person).person.limitations).toEqual(
+    projected.transfer.person.person.limitations,
+  );
+  expect(receipts.sources.hacer).toEqual(projected.raw);
+  expect(head?.transfer.checkpoint).toEqual((await sourceTransfer(before, [])).transfer.checkpoint);
+  expect(state.heads['hf.cast.hacer.voice']).toBe(head?.revision);
+  expect(receipts.owned['hf.cast.sevim.stairwell']).toBeDefined();
+  expect(receipts.owned['hf.cast.burak.stairwell']).toBeUndefined();
+  expect(receipts.owned['hf.cast.tarik.stairwell']).toBeUndefined();
+  // Derya remains in the real night-shift sleep interval at Sunday's ending.
+  expect(receipts.owned['hf.cast.derya.stairwell']).toBeUndefined();
 });

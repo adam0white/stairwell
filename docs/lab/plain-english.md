@@ -27,3 +27,7 @@ Technical delivery and final worktree cleanup are recorded in `~/code/.lab-scrat
 ## HF3 source boundary, 2026-10-25
 
 Edition9 uses HF3.0.0/engine2.23.0 and immutable client0.4.10/kit0.5.11. The fresh SDK already pins HF3, so the obsolete2.21 override is removed. `npm ls` must show one published3.0.0 dependency graph. Older notebooks require Start fresh. Plain English remains persisted in actual actors; no display projection rewrites replay state. See docs/hf3-adoption.md and the v3 scratch report for source and delivery proof.
+
+## Public controls, 2026-10-27
+
+Every gameplay option is public. Use Other ways to begin for alternate starts, supported morning returns, file play and accepted local recovery copies. Keep New game and exports public. Keep character management on the central people shelf. Put only diagnostics in one closed Debug item beside permanent Lab privacy at the bottom of the menu. Place explanations beside their source control; use an inline i control when an explanation needs disclosure. Do not introduce query-string feature switches.

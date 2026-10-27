@@ -59,7 +59,7 @@ it('foreign file preserves occupied notebook through import play hide departure 
   });
   try {
     await page.clock.install();
-    await page.goto(`${url}?file=1`);
+    await page.goto(`${url}file/`);
     await page.getByRole('heading', { name: 'Play a saved file', exact: true }).waitFor();
     expect(await page.evaluate(() => (window as unknown as { ownerCalls: string[] }).ownerCalls)).toEqual([]);
     expect(await page.evaluate("import('/src/ui/cast-continuity.ts').then(m => m.shelf === null)")).toBe(
@@ -287,13 +287,15 @@ it('foreign file preserves occupied notebook through import play hide departure 
     await page.getByRole('heading', { name: 'Play a saved file', exact: true }).waitFor();
     expect(await page.evaluate(() => (window as unknown as { ownerCalls: string[] }).ownerCalls)).toEqual([]);
     expect(requests.filter((value) => /persona|consent/.test(value))).toEqual([]);
-    await page.goto(`${url}?file=1&file=0`);
-    await page.getByText('This saved-file link is not supported.', { exact: false }).waitFor();
-    expect(await page.evaluate(() => (window as unknown as { ownerCalls: string[] }).ownerCalls)).toEqual([]);
-    expect(await page.locator('input[type=file], [data-a=continue], [data-a=new]').count()).toBe(0);
-    await page.goto(`${url}?file=unknown`);
-    await page.getByText('This saved-file link is not supported.', { exact: false }).waitFor();
-    expect(await page.evaluate(() => (window as unknown as { ownerCalls: string[] }).ownerCalls)).toEqual([]);
+    await page
+      .getByRole('link', { name: 'Leave file play and open my saved local game', exact: true })
+      .click();
+    await page.locator('[data-a=new]').waitFor();
+    expect(await page.evaluate('window.ownerSentinels()')).toEqual(
+      ['stairwell:notebook', 'stairwell-cast-recovery-index', 'stairwell-cast-recovery:sentinel'].map(
+        (key) => `synthetic-occupied:${key}`,
+      ),
+    );
   } finally {
     await page.close();
   }
@@ -358,7 +360,7 @@ it('latest chooser selection cancels older reads hashes errors and pending lifec
   );
   try {
     await page.clock.install();
-    await page.goto(`${url}?file=1`);
+    await page.goto(`${url}file/`);
     await page.getByRole('heading', { name: 'Play a saved file', exact: true }).waitFor();
     await page.evaluate(`Promise.all([import('/src/ui/app.ts'),import('/src/ui/lab.ts'),import('/src/ui/cast-continuity.ts')]).then(([host,{lab},cast]) => {
       window.race = {host,cast,reads:{},hashes:[],metadata:[],activeHashes:0};
@@ -547,7 +549,7 @@ it('menu close actions cancel pending files before delayed close completion in C
   const proofs: unknown[] = [];
   try {
     await page.clock.install();
-    await page.goto(`${url}?file=1`);
+    await page.goto(`${url}file/`);
     await page.getByRole('heading', { name: 'Play a saved file', exact: true }).waitFor();
     await page.evaluate(`Promise.all([import('/src/ui/app.ts'),import('/src/ui/lab.ts'),import('/src/ui/cast-continuity.ts')]).then(([host,{lab},cast]) => {
       const state = window.closeRace = {host,cast,reads:{},hashes:[],activeHashes:0,metadata:[],screens:0,callbacks:[],delivered:0};

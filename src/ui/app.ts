@@ -54,11 +54,12 @@ import {
   gateContinuity,
   installContinuity,
   invalidateContinuity,
+  type PublicationResult,
   restoreCastReceipts,
   shelf,
   validateContinuity,
 } from './cast-continuity.ts';
-import { downloadRun, fileMode, gameMenu, lab, labScreen, labTools, openFeedback } from './lab.ts';
+import { downloadRun, fileMode, gameMenu, lab, labScreen, openFeedback } from './lab.ts';
 import { canWait, playback, untilSomethingHappens } from './playback.ts';
 import { isSaved, type Saved } from './save.ts';
 
@@ -154,11 +155,6 @@ function showLoadError(error: unknown, action: string) {
   const explanation = document.createElement('p');
   explanation.textContent = `${reason} Your saved notebook has not been replaced.`;
   body.append(explanation);
-  if (labTools) {
-    const diagnostic = document.createElement('p');
-    diagnostic.textContent = detail;
-    body.append(diagnostic);
-  }
   const actions = document.createElement('div');
   actions.className = 'sw-dialog-actions load-actions';
   const close = () => {
@@ -340,30 +336,7 @@ function importRun(file: File) {
       });
     return;
   }
-  file.text().then((t) => {
-    try {
-      const raw = JSON.parse(t);
-      const x = {
-        ...raw,
-        oneCast: raw.continuity ?? (Array.isArray(raw.oneCast) ? undefined : raw.oneCast),
-      } as Saved;
-      if (!canReplay(x.game)) {
-        alert('This notebook is from a different version of the game. Start a new game.');
-        return;
-      }
-      if (!isSaved(x)) {
-        alert('The game could not read that notebook. Choose another file or start a new game.');
-        return;
-      }
-      void begin(restoreNotebook(x, true), true).catch(() =>
-        alert(
-          'The game could not check the history saved with that notebook. Keep the file and start a new game.',
-        ),
-      );
-    } catch {
-      alert('The game could not read that file.');
-    }
-  });
+  throw new Error('Open Play a saved file before choosing a file.');
 }
 
 // Host file sessions do not invent a new simulation edition or ownership authority.
@@ -523,7 +496,7 @@ function fileChooser() {
   stage = null;
   // A rejected replacement file must leave the current memory run available.
   invalidateContinuity();
-  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><h1>Play a saved file</h1><p>Your saved game stays unchanged. Progress stays in this page. Download this run before closing the page. Reload returns here.</p><label>Choose a saved file<input type="file" accept="application/json,.json,.txt"></label><p role="status" data-file-status></p>${ui.s ? '<button data-file-resume>Resume current file</button>' : ''}<p>To leave file play and open your saved local game, use the link below. That game uses this browser’s saved notebook.</p><a href="${esc(location.pathname)}">Leave file play and open my saved local game</a></main></div>`;
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><h1>Play a saved file</h1><p>Your saved game stays unchanged. Progress stays in this page. Download this run before closing the page. Reload returns here.</p><label>Choose a saved file<input type="file" accept="application/json,.json,.txt"></label><p role="status" data-file-status></p>${ui.s ? '<button data-file-resume>Resume current file</button>' : ''}<p>To leave file play and open your saved local game, use the link below. That game uses this browser’s saved notebook.</p><a href="/">Leave file play and open my saved local game</a></main></div>`;
   mountMenu(app().querySelector('.menu-slot'), null);
   app()
     .querySelector('[data-file-resume]')
@@ -552,8 +525,9 @@ function send(inp: NewInput) {
   else if (s.said.some((line) => (line.n ?? -1) >= lines && line.kind !== 'journal'))
     ui.readUntil = performance.now() + 6000;
   save();
-  if (inp.kind === 'next') void checkpointContinuity();
+  const checkpoint = inp.kind === 'next' ? checkpointContinuity() : undefined;
   render(false);
+  return checkpoint;
 }
 
 let loadSerial = 0;
@@ -801,7 +775,6 @@ function mountMenu(target: Element | null, s: GameState | null) {
         void startFresh();
       },
       getRun: () => runOf(ui.s),
-      continuityPanel,
       chooseRecording: chooseContinuityRecording,
       speed: () => selectedSpeed,
       setSpeed: (speed) => {
@@ -880,7 +853,7 @@ function titlePage() {
   infoOpen = false;
   const saved = loadSaved();
   const savedState = saved ? restoreNotebook(saved) : null;
-  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${olderNotebook() ? '<p role="status">This notebook is from a different version of the game. Start a new game.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label><label><input type="checkbox" data-work-start>Play four weeks with a Start work button for ordinary jobs here. Start without earlier character history; character transfer is unavailable. You can download this run.</label>${labTools ? '<button data-a="other">Lab tools ▸</button>' : ''}<div class="title-spacer"></div></main><div class="action-bar">
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${olderNotebook() ? '<p role="status">This notebook is from a different version of the game. Start a new game.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label><label><input type="checkbox" data-work-start>Play four weeks with a Start work button for ordinary jobs here. Start without earlier character history; character transfer is unavailable. You can download this run.</label><button data-a="other">Other ways to begin ▸</button><div class="title-spacer"></div></main><div class="action-bar">
     ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${dayLabel(savedState)} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
     <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'New game' : 'Begin on Monday'}</button><div class="new-confirm" hidden>The old notebook will be replaced.<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
   mountNotice();
@@ -921,7 +894,7 @@ function titlePage() {
         !saved?.oneCast ||
         (Object.keys(saved.oneCast).every((key) => key === 'rows') && saved.oneCast.rows.length === 0);
       const ms = saved && unlinked && !saved.castChapter ? mornings(saved) : [];
-      dialog.innerHTML = `<div class="who"><b>Lab tools</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body">${ms.length > 1 ? ms.map((m, i) => `<div><button data-morning="${i}">Turn back to ${dayName(m.day)} morning</button><div data-confirm="${i}" hidden>Your progress after that morning will be removed.<div class="row"><button data-yes="${i}">Yes, turn back</button><button data-no="${i}">No</button></div></div></div>`).join('') : ''}<label class="file-button">Load a playtest run<input type="file" accept="application/json"></label></div>`;
+      dialog.innerHTML = `<div class="who"><b>Other ways to begin</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body">${ms.length > 1 ? ms.map((m, i) => `<div><button data-morning="${i}">Turn back to ${dayName(m.day)} morning</button><div data-confirm="${i}" hidden>Your progress after that morning will be removed.<div class="row"><button data-yes="${i}">Yes, turn back</button><button data-no="${i}">No</button></div></div></div>`).join('') : ''}<a href="/file/">Play a saved file</a><a href="https://human.adamwhite.work/lab/people/">Shared people</a></div>`;
       document.body.append(dialog);
       dialog.showModal();
       const authored = document.createElement('button');
@@ -930,16 +903,9 @@ function titlePage() {
         dialog.close();
         await startFresh(true);
       });
-      dialog.querySelector('.sheet-body')?.append(authored);
+      dialog.querySelector('.sheet-body')?.append(authored, continuityPanel());
       dialog.querySelector('[data-a=close]')?.addEventListener('click', () => dialog.close());
       dialog.addEventListener('close', () => dialog.remove());
-      dialog.querySelector<HTMLInputElement>('input')?.addEventListener('change', (e) => {
-        const f = (e.target as HTMLInputElement).files?.[0];
-        if (f) {
-          dialog.close();
-          importRun(f);
-        }
-      });
       dialog.querySelectorAll<HTMLElement>('[data-morning]').forEach((b) => {
         b.addEventListener('click', () => {
           requiredUiValue(
@@ -1954,6 +1920,29 @@ function weekTallyHtml(s: GameState): string {
   </section>`;
 }
 
+const closingPending = new WeakSet<GameState>();
+const closingFailures = new WeakMap<GameState, string>();
+async function closeNotebook(s: GameState): Promise<void> {
+  if (closingPending.has(s)) return;
+  closingPending.add(s);
+  closingFailures.delete(s);
+  // Record the existing closing input once. A retry only repeats publication.
+  let result: PublicationResult | undefined;
+  try {
+    const publication = s.phase === 'sunday' ? send({ kind: 'next' }) : checkpointContinuity();
+    render(false);
+    result = await publication;
+  } finally {
+    closingPending.delete(s);
+  }
+  if (ui.s !== s) return;
+  if (result && !result.ok) {
+    closingFailures.set(s, result.failures.map((failure) => `${failure.name}: ${failure.error}`).join(' '));
+    render(false);
+  } else if (result?.cancelled) render(false);
+  else titlePage();
+}
+
 function sundayPage(s: GameState) {
   labScreen('ending');
   const m = s.meeting;
@@ -1978,9 +1967,11 @@ function sundayPage(s: GameState) {
     <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
     <p class="soft small">${fileMode === 'file' ? 'Progress stays in this page. Download this run before closing.' : 'Your notebook is saved.'}</p>
-    </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button>${labTools || fileMode === 'file' ? '<button data-a="download">Download this run</button>' : ''}</div>${s.month && s.month.stay === null ? '<button class="primary" data-a="next">Begin the next week</button>' : '<button class="primary" data-a="title">Close the notebook</button>'}</div>
+    ${closingFailures.has(s) ? `<section data-publication-failure><p role="status">Character progress could not be saved to Shared people. Your local notebook is saved. ${esc(closingFailures.get(s) ?? '')} Download this run to keep a copy. Use the recovery controls below if the local recovery archive is full, then retry Close the notebook.</p><a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noopener">Check Shared people</a></section>` : ''}
+    </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button><button data-a="download">Download this run</button></div>${s.month && s.month.stay === null ? '<button class="primary" data-a="next">Begin the next week</button>' : `<button class="primary" data-a="title" ${closingPending.has(s) ? 'disabled' : ''}>Close the notebook</button>`}</div>
   </div>`;
   mountMenu(app().querySelector('.menu-slot'), s);
+  if (closingFailures.has(s)) app().querySelector('[data-publication-failure]')?.append(continuityPanel());
   app()
     .querySelector('[data-a="see-tally"]')
     ?.addEventListener('click', (event) => {
@@ -1998,7 +1989,11 @@ function sundayPage(s: GameState) {
   app()
     .querySelector('[data-a="download"]')
     ?.addEventListener('click', () => downloadRun(runOf(s)));
-  app().querySelector('[data-a="title"]')?.addEventListener('click', titlePage);
+  app()
+    .querySelector('[data-a="title"]')
+    ?.addEventListener('click', () => {
+      void closeNotebook(s);
+    });
   app()
     .querySelector('[data-a="next"]')
     ?.addEventListener('click', () => send({ kind: 'next' }));
