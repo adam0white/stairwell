@@ -32,7 +32,7 @@ async function testPage(options: Parameters<Browser['newPage']>[0] = {}) {
 }
 
 async function gotoGame(page: Page) {
-  await page.goto(`${url}?lab=1`);
+  await page.goto(url);
   // Explicit empty local fixture, never proof of real shared admission.
   await page.evaluate(`import('/src/ui/cast-continuity.ts').then(async ({shelf}) => {
       // This synthetic bridge fixture must explicitly enable its mocked admission.
@@ -428,7 +428,7 @@ it('keeps the optional tally outside replay state', async () => {
   const page = await testPage({ viewport: { width: 360, height: 690 } });
   try {
     const s = playWeek(11, 'honest');
-    await importNotebook(page, s.minute, s.inputs, s.seed);
+    await importNotebook(page, s.minute, s.inputs.slice(0, -1), s.seed);
     const tally = page.locator('[data-week-tally]');
     expect(await tally.isVisible()).toBe(false);
     const before = await page.evaluate('JSON.stringify(window.__st.s)');
@@ -439,6 +439,23 @@ it('keeps the optional tally outside replay state', async () => {
     expect(await page.getByRole('button', { name: 'Feedback', exact: true }).count()).toBe(1);
     expect(await page.getByRole('button', { name: 'Download this run', exact: true }).count()).toBe(1);
     expect(fingerprint(replay(s.seed, s.inputs, s.minute))).toBe(fingerprint(s));
+    await page.evaluate(`import('/src/ui/cast-continuity.ts').then(({shelf}) => {
+      window.closingHeads = [];
+      const request = shelf.request;
+      shelf.request = async (message) => {
+        if (message.action === 'put') window.closingHeads.push(message.envelope);
+        return request(message);
+      };
+    })`);
+    await page.getByRole('button', { name: 'Close the notebook', exact: true }).click();
+    await page.locator('[data-a=continue]').waitFor();
+    const closed = await page.evaluate<{
+      notebook: { inputs: GameState['inputs'] };
+      heads: { castId: string }[];
+    }>(`({notebook:JSON.parse(localStorage.getItem('stairwell:notebook')),heads:window.closingHeads})`);
+    expect(closed.notebook.inputs).toEqual(s.inputs);
+    expect(fingerprint(replay(s.seed, closed.notebook.inputs, s.minute))).toBe(fingerprint(s));
+    expect(closed.heads.some((head: { castId: string }) => head.castId === 'hf.cast.hacer.voice')).toBe(true);
   } finally {
     await page.close();
   }
@@ -538,7 +555,7 @@ it.each([
     expect(await page.evaluate('window.__st.s.minute')).toBe(before);
     const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
     expect(await menu.locator('input[type=file]').count()).toBe(0);
-    expect(await menu.getByText('Download this run', { exact: true }).count()).toBe(0);
+    expect(await menu.getByText('Download this run', { exact: true }).count()).toBe(1);
     expect(await menu.getByRole('button').last().textContent()).toBe('Resume');
     expect(await menu.getByRole('button', { name: 'Fast', exact: true }).count()).toBe(0);
     await menu.getByRole('button', { name: 'To the title page', exact: true }).click();
@@ -548,7 +565,7 @@ it.each([
     );
     await page.locator('[data-a=no-new]').click();
     await page.locator('[data-a=other]').click();
-    expect(await page.getByText('Load a playtest run', { exact: false }).isVisible()).toBe(true);
+    expect(await page.getByText('Play a saved file', { exact: true }).isVisible()).toBe(true);
   } finally {
     await page.close();
   }
@@ -836,34 +853,28 @@ it('explains that an older cast notebook requires Start fresh', async () => {
   }
 });
 
-it.each(['', '?lab=true', '?lab=0', '?lab=1'])(
-  'shows diagnostic controls only with exact lab=1 (%s)',
-  async (query) => {
-    const page = await testPage({ viewport: { width: 820, height: 1180 } });
-    try {
-      await page.goto(`${url}${query}`);
-      expect(await page.locator('[data-a=other]').count()).toBe(query === '?lab=1' ? 1 : 0);
-      await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-      const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
-      expect(await menu.locator('.sw-cast-controls').count()).toBe(query === '?lab=1' ? 1 : 0);
-      if (query !== '?lab=1') {
-        expect(await menu.getByRole('button').allTextContents()).toEqual([
-          '×',
-          'Feedback',
-          'Full screen',
-          'New game',
-          'Resume',
-        ]);
-        expect(await menu.getByRole('link', { name: 'All games', exact: true }).getAttribute('href')).toBe(
-          'https://human.adamwhite.work/games/',
-        );
-        expect(await menu.getByRole('switch').count()).toBe(1);
-      }
-    } finally {
-      await page.close();
-    }
-  },
-);
+it('makes gameplay public and keeps only collapsed diagnostics beside privacy', async () => {
+  const page = await testPage({ viewport: { width: 360, height: 690 } });
+  try {
+    await page.goto(url);
+    await page.locator('[data-a=other]').click();
+    expect(
+      await page.getByRole('link', { name: 'Play a saved file', exact: true }).getAttribute('href'),
+    ).toBe('/file/');
+    await page.getByRole('button', { name: 'Close other ways in', exact: true }).click();
+    await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+    const menu = page.getByRole('dialog', { name: 'Game menu', exact: true });
+    expect(await menu.locator('summary').allTextContents()).toEqual(['Debug']);
+    expect(await menu.locator('details').getAttribute('open')).toBeNull();
+    expect(await menu.locator('.sw-recovery-controls, .sw-cast-controls').count()).toBe(0);
+    expect(await menu.getByRole('switch').count()).toBe(1);
+    expect(await menu.getByText('Keep fictional characters', { exact: false }).count()).toBe(0);
+    expect(await menu.locator('.sw-menu-links > a').textContent()).toBe('Lab privacy');
+    expect(await menu.getByRole('button', { name: 'New game', exact: true }).isVisible()).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
 
 it('keeps the old notebook and receipts when ordinary New game admission fails', async () => {
   const page = await testPage();

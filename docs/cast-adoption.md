@@ -4,6 +4,10 @@ Technical delivery ends with released whole-cast integration, exact green CI, li
 
 The integration versions above describe the original canonical-content delivery. The HF3 source uses notebook edition9 with HF3.0.0/engine2.23.0. Its five canonical lives remain unchanged. Fresh actors enable plain English; replay restores the pinned admitted narration choice. Older notebooks explicitly require Start fresh. Current HF3 source, receiving and delivery receipts are recorded in ~/code/.lab-scratch/v3/stairwell/report.md. Earlier narration adoption is recorded in ~/code/.lab-scratch/hfadopt/stairwell-report.md; this page preserves the historical content receipts below.
 
+## Current public continuity — 2026-10-27
+
+Shared people carry automatically in native play. The host enables the released SDK people channel during ordinary admission and checkpoint publication, independently of Recording. Cast management lives on the central people shelf. The public Other ways to begin surface keeps explicit local alternatives and accepted recovery copies available. The isolated `/file/` entry constructs no people channel and never reads or writes the native notebook or recovery storage. Imported history remains provenance and grants no ownership. Exact-parent CAS, source replay, admission and duty guards remain unchanged.
+
 ## Exhaustive foreground census
 
 The original source is origin/main b8fcedc, `src/sim/people.ts` RESIDENTS/makeResident/seedNeighbours and `src/sim/game.ts` sitting, boiler, ring and meeting functions. Current anchors use the same modules plus `src/sim/stories.ts`.

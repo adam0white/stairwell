@@ -2,19 +2,10 @@ import { createLab, FEEDBACK_LABELS, type FeedbackLabel, PRIVACY_URL } from '@ad
 import { feedbackPersonaControl, feedbackSharePlay } from '@adam0white/lab-kit';
 import './lab.css';
 
-/** Resolve before any owner host service is constructed. Supplied values never fall back to native. */
-export function selectFileMode(search: string): 'native' | 'file' | 'invalid' {
-  const values = new URLSearchParams(search).getAll('file');
-  return values.length === 0 ? 'native' : values.length === 1 && values[0] === '1' ? 'file' : 'invalid';
-}
-export const fileMode = selectFileMode(typeof location === 'undefined' ? '' : location.search);
-if (fileMode === 'invalid') {
-  const root = typeof document === 'undefined' ? null : document.getElementById('app');
-  if (root) root.textContent = 'This saved-file link is not supported. Use ?file=1 to choose a saved file.';
-  throw new Error('Unsupported saved-file entry. Use ?file=1 to choose a file.');
-}
+import { fileMode } from './session-route.ts';
+
+export { fileMode } from './session-route.ts';
 export const lab = createLab({ game: 'stairwell' });
-export const labTools = new URLSearchParams(location.search).get('lab') === '1';
 
 interface MenuOptions {
   getRun: () => unknown;
@@ -30,7 +21,6 @@ interface MenuOptions {
   importRun?: (file: File) => void;
   hasRun: boolean;
   chooseFile?: () => void;
-  continuityPanel?: () => HTMLElement;
   chooseRecording?: (allow: boolean) => Promise<void>;
 }
 
@@ -250,17 +240,12 @@ export function openFeedback(
   send.className = 'primary';
   send.textContent = 'Submit';
   const copy = button('Keep a copy of this run', () => downloadRun(getRun()));
-  body.append(
-    lead,
-    labels,
-    verdicts,
-    noteLabel,
-    nameDetails,
-    details,
-    preferences,
-    ...(labTools ? [copy] : []),
-    status,
-  );
+  try {
+    copy.disabled = !getRun();
+  } catch {
+    copy.disabled = true;
+  }
+  body.append(lead, labels, verdicts, noteLabel, nameDetails, details, preferences, copy, status);
   actions.append(send);
   form.append(body, actions);
   dialog.append(form);
@@ -374,6 +359,8 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
           });
       });
       full.className = 'sw-fullscreen';
+      if (fileMode !== 'file' && options.hasRun)
+        body.append(button('Download this run', () => downloadRun(options.getRun())));
       body.append(full);
       if (fileMode !== 'file' && options.newGame) {
         const confirm = document.createElement('div');
@@ -396,7 +383,7 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
           confirm,
         );
       }
-      if (labTools && options.title)
+      if (options.title)
         body.append(
           button('To the title page', () => {
             const title = options.title;
@@ -408,10 +395,19 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
       games.href = 'https://human.adamwhite.work/games/';
       games.textContent = 'All games';
       body.append(games);
-      if (fileMode !== 'file' && labTools && options.continuityPanel) body.append(options.continuityPanel());
       const footer = document.createElement('footer');
       footer.className = 'sw-menu-footer';
-      footer.append(recordingSwitch(), privacyLink());
+      const debug = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = 'Debug';
+      debug.append(summary);
+      const diagnostic = document.createElement('p');
+      diagnostic.textContent = JSON.stringify(lab.build());
+      debug.append(diagnostic);
+      const links = document.createElement('div');
+      links.className = 'sw-menu-links';
+      links.append(privacyLink(), debug);
+      footer.append(recordingSwitch(), links);
       body.append(footer);
       const actions = document.createElement('div');
       actions.className = 'sw-dialog-actions';

@@ -1,5 +1,11 @@
 # Stairwell — current handoff
 
+## Public controls and automatic people — 2026-10-27
+
+Source removes query-string feature switches. Gameplay options, clock speed, exports, New game and Other ways to begin are public. File play uses the real built `/file/` entry before native services are constructed. It keeps native notebooks, recovery storage and shared people isolated. Returning to `/` restores normal local play. Invalid or cancelled files preserve the current file run. Menu diagnostics occupy one closed Debug item beside permanent Lab privacy. Accepted local recovery copies remain public in Other ways to begin. Character controls belong to the central people shelf.
+
+At the ordinary notebook ending, idle Hacer and Sevim can publish their actual state automatically. Account and dues restrictions remain for Burak and Tarık. Derya remains blocked during real work and sleep intervals. No activity is finished or erased to make a checkpoint. Ordinary native admission and checkpoint publication enable the SDK people channel automatically. Recording remains separate. Exact-parent CAS, admitted snapshots, file nonownership, replay, source guards and work-option transfer limits remain unchanged. No simulation rules changed. Technical verification is recorded by the coordinator; this source change does not claim a deployment or owner acceptance.
+
 ## Lab artifact maintenance — 2026-10-27
 
 Source now pins immutable lab-client0.4.15 and lab-kit0.5.17. [The adoption note](docs/lab-client-0415.md) records verified release hashes, the retained garden replay artifact peer rule and passing focused native/file controls. This is SDK maintenance with unchanged game rules and exports. The requested live/CI receipt is recorded in `~/code/.lab-scratch/codex/hearsay-stairwell-client.md`; historical receipts below retain their original versions. Owner feel acceptance and deferred playtests remain separate.
@@ -48,7 +54,7 @@ Submit combines the selected words, optional verdict and note. The host builds t
 form; shared SDK labels do not mean it uses the SDK dialog or textarea prefill.
 Mocked controls are not a production Feedback receipt.
 
-Exports are diagnostic controls under `?lab=1`: Feedback → Keep a copy of this run, or Download this run at the ending. Title-page Lab tools → Load a playtest run imports a file. Downloads retain replay and continuity data but omit the derived state summary. The old ordinary-menu export description is superseded. The earlier manual download timeout below is historical; the HF3 report records an automated UI download and exact current replay. It does not turn that older manual attempt into a successful receipt.
+Exports are public: Game menu → Download this run, Feedback → Keep a copy of this run, or Download this run at the ending. Title-page Other ways to begin → Play a saved file opens the isolated file route. Native downloads retain replay and continuity data but omit the derived state summary; file-session downloads preserve the complete source and current state. Earlier lab-only and manual-timeout receipts below remain historical.
 
 ## Operations
 

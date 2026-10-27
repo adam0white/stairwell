@@ -14,15 +14,12 @@ import {
   watchPersonaCheckpoint,
 } from '@adam0white/lab-client';
 import { ALLOCATION, admitCast, type CastChapter, roleFor, sourceTransfer } from '../sim/cast-life.ts';
-import { act, canReplay, GAME_VERSION, type GameState, newGame, personOf, replay } from '../sim/game.ts';
+import { canReplay, GAME_VERSION, type GameState, newGame, personOf, replay } from '../sim/game.ts';
 import { WORK_START_VERSION } from '../sim/month.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
 import { lab } from './lab.ts';
 
-// Keep the boundary independent of Lab construction and native-route test doubles.
-const fileParameters =
-  typeof location === 'undefined' ? [] : new URLSearchParams(location.search).getAll('file');
-const fileMode = fileParameters.length === 0 ? 'native' : 'file';
+import { fileMode } from './session-route.ts';
 export const shelf = fileMode === 'file' ? null : personaChannel();
 function nativeShelf(): ReturnType<typeof personaChannel> {
   if (fileMode === 'file' || !shelf)
@@ -56,7 +53,6 @@ let generation = 0;
 let current: () => GameState | undefined = () => undefined;
 let store: () => void = () => {};
 let resumeGame: ((g: GameState) => Promise<void>) | undefined;
-let selected: Rid = 'hacer';
 let status = '';
 let pending = Promise.resolve();
 function refuseWorkTransfer(edition: string): void {
@@ -206,8 +202,13 @@ export async function arrive(seed: number, fresh = false, edition = GAME_VERSION
     return newGame(seed, edition);
   }
   await nativeShelf().ready;
+  if (!nativeShelf().enabled) {
+    nativeShelf().setEnabled(true);
+    await nativeShelf().ready;
+  }
   requireCurrent(serial);
-  if (fresh || !nativeShelf().enabled) return newGame(seed, edition);
+  if (fresh) return newGame(seed, edition);
+  if (!nativeShelf().enabled) throw new Error('Shared character history could not be enabled. Try again.');
   const opening = newGame(seed, edition);
   let draftInputs: CastChapter['inputs'] = [];
   let draftInitial: CastChapter['initial'] = {};
@@ -374,6 +375,16 @@ export async function chooseContinuityRecording(_value: boolean): Promise<void> 
 export function acknowledgeContinuity(_g: GameState): void {
   /* Receipt is saved with the current local notebook. */
 }
+/** Closing the whole notebook is a real boundary; it does not finish an actor's work or sleep. */
+function endedBoundary(g: GameState, id: Rid): boolean {
+  if (g.phase !== 'end' || id === 'burak' || id === 'tarik') return false;
+  const minute = ((g.minute % 1440) + 1440) % 1440;
+  const weekday = (Math.floor(g.minute / 1440) % 7) + 1;
+  const info = RESIDENTS[id];
+  if (info.nights && (minute < 15 * 60 + 30 || minute >= 19 * 60 + 30)) return false;
+  if (info.work && weekday <= 5 && minute >= info.work[0] && minute < info.work[1]) return false;
+  return !personOf(g, id).activity;
+}
 async function checkpoint(g: GameState, id: Rid, fork = false) {
   requireNative();
   refuseWorkTransfer(g.version);
@@ -405,7 +416,7 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
     store();
     return;
   }
-  if (g.castPauses?.[id] !== 'paused' || actual.activity)
+  if ((g.castPauses?.[id] !== 'paused' && !endedBoundary(g, id)) || actual.activity)
     throw new Error(
       `${RESIDENTS[id].name} has not reached a pause in the game. Close the menu and continue until their duties are complete.`,
     );
@@ -443,6 +454,15 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
     old?.transfer.life && !fork
       ? anchorPersonaLife(old.transfer.life as PersonaLife, castId, Date.now())
       : initialPersonaLife(castId, branchId, Date.now());
+  const portableLimits = projected.transfer.person.person.limitations;
+  const shelfLimits =
+    portableLimits.length <= 64 && portableLimits.every((line) => line.length <= 500)
+      ? portableLimits
+      : [
+          'Full source portability limits, including omitted episode references, remain in transfer.person.person.limitations. The complete source state stays in this notebook.',
+          'Beliefs, trust, relationships, building accounts, visitor secrets and memories remain in this game’s full archive. Moving does not finish work, pay debts or resolve private matters.',
+          ...projected.transfer.hostObligations,
+        ];
   const envelope = await createPersona({
     format: 'hf-persona/1',
     castId,
@@ -451,7 +471,8 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
     parentRevision: fork ? null : (old?.revision ?? null),
     source: source(g.version),
     transfer: { ...projected.transfer, life },
-    limitations: projected.transfer.person.person.limitations,
+    // Summarize only the bounded SDK shelf row; the transfer and raw archive retain every detail.
+    limitations: shelfLimits,
   });
   requireCurrent(serial);
   const canAuthor = r.authored && !g.castChapter?.inputs.length && !fork && !old;
@@ -483,23 +504,36 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
 export function checkpointContinuity(): Promise<void> {
   if (fileMode === 'file') return Promise.resolve();
   const g = current();
-  if (!g || !nativeShelf().enabled) return Promise.resolve();
+  if (!g) return Promise.resolve();
+  const serial = generation;
   const task = pending
     .catch(() => {})
     .then(async () => {
-      if (current() !== g) return;
-      for (const id of RIDS)
+      if (serial !== generation || current() !== g) return;
+      await nativeShelf().ready;
+      if (serial !== generation || current() !== g) return;
+      if (!nativeShelf().enabled) {
+        nativeShelf().setEnabled(true);
+        await nativeShelf().ready;
+      }
+      if (serial !== generation || current() !== g) return;
+      for (const id of RIDS) {
+        if (serial !== generation || current() !== g) return;
         if (
           g.castPauses?.[id] === 'paused' ||
+          endedBoundary(g, id) ||
           !personOf(g, id).body.alive ||
           personOf(g, id).body.health <= 0
         ) {
           try {
             await checkpoint(g, id);
+            if (serial !== generation || current() !== g) return;
           } catch (e) {
+            if (serial !== generation || current() !== g) return;
             status = errorText(e);
           }
         }
+      }
     });
   pending = task;
   return task;
@@ -535,100 +569,9 @@ export function continuityPanel(): HTMLElement {
     return section;
   }
   const section = document.createElement('section');
-  section.className = 'sw-cast-controls';
-  const toggle = document.createElement('input');
-  toggle.type = 'checkbox';
-  toggle.checked = nativeShelf().enabled;
-  const label = document.createElement('label');
-  label.append(toggle, 'Keep fictional characters between games in this browser');
-  section.append(label);
-  toggle.addEventListener('change', () => {
-    requireNative();
-    invalidateContinuity();
-    nativeShelf().setEnabled(toggle.checked);
-    const g = current();
-    if (g) void gateContinuity(g);
-  });
+  section.className = 'sw-recovery-controls';
   const line = document.createElement('p');
-  line.dataset.castStatus = '';
-  line.textContent =
-    status ||
-    'A new chapter checks all five characters together. A loaded chapter keeps the character histories saved with it. Unsupported histories cannot continue. You can still start a new game without earlier character history.';
   section.append(line);
-  const link = document.createElement('a');
-  link.href = 'https://human.adamwhite.work/lab/people/';
-  link.target = '_blank';
-  link.rel = 'noopener';
-  link.textContent = 'View, download or delete your characters';
-  section.append(link);
-  const select = document.createElement('select');
-  select.setAttribute('aria-label', 'Character whose progress you want to save');
-  for (const id of RIDS) {
-    const opt = document.createElement('option');
-    opt.value = id;
-    opt.textContent = RESIDENTS[id].name;
-    select.append(opt);
-  }
-  select.value = selected;
-  select.addEventListener('change', () => {
-    selected = select.value as Rid;
-    invalidateContinuity();
-    const g = current();
-    if (g) void gateContinuity(g);
-  });
-  section.append(select);
-  section.append(
-    button('Pause the selected character after their duties', () => {
-      const g = current();
-      if (!g) return;
-      act(g, { kind: 'cast-pause', who: selected });
-      store();
-      line.textContent =
-        g.castPauses?.[selected] === 'requested'
-          ? 'Close the menu and continue playing. The character must still finish their work and sleep.'
-          : g.castPauses?.[selected] === 'paused'
-            ? 'This character has reached the pause in the game.'
-            : (g.said.at(-1)?.text ?? 'The game cannot pause this chapter during this duty.');
-    }),
-  );
-  section.append(
-    button('Save the selected character’s progress', async () => {
-      const g = current();
-      if (!g) return;
-      if (!nativeShelf().enabled)
-        throw new Error('Turn on character history in this browser first, or download a copy of your game.');
-      await checkpoint(g, selected);
-      line.textContent = status;
-    }),
-  );
-  section.append(
-    button('Create a separate character history from this pause', async () => {
-      const g = current();
-      if (!g) return;
-      if (!nativeShelf().enabled) throw new Error('Turn on character history in this browser first.');
-      await checkpoint(g, selected, true);
-      line.textContent = status;
-    }),
-  );
-  section.append(
-    button('Download the selected character’s file', () => {
-      const g = current();
-      if (!g) return;
-      const envelope =
-        runtime(g).owned[RESIDENTS[selected].castId] ??
-        g.castChapter?.claims.find((h) => h.castId === RESIDENTS[selected].castId);
-      if (!envelope)
-        throw new Error('No character save has been accepted yet. Download a copy of your game instead.');
-      const url = URL.createObjectURL(
-        new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' }),
-      );
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `stairwell-${selected}-person.json`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }),
-  );
   for (const recovery of acceptedCastRecoveries()) {
     section.append(
       button('Resume an accepted chapter saved for recovery', async () => {

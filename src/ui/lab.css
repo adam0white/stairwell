@@ -198,14 +198,14 @@ dialog.sw-feedback::backdrop {
   }
 }
 
-.sw-cast-controls {
+.sw-recovery-controls {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
 }
-.sw-cast-controls button,
-.sw-cast-controls select {
+.sw-recovery-controls button,
+.sw-recovery-controls select {
   width: 100%;
   min-width: 0;
   min-height: 44px;
@@ -229,4 +229,19 @@ dialog.sw-feedback::backdrop {
 }
 dialog.sw-feedback {
   max-height: calc(100dvh - 24px);
+}
+
+.sw-menu-links {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.sw-menu-links details {
+  min-width: 0;
+}
+.sw-menu-links summary {
+  cursor: pointer;
+}
+.sw-menu-links details p {
+  overflow-wrap: anywhere;
 }
