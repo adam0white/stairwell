@@ -1,0 +1,16 @@
+# Lab artifact adoption, 2026-10-27
+
+This maintenance scope ends at client 0.4.15 and kit 0.5.17 deployed from a signed commit with exact green CI and a matching clean release stamp. Adam requested deployment. Playtests and owner feel acceptance remain separate.
+
+Before vendoring, both downloaded release tarballs matched the GitHub release asset digest, `SHA256SUMS` and `artifact-manifest.json` from `adam0white/human-framework`:
+
+- `lab-client-v0.4.15`: `a317b83fdbf9239a9fea729d9ec7a95cf5b2c54d87d70d780148720a7e2a2eb7`.
+- `lab-kit-v0.5.17`: `e31e2d632617a3b680e7ba5f0d0e5f3e8c477f5584277e1302cb83177091db16`. The existing vendored kit is byte-identical.
+
+Unlike Hearsay, current Stairwell has `src/ui/app.ts`, `src/ui/cast-continuity.ts` and `test/native-file-session.test.ts`. It has no garden-app, garden-recording or garden-file-session source. With the new client, all four native-file-session controls and the headless native-export control passed before any game or test change. No runtime client failure was reproduced. The full suite then exposed three layout admission fixtures that failed to trigger their injected errors. In particular the retained 410-byte edition9 file replays and reexports; occupied native saves remain separate and the native identity control passes.
+
+The three failures were `keeps the old notebook and receipts when ordinary New game admission fails` and the unsupported/uncertain cases of `gives an actionable ordinary ... history failure without a retry loop`. Each waited 30 seconds for a failure dialog that never appeared. The fixtures replaced `shelf.request` but did not enable the synthetic Shelf. Client 0.4.11 began with `enabled = true`; 0.4.15 begins disabled and stays disabled after the blocked localhost handshake. `arrive()` correctly starts a local game when the Shelf is disabled, so the injected errors were unreachable. The fixture setup now waits for readiness, explicitly enables its test Shelf and waits again before replacing its request method. The same three controls passed in 2.05 seconds after that change. The common empty-Shelf fixture uses the same explicit setup. Production admission and recording code remain unchanged.
+
+The reproducible installation failure was `pnpm install --lockfile-only`: `ERR_PNPM_PEER_DEP_ISSUES`, because `@adam0white/hearsay-garden-replay@0.0.0-task2` declares client `0.4.11` as its exact peer. Its immutable tarball remains unchanged. `pnpm-workspace.yaml` now accepts exactly client `0.4.15` for that artifact alone, using pnpm's [package-specific allowedVersions rule](https://github.com/pnpm/pnpm/blob/main/pnpm/docs/settings/peer-dependencies.md#peerdependencyrulesallowedversions). Every other strict peer check remains enabled. A lockfile-only install followed by a frozen install succeeded. Simulation, file routing, recording binding, replay artifact and exports remain unchanged. The full suite also includes the headless aligned-visit controls that exercise the garden replay artifact itself.
+
+`public/_headers` explicitly permits `https://static.cloudflareinsights.com` in `script-src` and `https://cloudflareinsights.com` in `connect-src`; the production response is checked after deployment.

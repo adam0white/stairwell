@@ -34,7 +34,12 @@ async function testPage(options: Parameters<Browser['newPage']>[0] = {}) {
 async function gotoGame(page: Page) {
   await page.goto(`${url}?lab=1`);
   // Explicit empty local fixture, never proof of real shared admission.
-  await page.evaluate(`import('/src/ui/cast-continuity.ts').then(({shelf}) => {
+  await page.evaluate(`import('/src/ui/cast-continuity.ts').then(async ({shelf}) => {
+      // This synthetic bridge fixture must explicitly enable its mocked admission.
+      // A failed real bridge now stays disabled rather than authorizing admission.
+      await shelf.ready;
+      shelf.setEnabled(true);
+      await shelf.ready;
     shelf.request = async (request) => request.action === 'prepareBatch' ? {
       inputs: [], blocked: [],
       expectedHeads: Object.fromEntries((request.castIds ?? []).map(id => [id, null])),
@@ -873,7 +878,12 @@ it('keeps the old notebook and receipts when ordinary New game admission fails',
     });
     await page.evaluate((text) => localStorage.setItem('stairwell:notebook', text), saved);
     await page.reload();
-    await page.evaluate(`import('/src/ui/cast-continuity.ts').then(({shelf}) => {
+    await page.evaluate(`import('/src/ui/cast-continuity.ts').then(async ({shelf}) => {
+      // This synthetic bridge fixture must explicitly enable its mocked admission.
+      // A failed real bridge now stays disabled rather than authorizing admission.
+      await shelf.ready;
+      shelf.setEnabled(true);
+      await shelf.ready;
       shelf.request = async () => { throw new Error('Shelf unavailable. Use a local file.'); };
     })`);
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
@@ -906,7 +916,12 @@ it.each([
     const saved = JSON.stringify({ game: GAME_VERSION, seed: 7, inputs: [], minute: 420 });
     await page.evaluate((text) => localStorage.setItem('stairwell:notebook', text), saved);
     await page.reload();
-    await page.evaluate(`import('/src/ui/cast-continuity.ts').then(({shelf}) => {
+    await page.evaluate(`import('/src/ui/cast-continuity.ts').then(async ({shelf}) => {
+      // This synthetic bridge fixture must explicitly enable its mocked admission.
+      // A failed real bridge now stays disabled rather than authorizing admission.
+      await shelf.ready;
+      shelf.setEnabled(true);
+      await shelf.ready;
       shelf.request = async request => {
         if (${JSON.stringify(kind)} === 'unsupported') throw new Error('Unsupported source role/dialect. Keep that chapter or export it; no silent fresh replacement.');
         if (request.action === 'prepareBatch') return {

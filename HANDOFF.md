@@ -1,5 +1,9 @@
 # Stairwell — current handoff
 
+## Lab artifact maintenance — 2026-10-27
+
+Source now pins immutable lab-client0.4.15 and lab-kit0.5.17. [The adoption note](docs/lab-client-0415.md) records verified release hashes, the retained garden replay artifact peer rule and passing focused native/file controls. This is SDK maintenance with unchanged game rules and exports. The requested live/CI receipt is recorded in `~/code/.lab-scratch/codex/hearsay-stairwell-client.md`; historical receipts below retain their original versions. Owner feel acceptance and deferred playtests remain separate.
+
 ## Dependency installation — 2026-10-26
 
 The dependency configuration uses pnpm 12.14.0 and shared Node 26.12.0. Install with `pnpm install --frozen-lockfile`; `npm run` still runs existing scripts. `pnpm-lock.yaml` imports the npm lock without intended dependency changes. Overrides and exact native build permissions live in `pnpm-workspace.yaml`. Do not regenerate an npm lock or install a runtime per worktree. Configuration delivery requires the full lane, unchanged raw build outputs against the npm baseline, signed source and exact green CI. This conversion does not deploy the app or establish game-readiness acceptance.
