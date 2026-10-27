@@ -809,8 +809,14 @@ function mountMenu(target: Element | null, s: GameState | null) {
         ui.acc = 0;
       },
       beforeOpen: save,
+      beforeClose:
+        fileMode === 'file'
+          ? () => {
+              if (target.isConnected) ++fileImportSerial;
+            }
+          : undefined,
       onClose: () => {
-        if (fileMode === 'file' && fileChoosing) ++fileImportSerial;
+        if (fileMode === 'file' && !target.isConnected) return;
         if (ui.s && (fileMode === 'file' || ui.s.phase === 'day')) render(false);
       },
       readNotebook:

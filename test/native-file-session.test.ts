@@ -1,7 +1,7 @@
 /** Synthetic occupied storage, retained B source bytes. No owner receipt or SDK preservation claim. */
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { type Browser, chromium, webkit } from 'playwright';
+import { type Browser, chromium } from 'playwright';
 import { createServer, type ViteDevServer } from 'vite';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 
@@ -15,7 +15,8 @@ beforeAll(async () => {
   server = await createServer({ server: { host: '127.0.0.1', port: 0 } });
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? '';
-  browser = await (process.platform === 'darwin' ? webkit : chromium).launch();
+  // Match the CI browser for native file lifecycle and close-event scheduling.
+  browser = await chromium.launch();
 });
 afterAll(async () => {
   await browser?.close();
@@ -271,7 +272,9 @@ it('foreign file preserves occupied notebook through import play hide departure 
     await page.getByRole('heading', { name: 'Play a saved file', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     await page.getByRole('button', { name: 'Resume', exact: true }).click();
-    expect(await page.getByRole('heading', { name: 'Play a saved file', exact: true }).count()).toBe(0);
+    await page
+      .getByRole('heading', { name: 'Play a saved file', exact: true })
+      .waitFor({ state: 'detached' });
     expect(await page.evaluate('window.fileModules.host._debug.s.phase')).toBe('end');
     // Check the entire import/play/menu/phase lifecycle BEFORE reload replaces the instrumentation.
     expect(await page.evaluate(() => (window as unknown as { ownerCalls: string[] }).ownerCalls)).toEqual([]);
@@ -404,7 +407,7 @@ it('latest chooser selection cancels older reads hashes errors and pending lifec
         .toBe(true);
     };
     const snapshot = () =>
-      page.evaluate(
+      page.evaluate<{ packet: string; status: string; metadata: string; receipts: string }>(
         `({packet:JSON.stringify(window.race.host.fileSessionExport()),status:document.querySelector('[data-file-status]').textContent,metadata:JSON.stringify(window.race.metadata),receipts:JSON.stringify(window.race.cast.castReceipts(window.race.host._debug.s))})`,
       );
     const settle = async () => {
@@ -488,13 +491,18 @@ it('latest chooser selection cancels older reads hashes errors and pending lifec
     await page.evaluate("window.race.reads['slow-resume.json'].resolve()");
     await settle();
     expect(await snapshot()).toEqual(resumed);
+    const menuAccepted = await snapshot();
     await pendingRead('slow-menu-resume.json');
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
-    await page.getByRole('button', { name: 'Resume', exact: true }).click();
     const menuResumed = await snapshot();
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
     await page.evaluate("window.race.reads['slow-menu-resume.json'].resolve()");
     await settle();
-    expect(await snapshot()).toEqual(menuResumed);
+    await page
+      .getByRole('heading', { name: 'Play a saved file', exact: true })
+      .waitFor({ state: 'detached' });
+    // Compare the whole run and metadata; the completed UI restores the accepted run's status.
+    expect(await snapshot()).toEqual({ ...menuResumed, status: (menuAccepted as { status: string }).status });
     await pendingRead('slow-chooser.json');
     await page.getByRole('button', { name: 'Game menu', exact: true }).click();
     await page.getByRole('button', { name: 'Choose another file', exact: true }).click();
@@ -520,6 +528,163 @@ it('latest chooser selection cancels older reads hashes errors and pending lifec
             resume: true,
             pagehide: true,
           },
+          null,
+          2,
+        ),
+      );
+  } finally {
+    await page.close();
+  }
+});
+
+it('menu close actions cancel pending files before delayed close completion in Chromium', async () => {
+  expect(browser.browserType().name()).toBe('chromium');
+  const aText = JSON.stringify({ ...JSON.parse(fixture), seed: 740489 });
+  const page = await browser.newPage();
+  await page.route('**/*', (route) =>
+    new URL(route.request().url()).origin === new URL(url).origin ? route.continue() : route.abort(),
+  );
+  const proofs: unknown[] = [];
+  try {
+    await page.clock.install();
+    await page.goto(`${url}?file=1`);
+    await page.getByRole('heading', { name: 'Play a saved file', exact: true }).waitFor();
+    await page.evaluate(`Promise.all([import('/src/ui/app.ts'),import('/src/ui/lab.ts'),import('/src/ui/cast-continuity.ts')]).then(([host,{lab},cast]) => {
+      const state = window.closeRace = {host,cast,reads:{},hashes:[],activeHashes:0,metadata:[],screens:0,callbacks:[],delivered:0};
+      const read = File.prototype.arrayBuffer;
+      File.prototype.arrayBuffer = function() {
+        const result = read.call(this);
+        return this.name.startsWith('pending-') ? result.then(bytes => new Promise(resolve => {state.reads[this.name]=()=>resolve(bytes)})) : result;
+      };
+      const digest = crypto.subtle.digest.bind(crypto.subtle);
+      crypto.subtle.digest = function(algorithm,data) {
+        const result = digest(algorithm,data);
+        const hold = state.blockHash && new TextDecoder().decode(data).includes('740489');
+        if(hold) state.blockHash=false;
+        const complete = hold ? result.then(value=>new Promise(resolve=>state.hashes.push(()=>resolve(value)))) : result;
+        state.activeHashes++;
+        return complete.finally(()=>state.activeHashes--);
+      };
+      const add = HTMLDialogElement.prototype.addEventListener;
+      HTMLDialogElement.prototype.addEventListener = function(type,listener,options) {
+        if(type!=='close') return add.call(this,type,listener,options);
+        return add.call(this,type,event=>{
+          const invoke=()=> typeof listener==='function' ? listener.call(this,event) : listener.handleEvent(event);
+          if(this===state.holdDialog) state.callbacks.push(invoke); else invoke();
+        },options);
+      };
+      state.deliver=()=>{state.holdDialog=null; for(const invoke of state.callbacks.splice(0)){state.delivered++;invoke();}};
+      for(const name of ['setPersonaRecording','allowPersonaRecording']) {
+        const original=lab[name].bind(lab);
+        lab[name]=(...args)=>{state.metadata.push([name,...args]);return original(...args);};
+      }
+      const screen=lab.screen.bind(lab);lab.screen=(...args)=>{state.screens++;return screen(...args);};
+    })`);
+    const snapshot = () =>
+      page.evaluate<{ packet: string; receipts: string; metadata: string; status: string }>(
+        `({packet:JSON.stringify(window.closeRace.host.fileSessionExport()),receipts:JSON.stringify(window.closeRace.cast.castReceipts(window.closeRace.host._debug.s)),metadata:JSON.stringify(window.closeRace.metadata),status:document.querySelector('[data-file-status]').textContent})`,
+      );
+    const select = (name: string, text: string) =>
+      page
+        .locator('input[type=file]')
+        .setInputFiles({ name, mimeType: 'application/json', buffer: Buffer.from(text) });
+    const chooser = async () => {
+      if (await page.locator('input[type=file]').count()) return;
+      await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+      await page.getByRole('button', { name: 'Choose another file', exact: true }).click();
+      await page.getByRole('heading', { name: 'Play a saved file', exact: true }).waitFor();
+    };
+    const loadB = async () => {
+      await chooser();
+      await select('B.json', fixture);
+      await expect.poll(() => page.locator('[data-file-status]').textContent()).toContain('Loaded');
+      expect(await page.evaluate('window.closeRace.host.fileSessionExport().original.text')).toBe(fixture);
+      return snapshot();
+    };
+    const pending = async (name: string, hash: boolean) => {
+      await chooser();
+      if (hash) await page.evaluate('window.closeRace.blockHash=true');
+      await select(name, aText);
+      await expect
+        .poll(() =>
+          page.evaluate(
+            hash
+              ? 'window.closeRace.hashes.length===1'
+              : `Boolean(window.closeRace.reads[${JSON.stringify(name)}])`,
+          ),
+        )
+        .toBe(true);
+    };
+    const openHeldMenu = async () => {
+      await page.getByRole('button', { name: 'Game menu', exact: true }).click();
+      await page.evaluate(`window.closeRace.holdDialog=document.querySelector('dialog.sw-menu[open]')`);
+    };
+    const release = async (name: string, hash: boolean) => {
+      await page.evaluate(
+        hash ? 'window.closeRace.hashes.shift()()' : `window.closeRace.reads[${JSON.stringify(name)}]()`,
+      );
+      await expect.poll(() => page.evaluate('window.closeRace.activeHashes')).toBe(0);
+      await page.evaluate(() => Promise.resolve());
+    };
+    for (const [action, hash] of [
+      ['Resume', false],
+      ['X', true],
+      ['Escape', false],
+    ] as const) {
+      const accepted = await loadB();
+      const name = hash ? 'hash-A.json' : `pending-${action}.json`;
+      await pending(name, hash);
+      await openHeldMenu();
+      const before = await snapshot();
+      if (action === 'Resume') await page.getByRole('button', { name: 'Resume', exact: true }).click();
+      else if (action === 'X')
+        await page.getByRole('button', { name: 'Close game menu', exact: true }).click();
+      else if (action === 'Escape') await page.keyboard.press('Escape');
+      else await page.mouse.click(1, 1);
+      // No completion wait or delay before releasing A. This is the harmful CI interval.
+      await release(name, hash);
+      const afterRelease = await snapshot();
+      proofs.push({ action, hash, before, afterRelease });
+      if (process.env.STAIRWELL_CLOSE_PROOF_PATH)
+        writeFileSync(
+          process.env.STAIRWELL_CLOSE_PROOF_PATH,
+          JSON.stringify({ browser: browser.version(), proofs }, null, 2),
+        );
+      expect(afterRelease).toEqual(before);
+      await expect.poll(() => page.evaluate('window.closeRace.callbacks.length')).toBeGreaterThan(0);
+      const screens = await page.evaluate<number>('window.closeRace.screens');
+      await page.evaluate('window.closeRace.deliver()');
+      await page
+        .getByRole('heading', { name: 'Play a saved file', exact: true })
+        .waitFor({ state: 'detached' });
+      expect(await snapshot()).toEqual({ ...before, status: (accepted as { status: string }).status });
+      expect(await page.evaluate('window.closeRace.screens')).toBe(screens + 1);
+      await page.evaluate('window.closeRace.deliver()');
+      expect(await page.evaluate('window.closeRace.screens')).toBe(screens + 1);
+    }
+    // A completed replacement UI must ignore an older menu's delayed close callback.
+    await loadB();
+    await pending('pending-replaced-root.json', false);
+    await openHeldMenu();
+    const before = await snapshot();
+    await page.getByRole('button', { name: 'Resume', exact: true }).click();
+    await release('pending-replaced-root.json', false);
+    expect(await snapshot()).toEqual(before);
+    await expect.poll(() => page.evaluate('window.closeRace.callbacks.length')).toBeGreaterThan(0);
+    await select('new-C.json', aText);
+    await expect
+      .poll(() => page.evaluate('window.closeRace.host.fileSessionExport().original.text'))
+      .toBe(aText);
+    const replacement = await snapshot();
+    const screens = await page.evaluate<number>('window.closeRace.screens');
+    await page.evaluate('window.closeRace.deliver()');
+    expect(await snapshot()).toEqual(replacement);
+    expect(await page.evaluate('window.closeRace.screens')).toBe(screens);
+    if (process.env.STAIRWELL_CLOSE_PROOF_PATH)
+      writeFileSync(
+        process.env.STAIRWELL_CLOSE_PROOF_PATH,
+        JSON.stringify(
+          { browser: browser.version(), proofs, onceOnlyCompletion: true, replacedRootIgnored: true },
           null,
           2,
         ),

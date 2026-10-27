@@ -19,6 +19,7 @@ export const labTools = new URLSearchParams(location.search).get('lab') === '1';
 interface MenuOptions {
   getRun: () => unknown;
   beforeOpen: () => void;
+  beforeClose?: () => void;
   onClose?: () => void;
   readNotebook?: () => void;
   title?: () => void;
@@ -109,7 +110,7 @@ function recordingSwitch(changed: () => void = () => {}): HTMLLabelElement {
   label.append(input, 'Recording');
   return label;
 }
-function dialogShell(kind: 'menu' | 'feedback', title: string): HTMLDialogElement {
+function dialogShell(kind: 'menu' | 'feedback', title: string, requestClose?: () => void): HTMLDialogElement {
   const dialog = document.createElement('dialog');
   dialog.className = `sw-${kind}`;
   dialog.setAttribute('aria-label', title);
@@ -117,7 +118,8 @@ function dialogShell(kind: 'menu' | 'feedback', title: string): HTMLDialogElemen
   heading.className = 'sw-dialog-header';
   const h2 = document.createElement('h2');
   h2.textContent = title;
-  const close = button('×', () => dialog.close());
+  const closeDialog = requestClose ?? (() => dialog.close());
+  const close = button('×', closeDialog);
   close.setAttribute('aria-label', `Close ${title.toLowerCase()}`);
   heading.append(h2, close);
   dialog.append(heading);
@@ -130,9 +132,14 @@ function dialogShell(kind: 'menu' | 'feedback', title: string): HTMLDialogElemen
         event.clientY < r.top ||
         event.clientY > r.bottom
       )
-        dialog.close();
+        closeDialog();
     }
   });
+  if (requestClose)
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeDialog();
+    });
   return dialog;
 }
 
@@ -322,13 +329,21 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
   const entry = Object.assign(
     button('≡', () => {
       options.beforeOpen();
-      const dialog = dialogShell('menu', 'Game menu');
+      let closeRequested = false;
+      const requestClose = (): void => {
+        if (closeRequested) return;
+        closeRequested = true;
+        options.beforeClose?.();
+        dialog.close();
+      };
+      const dialog = dialogShell('menu', 'Game menu', options.beforeClose ? requestClose : undefined);
       const body = document.createElement('div');
       body.className = 'sw-menu-body';
       let transfer = false;
       const leave = (action: () => void) => {
+        if (closeRequested) return;
         transfer = true;
-        dialog.close();
+        requestClose();
         action();
       };
       const feedback = button('Feedback', () =>
@@ -400,7 +415,7 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
       body.append(footer);
       const actions = document.createElement('div');
       actions.className = 'sw-dialog-actions';
-      const resume = button('Resume', () => dialog.close());
+      const resume = button('Resume', requestClose);
       resume.className = 'primary';
       actions.append(resume);
       dialog.append(body, actions);
