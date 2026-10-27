@@ -4,6 +4,7 @@
  * input and at every page turn.
  */
 
+import { snapshot } from '@adam0white/human-framework';
 import { type phoneStage, telemetryNotice } from '@adam0white/lab-kit';
 import {
   act,
@@ -57,7 +58,7 @@ import {
   shelf,
   validateContinuity,
 } from './cast-continuity.ts';
-import { downloadRun, gameMenu, lab, labScreen, labTools, openFeedback } from './lab.ts';
+import { downloadRun, fileMode, gameMenu, lab, labScreen, labTools, openFeedback } from './lab.ts';
 import { canWait, playback, untilSomethingHappens } from './playback.ts';
 import { isSaved, type Saved } from './save.ts';
 
@@ -221,6 +222,14 @@ const esc = (x: string) => x.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 function save(): boolean {
   const s = ui.s;
   if (!s) return false;
+  if (fileMode === 'file') {
+    try {
+      lab.captureSave(fileSessionExport());
+      return true;
+    } catch {
+      return false;
+    }
+  }
   try {
     const text = JSON.stringify({
       game: s.version,
@@ -247,6 +256,7 @@ function restoreNotebook(x: Saved, file = false): GameState {
 }
 
 function olderNotebook(): boolean {
+  if (fileMode === 'file') return false;
   try {
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null');
     return typeof saved?.game === 'string' && !canReplay(saved.game);
@@ -256,6 +266,7 @@ function olderNotebook(): boolean {
 }
 
 function loadSaved(): Saved | null {
+  if (fileMode === 'file') return null;
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
@@ -283,6 +294,7 @@ function mornings(saved: Saved): { day: number; inputs: Input[] }[] {
 
 function runOf(s = ui.s) {
   if (!s) return;
+  if (fileMode === 'file') return fileSessionExport(s);
   return {
     game: s.version,
     seed: s.seed,
@@ -307,6 +319,27 @@ function runOf(s = ui.s) {
 }
 
 function importRun(file: File) {
+  if (fileMode === 'file') {
+    const serial = ++fileImportSerial;
+    if (file.size > FILE_BYTES) {
+      setFileStatus(
+        'The game could not read that complete file within the size limit. Your current run has not changed.',
+      );
+      return;
+    }
+    void file
+      .arrayBuffer()
+      .then((bytes) => {
+        if (serial !== fileImportSerial) return;
+        const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+        return importFileCandidate(text, serial);
+      })
+      .catch(() => {
+        if (serial === fileImportSerial)
+          setFileStatus('The game could not read that file. Your current run has not changed.');
+      });
+    return;
+  }
   file.text().then((t) => {
     try {
       const raw = JSON.parse(t);
@@ -331,6 +364,180 @@ function importRun(file: File) {
       alert('The game could not read that file.');
     }
   });
+}
+
+// Host file sessions do not invent a new simulation edition or ownership authority.
+const FILE_FORMAT = 'stairwell-file-session/1';
+const FILE_BYTES = 4 * 1024 * 1024;
+let originalFile: { text: string; sha256: string; edition: string } | undefined;
+let originalProvenance: unknown;
+let fileImportSerial = 0;
+let fileStatus = '';
+let fileChoosing = false;
+function setFileStatus(text: string) {
+  fileStatus = text;
+  for (const line of document.querySelectorAll('[data-file-status]')) line.textContent = text;
+}
+function checkedJson(text: string): unknown {
+  if (new TextEncoder().encode(text).length > FILE_BYTES) throw new Error('The complete file exceeds 4 MiB.');
+  const value: unknown = JSON.parse(text);
+  let nodes = 0;
+  const visit = (x: unknown, depth: number) => {
+    if (++nodes > 480000 || depth > 64) throw new Error('The complete file exceeds the structure limit.');
+    if (typeof x === 'number' && !Number.isFinite(x)) throw new Error('Invalid number.');
+    if (!x || typeof x !== 'object') return;
+    for (const [key, child] of Object.entries(x)) {
+      if (['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error('Unsafe file key.');
+      visit(child, depth + 1);
+    }
+  };
+  visit(value, 0);
+  return value;
+}
+async function textDigest(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+function nativePacket(s: GameState): Saved {
+  return structuredClone({
+    game: s.version,
+    seed: s.seed,
+    inputs: s.inputs,
+    minute: s.minute,
+    oneCast: s.oneCast,
+    castChapter: s.castChapter,
+    castReceipts: castReceipts(s),
+  });
+}
+function completeState(s: GameState) {
+  return structuredClone({
+    ...s,
+    people: s.people.map((person) => snapshot(person)),
+    kapici: snapshot(s.kapici),
+  });
+}
+function fileExport(s: GameState, original: NonNullable<typeof originalFile>, provenance: unknown) {
+  const value = {
+    format: FILE_FORMAT,
+    original: structuredClone(original),
+    current: { native: nativePacket(s), state: completeState(s) },
+    provenance: structuredClone(provenance),
+  };
+  // Never compact/truncate Person, duties, claims or sources to fit a host limit.
+  checkedJson(JSON.stringify(value));
+  return value;
+}
+export function fileSessionExport(s = ui.s) {
+  if (fileMode !== 'file' || !s || !originalFile) throw new Error('No saved-file run is open.');
+  return fileExport(s, originalFile, originalProvenance);
+}
+function savedFromRaw(raw: unknown): Saved {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid notebook.');
+  const object = raw as Record<string, unknown>;
+  const saved = {
+    ...object,
+    oneCast: object.continuity ?? (Array.isArray(object.oneCast) ? undefined : object.oneCast),
+  };
+  if (!isSaved(saved)) throw new Error('Unsupported or malformed notebook.');
+  return saved;
+}
+/** Parse/validate a detached candidate completely before changing the active run or caller values. */
+export function importFileText(text: string): Promise<void> {
+  return importFileCandidate(text, ++fileImportSerial);
+}
+async function importFileCandidate(text: string, serial: number): Promise<void> {
+  if (fileMode !== 'file') throw new Error('Use Play a saved file first.');
+  if (serial !== fileImportSerial) return;
+  const raw = checkedJson(text) as Record<string, unknown>;
+  if (raw?.format !== undefined && raw.format !== FILE_FORMAT) throw new Error('Unsupported file session.');
+  let original: NonNullable<typeof originalFile>;
+  let provenance: unknown;
+  let saved: Saved;
+  let expected: unknown;
+  if (raw?.format === FILE_FORMAT) {
+    const envelope = raw as unknown as ReturnType<typeof fileExport>;
+    if (typeof envelope.original?.text !== 'string' || typeof envelope.original.sha256 !== 'string')
+      throw new Error('Missing original file.');
+    const originalSaved = savedFromRaw(checkedJson(envelope.original.text));
+    await validateContinuity(restoreNotebook(originalSaved, true));
+    if (serial !== fileImportSerial) return;
+    const boundProvenance = {
+      castReceipts: originalSaved.castReceipts,
+      oneCast: originalSaved.oneCast,
+      castChapter: originalSaved.castChapter,
+    };
+    if (JSON.stringify(boundProvenance) !== JSON.stringify(envelope.provenance))
+      throw new Error('Original provenance binding mismatch.');
+    const digest = await textDigest(envelope.original.text);
+    if (serial !== fileImportSerial) return;
+    if (envelope.original.edition !== originalSaved.game || digest !== envelope.original.sha256)
+      throw new Error('Original file binding mismatch.');
+    original = structuredClone(envelope.original);
+    provenance = structuredClone(envelope.provenance);
+    saved = savedFromRaw(envelope.current?.native);
+    expected = envelope;
+  } else {
+    saved = savedFromRaw(raw);
+    const digest = await textDigest(text);
+    if (serial !== fileImportSerial) return;
+    original = { text, sha256: digest, edition: saved.game };
+    provenance = structuredClone({
+      castReceipts: saved.castReceipts,
+      oneCast: saved.oneCast,
+      castChapter: saved.castChapter,
+    });
+  }
+  const s = restoreNotebook(saved, true);
+  await validateContinuity(s);
+  if (serial !== fileImportSerial) return;
+  // File origin is runtime authority only. Do not rewrite simulation continuity or original claims.
+  const candidate = fileExport(s, original, provenance);
+  if (expected !== undefined && JSON.stringify(candidate) !== JSON.stringify(expected))
+    throw new Error('The complete current export does not match replay.');
+  if (serial !== fileImportSerial) return;
+  ++loadSerial;
+  // The current gate has no await: commit continuity metadata and the accepted UI run
+  // in one synchronous turn after the last generation check. Never yield between them.
+  invalidateContinuity();
+  void gateContinuity(s, true);
+  fileChoosing = false;
+  originalFile = original;
+  originalProvenance = provenance;
+  ui.s = s;
+  ui.sheet = 'none';
+  ui.sheetFor = null;
+  selection = null;
+  ui.pendingPerson = null;
+  ui.acc = 0;
+  ui.readUntil = 0;
+  ui.dismissed = '';
+  save();
+  render(true);
+  setFileStatus('Loaded saved file. Download this run before closing the page.');
+}
+function fileChooser() {
+  fileChoosing = true;
+  ++fileImportSerial;
+  ++loadSerial;
+  stage?.destroy();
+  stage = null;
+  // A rejected replacement file must leave the current memory run available.
+  invalidateContinuity();
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><h1>Play a saved file</h1><p>Your saved game stays unchanged. Progress stays in this page. Download this run before closing the page. Reload returns here.</p><label>Choose a saved file<input type="file" accept="application/json,.json,.txt"></label><p role="status" data-file-status></p>${ui.s ? '<button data-file-resume>Resume current file</button>' : ''}<p>To leave file play and open your saved local game, use the link below. That game uses this browser’s saved notebook.</p><a href="${esc(location.pathname)}">Leave file play and open my saved local game</a></main></div>`;
+  mountMenu(app().querySelector('.menu-slot'), null);
+  app()
+    .querySelector('[data-file-resume]')
+    ?.addEventListener('click', () => {
+      ++fileImportSerial;
+      render(true);
+    });
+  app()
+    .querySelector('input')
+    ?.addEventListener('change', (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (file) importRun(file);
+      else ++fileImportSerial;
+    });
 }
 
 // ---------- flow ----------
@@ -360,6 +567,7 @@ async function holdLoad<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 async function startFresh(authored = false, month = false, workStart = false) {
+  if (fileMode === 'file') throw new Error('Choose a saved file to play.');
   return holdLoad(async () => {
     const serial = ++loadSerial;
     invalidateContinuity();
@@ -406,7 +614,7 @@ async function begin(s: GameState, file = false) {
 
 export async function start() {
   lab.setPersonaRecording('pending-history');
-  await shelf.ready;
+  if (fileMode !== 'file') await shelf?.ready;
   installContinuity(
     () => ui.s ?? undefined,
     save,
@@ -417,6 +625,10 @@ export async function start() {
   lab.trackRun(
     () => {
       try {
+        if (fileMode === 'file') {
+          if (ui.s) lab.captureSave(fileSessionExport());
+          return ui.s ? fileSessionExport() : null;
+        }
         const saved = localStorage.getItem(SAVE_KEY);
         if (saved) lab.captureSave(JSON.parse(saved));
       } catch {}
@@ -436,12 +648,20 @@ export async function start() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) save();
   });
-  window.addEventListener('pagehide', save);
+  window.addEventListener(
+    'pagehide',
+    fileMode === 'file'
+      ? () => {
+          ++fileImportSerial;
+          save();
+        }
+      : save,
+  );
   window.addEventListener('resize', () => {
-    if (ui.s?.phase === 'day') render(false);
+    if (ui.s?.phase === 'day' && !fileChoosing) render(false);
   });
   requestAnimationFrame(loop);
-  if ('serviceWorker' in navigator && !import.meta.env.DEV)
+  if (fileMode !== 'file' && 'serviceWorker' in navigator && !import.meta.env.DEV)
     navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
@@ -458,6 +678,7 @@ function loop(t: number) {
   if (
     s &&
     s.phase === 'day' &&
+    !fileChoosing &&
     pendingLoads === 0 &&
     !document.hidden &&
     !document.querySelector('dialog[open], [role=dialog][aria-modal=true]')
@@ -564,9 +785,18 @@ function infoContent(s: GameState | null) {
 }
 function mountMenu(target: Element | null, s: GameState | null) {
   if (!target) return;
+  if (fileMode === 'file' && !document.querySelector('[data-file-status]')) {
+    const status = document.createElement('span');
+    // Completion marker for the chooser handler; the visible memory-only explanation lives in the menu.
+    status.hidden = true;
+    status.dataset.fileStatus = '';
+    status.textContent = fileStatus;
+    target.append(status);
+  }
   target.append(
     gameMenu({
       hasRun: !!ui.s,
+      chooseFile: fileMode === 'file' ? fileChooser : undefined,
       newGame: () => {
         void startFresh();
       },
@@ -580,7 +810,8 @@ function mountMenu(target: Element | null, s: GameState | null) {
       },
       beforeOpen: save,
       onClose: () => {
-        if (ui.s?.phase === 'day') render(false);
+        if (fileMode === 'file' && fileChoosing) ++fileImportSerial;
+        if (ui.s && (fileMode === 'file' || ui.s.phase === 'day')) render(false);
       },
       readNotebook:
         s?.phase === 'day' && ui.s
@@ -622,13 +853,17 @@ function mountMenu(target: Element | null, s: GameState | null) {
     info.addEventListener('toggle', () => {
       infoOpen = info.matches(':popover-open');
       ui.acc = 0;
-      if (ui.s?.phase === 'day') render(false);
+      if (ui.s?.phase === 'day' && !fileChoosing) render(false);
     });
     info.querySelector('[data-info-close]')?.addEventListener('click', () => info.hidePopover());
   }
 }
 
 function titlePage() {
+  if (fileMode === 'file') {
+    fileChooser();
+    return;
+  }
   save();
   labScreen('title');
   stage?.destroy();
@@ -730,6 +965,7 @@ function titlePage() {
 function render(full: boolean) {
   labScreen('play');
   const s = ui.s;
+  if (s && fileMode === 'file') fileChoosing = false;
   if (!s) return;
   if (s.phase !== 'day') {
     stage?.destroy();
@@ -1735,8 +1971,8 @@ function sundayPage(s: GameState) {
     <div class="margin hand">${s.month ? (s.month.stay === null ? 'There is another working week ahead. The building remembers this one.' : s.month.stay ? 'Your agreement is renewed. The building still needs its daily work.' : 'The agreement ends here. Your work and the people you met remain in this notebook.') : m?.raise ? 'You did well in your first week. They will want more next week.' : 'Your first week is over. Next week they will know you better.'} <span class="soft">— R.</span></div>
     <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
-    <p class="soft small">Your notebook is saved.</p>
-    </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button>${labTools ? '<button data-a="download">Download this run</button>' : ''}</div>${s.month && s.month.stay === null ? '<button class="primary" data-a="next">Begin the next week</button>' : '<button class="primary" data-a="title">Close the notebook</button>'}</div>
+    <p class="soft small">${fileMode === 'file' ? 'Progress stays in this page. Download this run before closing.' : 'Your notebook is saved.'}</p>
+    </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button>${labTools || fileMode === 'file' ? '<button data-a="download">Download this run</button>' : ''}</div>${s.month && s.month.stay === null ? '<button class="primary" data-a="next">Begin the next week</button>' : '<button class="primary" data-a="title">Close the notebook</button>'}</div>
   </div>`;
   mountMenu(app().querySelector('.menu-slot'), s);
   app()

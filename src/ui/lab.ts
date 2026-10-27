@@ -2,6 +2,17 @@ import { createLab, FEEDBACK_LABELS, type FeedbackLabel, PRIVACY_URL } from '@ad
 import { feedbackPersonaControl, feedbackSharePlay } from '@adam0white/lab-kit';
 import './lab.css';
 
+/** Resolve before any owner host service is constructed. Supplied values never fall back to native. */
+export function selectFileMode(search: string): 'native' | 'file' | 'invalid' {
+  const values = new URLSearchParams(search).getAll('file');
+  return values.length === 0 ? 'native' : values.length === 1 && values[0] === '1' ? 'file' : 'invalid';
+}
+export const fileMode = selectFileMode(typeof location === 'undefined' ? '' : location.search);
+if (fileMode === 'invalid') {
+  const root = typeof document === 'undefined' ? null : document.getElementById('app');
+  if (root) root.textContent = 'This saved-file link is not supported. Use ?file=1 to choose a saved file.';
+  throw new Error('Unsupported saved-file entry. Use ?file=1 to choose a file.');
+}
 export const lab = createLab({ game: 'stairwell' });
 export const labTools = new URLSearchParams(location.search).get('lab') === '1';
 
@@ -17,6 +28,7 @@ interface MenuOptions {
   mornings?: { label: string; action: () => void }[];
   importRun?: (file: File) => void;
   hasRun: boolean;
+  chooseFile?: () => void;
   continuityPanel?: () => HTMLElement;
   chooseRecording?: (allow: boolean) => Promise<void>;
 }
@@ -125,6 +137,7 @@ function dialogShell(kind: 'menu' | 'feedback', title: string): HTMLDialogElemen
 }
 
 export function compactRun(run: unknown): unknown {
+  if ((run as { format?: string } | undefined)?.format === 'stairwell-file-session/1') return run;
   const { state: _state, ...replayable } = run as Record<string, unknown>;
   return replayable;
 }
@@ -322,6 +335,17 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
         leave(() => openFeedback(options.getRun, () => entry.click(), options.chooseRecording)),
       );
       body.append(feedback);
+      if (fileMode === 'file') {
+        const explanation = document.createElement('p');
+        explanation.textContent =
+          'Progress stays in this page. Download this run before closing the page. Reload returns to the file chooser.';
+        body.append(explanation);
+        if (options.hasRun) body.append(button('Download this run', () => downloadRun(options.getRun())));
+        if (options.chooseFile) {
+          const chooseFile = options.chooseFile;
+          body.append(button('Choose another file', () => leave(chooseFile)));
+        }
+      }
       const full = button(document.fullscreenElement ? 'Leave full screen' : 'Full screen', () => {
         const result = document.fullscreenElement
           ? document.exitFullscreen()
@@ -336,7 +360,7 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
       });
       full.className = 'sw-fullscreen';
       body.append(full);
-      if (options.newGame) {
+      if (fileMode !== 'file' && options.newGame) {
         const confirm = document.createElement('div');
         confirm.hidden = true;
         confirm.textContent = 'Replace the saved notebook and begin on Monday?';
@@ -369,7 +393,7 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
       games.href = 'https://human.adamwhite.work/games/';
       games.textContent = 'All games';
       body.append(games);
-      if (labTools && options.continuityPanel) body.append(options.continuityPanel());
+      if (fileMode !== 'file' && labTools && options.continuityPanel) body.append(options.continuityPanel());
       const footer = document.createElement('footer');
       footer.className = 'sw-menu-footer';
       footer.append(recordingSwitch(), privacyLink());

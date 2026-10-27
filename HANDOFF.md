@@ -153,3 +153,49 @@ The detached continuation reaches1170 through ordinary steps. At1170 Derya is st
 meal interval begun at1141; the existing host waits for that interval before offering night
 work. The control then reaches the ordinary work offer and HF begin without forcing assent,
 editing a private clock/body, waiving duty or changing the returned990 world.
+
+## Saved-file host boundary — GDI1325 source candidate, 2026-10-26
+
+Remaining: parent ONE independent review, integration with normal signed-source/exact-CI gates,
+then separately authorized deployment and actual admission. Parent games-deferred accepts this
+source candidate. Actual db491 deployment hold persists. This batch does not change Garden
+artifacts/pins, Derya Task2/3/4, any simulation edition or input, or SDK packages.
+
+`?file=1` selects a memory-only saved-file host before native-slot reads, Shelf construction or
+new SW registration. Supplied unknown/empty/duplicate file parameters refuse before host
+startup. No file parameter retains the native route. File play has a public chooser, complete
+Download this run, Choose another file and Resume current file. Menu Resume continues the
+memory run. A bad replacement leaves that run intact. Reload returns to the chooser. Leaving
+file play for the local saved game requires the explicit labelled link. No fresh-game transition
+or continuity publication/fork/toggle/recovery controls exist in file mode. Method guards also
+refuse native admission/publication before Shelf, recovery, source or head mutations. File
+receipts/claims remain provenance; active owned receipts are empty. Edition13 character
+transfer remains refused. Whole-game10 remains refused;9/11/13 replay contracts are unchanged.
+
+`stairwell-file-session/1` retains original file text, SHA256 and edition, original provenance,
+the full current native replay packet and the entire current state with all public HF Person
+snapshots, RNG, clocks, duties, claims and source archives. It never uses compactRun or a state
+summary. Reimport uses public isSaved/replay/validateContinuity and compares the complete
+current export before installation. An old notebook supplies replay inputs, not a fabricated
+original final-state comparator. Total serialized envelope is limited to4MiB, depth64 and
+480000 value nodes; unsafe keys, invalid UTF8 and nonfinite JSON numbers refuse. Exceeding a bound refuses
+before installation; no Person/provenance truncation. Caller packets are not mutated.
+
+The focused source control embeds exact retained B notebook bytes (410 bytes, SHA256
+`df2e914fd66af4709509dff96df440e6ac404c23ae217137be7ddf6a3f89771f`). It uses synthetic occupied
+native/recovery sentinels, not owner data or an owner receipt. The complete progressed fixture
+measured40552 UTF8 bytes,2546 value nodes,depth11. Automated source controls exercise actual
+startup/chooser/download/menu/timer/hide/pagehide/ordinary phase progression and complete
+export/reimport/same-input continuation. The timer reaches the ordinary unowned480 departure on this retained fixture; this is not
+proof of an admitted owned-character departure. Existing admission/CAS/legacy controls remain
+required. Raw evidence and candidate retention live in games-deferred/stairwell-native-file-evidence.
+
+The actual public client11 Lab captureSave/trackRun paths receive complete file snapshots and
+retain existing recording/privacy/off choices. HOST-ONLY SOURCE CONTROL IS NOT OCCUPIED-PROFILE
+GO. Client11 lacks a public complete SDK identity/session/journal/pending-Blob/notice preservation
+contract. Its real initialization and the kit notice can change SDK storage. No fake client,
+preservation options, queue reset/quarantine or host rollback is introduced. Generic SDK request
+is parent/coordinator-owned, target2026-10-26T23:30Z; separate published marker14/kit16-or-designated
+artifact adoption, exact SDK contract/source verification, active-SW/cache preservation (an
+existing controller acts before JS), actual Chrome admission and stored recording receipts
+remain gates. Review this dependency on2026-10-27. No owner profile was run by this author.

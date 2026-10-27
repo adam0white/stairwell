@@ -18,7 +18,20 @@ import { act, canReplay, GAME_VERSION, type GameState, newGame, personOf, replay
 import { WORK_START_VERSION } from '../sim/month.ts';
 import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
 import { lab } from './lab.ts';
-export const shelf = personaChannel();
+
+// Keep the boundary independent of Lab construction and native-route test doubles.
+const fileParameters =
+  typeof location === 'undefined' ? [] : new URLSearchParams(location.search).getAll('file');
+const fileMode = fileParameters.length === 0 ? 'native' : 'file';
+export const shelf = fileMode === 'file' ? null : personaChannel();
+function nativeShelf(): ReturnType<typeof personaChannel> {
+  if (fileMode === 'file' || !shelf)
+    throw new Error('Saved-file play cannot change shared character history. Download this run.');
+  return shelf;
+}
+function requireNative(): void {
+  nativeShelf();
+}
 export interface CastReceipts {
   owned: Record<string, PersonaEnvelope>;
   fileOrigin: boolean;
@@ -83,10 +96,12 @@ export function castReceipts(g: GameState): CastReceipts {
 export function restoreCastReceipts(g: GameState, value: unknown, file = false): void {
   const r = runtime(g);
   const raw = value as Partial<CastReceipts> | undefined;
+  if (g.version === WORK_START_VERSION && raw?.owned && Object.keys(raw.owned).length)
+    refuseWorkTransfer(g.version);
   r.fileOrigin = file || raw?.fileOrigin === true;
   r.authored = !r.fileOrigin && !g.castChapter?.inputs.length;
   r.sources = raw?.sources && typeof raw.sources === 'object' ? structuredClone(raw.sources) : {};
-  if (!file) r.rawOwned = raw?.owned;
+  if (!file && fileMode !== 'file') r.rawOwned = raw?.owned;
   r.owned = {};
 }
 interface RecoveryNotebook {
@@ -119,6 +134,7 @@ function recoveryNotebook(
   });
 }
 function persistRecovery(key: string, notebook: RecoveryNotebook, accepted: boolean) {
+  if (fileMode === 'file') throw new Error('Saved-file play cannot write recovery history.');
   if (typeof localStorage === 'undefined') return;
   const keys = JSON.parse(localStorage.getItem(recoveryIndex) ?? '[]') as string[];
   if (!keys.includes(key) && keys.length >= 8)
@@ -134,6 +150,7 @@ function persistRecovery(key: string, notebook: RecoveryNotebook, accepted: bool
   if (!keys.includes(key)) localStorage.setItem(recoveryIndex, JSON.stringify([...keys, key]));
 }
 export function acceptedCastRecoveries(): Recovery[] {
+  if (fileMode === 'file') return [];
   if (typeof localStorage === 'undefined') return [];
   try {
     const keys = JSON.parse(localStorage.getItem(recoveryIndex) ?? '[]') as string[];
@@ -180,26 +197,27 @@ export class AdmissionFailure extends Error {
   }
 }
 export async function arrive(seed: number, fresh = false, edition = GAME_VERSION): Promise<GameState> {
+  requireNative();
   const serial = generation;
   lab.setPersonaRecording('pending-cast-group');
   lab.allowPersonaRecording(false);
   if (edition === WORK_START_VERSION) {
-    if (!fresh && shelf.enabled) refuseWorkTransfer(edition);
+    if (!fresh && nativeShelf().enabled) refuseWorkTransfer(edition);
     return newGame(seed, edition);
   }
-  await shelf.ready;
+  await nativeShelf().ready;
   requireCurrent(serial);
-  if (fresh || !shelf.enabled) return newGame(seed, edition);
+  if (fresh || !nativeShelf().enabled) return newGame(seed, edition);
   const opening = newGame(seed, edition);
   let draftInputs: CastChapter['inputs'] = [];
   let draftInitial: CastChapter['initial'] = {};
   const recoveryKey = `stairwell-cast-recovery:${seed}:admission`;
   let submitted = false;
   let accepted = false;
-  const transport: typeof shelf = {
-    ...shelf,
-    request: async <T>(request: Parameters<typeof shelf.request>[0]): Promise<T> => {
-      if (request.action !== 'putBatch') return shelf.request<T>(request);
+  const transport: ReturnType<typeof personaChannel> = {
+    ...nativeShelf(),
+    request: async <T>(request: Parameters<ReturnType<typeof personaChannel>['request']>[0]): Promise<T> => {
+      if (request.action !== 'putBatch') return nativeShelf().request<T>(request);
       const chapter: CastChapter = {
         version: 'stairwell-cast/1',
         inputs: structuredClone(draftInputs),
@@ -212,7 +230,7 @@ export async function arrive(seed: number, fresh = false, edition = GAME_VERSION
       const notebook = recoveryNotebook(draft, owned);
       persistRecovery(recoveryKey, notebook, false);
       submitted = true;
-      const result = await shelf.request<T>(request);
+      const result = await nativeShelf().request<T>(request);
       accepted = true;
       persistRecovery(recoveryKey, notebook, true);
       return result;
@@ -341,7 +359,7 @@ export async function validateContinuity(g: GameState): Promise<void> {
 export async function gateContinuity(g: GameState | undefined, file = false): Promise<void> {
   if (!g) return;
   const r = runtime(g);
-  if (file) {
+  if (file || fileMode === 'file') {
     r.fileOrigin = true;
     r.authored = false;
     r.owned = {};
@@ -357,6 +375,7 @@ export function acknowledgeContinuity(_g: GameState): void {
   /* Receipt is saved with the current local notebook. */
 }
 async function checkpoint(g: GameState, id: Rid, fork = false) {
+  requireNative();
   refuseWorkTransfer(g.version);
   const serial = generation;
   const r = runtime(g);
@@ -378,7 +397,7 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
       { ...r.sources, [id]: snapshot(actual) },
     );
     persistRecovery(recoveryKey, notebook, false);
-    await shelf.request({ action: 'put', envelope: closed });
+    await nativeShelf().request({ action: 'put', envelope: closed });
     persistRecovery(recoveryKey, notebook, true);
     requireCurrent(serial);
     if (current() !== g) return;
@@ -408,7 +427,7 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
     (old.transfer.checkpoint as { sha256?: string } | undefined)?.sha256 ===
       projected.transfer.checkpoint.sha256
   ) {
-    await shelf.request({ action: 'put', envelope: old });
+    await nativeShelf().request({ action: 'put', envelope: old });
     requireCurrent(serial);
     status = 'The accepted character save is still active and has not changed.';
     return;
@@ -445,7 +464,7 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
     { ...r.sources, [id]: projected.raw },
   );
   persistRecovery(recoveryKey, notebook, false);
-  await shelf.request({
+  await nativeShelf().request({
     action: 'put',
     envelope,
     fork,
@@ -462,8 +481,9 @@ async function checkpoint(g: GameState, id: Rid, fork = false) {
   await gateContinuity(g);
 }
 export function checkpointContinuity(): Promise<void> {
+  if (fileMode === 'file') return Promise.resolve();
   const g = current();
-  if (!g || !shelf.enabled) return Promise.resolve();
+  if (!g || !nativeShelf().enabled) return Promise.resolve();
   const task = pending
     .catch(() => {})
     .then(async () => {
@@ -492,7 +512,7 @@ export function installContinuity(
   current = getGame;
   store = save;
   resumeGame = load;
-  watchPersonaCheckpoint(checkpointContinuity);
+  if (fileMode !== 'file') watchPersonaCheckpoint(checkpointContinuity);
 }
 function button(label: string, run: () => void | Promise<void>) {
   const b = document.createElement('button');
@@ -508,17 +528,24 @@ function button(label: string, run: () => void | Promise<void>) {
   return b;
 }
 export function continuityPanel(): HTMLElement {
+  if (fileMode === 'file') {
+    const section = document.createElement('section');
+    section.textContent =
+      'This file keeps earlier character histories as provenance. Shared history controls are unavailable. Download this run to keep progress.';
+    return section;
+  }
   const section = document.createElement('section');
   section.className = 'sw-cast-controls';
   const toggle = document.createElement('input');
   toggle.type = 'checkbox';
-  toggle.checked = shelf.enabled;
+  toggle.checked = nativeShelf().enabled;
   const label = document.createElement('label');
   label.append(toggle, 'Keep fictional characters between games in this browser');
   section.append(label);
   toggle.addEventListener('change', () => {
+    requireNative();
     invalidateContinuity();
-    shelf.setEnabled(toggle.checked);
+    nativeShelf().setEnabled(toggle.checked);
     const g = current();
     if (g) void gateContinuity(g);
   });
@@ -568,7 +595,7 @@ export function continuityPanel(): HTMLElement {
     button('Save the selected character’s progress', async () => {
       const g = current();
       if (!g) return;
-      if (!shelf.enabled)
+      if (!nativeShelf().enabled)
         throw new Error('Turn on character history in this browser first, or download a copy of your game.');
       await checkpoint(g, selected);
       line.textContent = status;
@@ -578,7 +605,7 @@ export function continuityPanel(): HTMLElement {
     button('Create a separate character history from this pause', async () => {
       const g = current();
       if (!g) return;
-      if (!shelf.enabled) throw new Error('Turn on character history in this browser first.');
+      if (!nativeShelf().enabled) throw new Error('Turn on character history in this browser first.');
       await checkpoint(g, selected, true);
       line.textContent = status;
     }),
