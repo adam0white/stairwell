@@ -1,3 +1,4 @@
+import { PEOPLE_ACROSS_GAMES } from '@adam0white/lab-kit';
 /**
  * The Stairwell UI: a page from the kapıcı's notebook. Plain DOM, no framework. The shared native Run owns people.
  * This file reads public projections and queues host inputs. IndexedDB stores complete checkpoints at save boundaries.
@@ -1106,7 +1107,7 @@ async function titlePage() {
     ?.addEventListener('click', () => {
       const dialog = document.createElement('dialog');
       dialog.className = 'other-ways';
-      dialog.innerHTML = `<div class="who"><b>Other ways to begin</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body"><a href="/file/">Play a saved file</a><a href="https://human.adamwhite.work/lab/people/">Shared people (Hacer and Sevim can transfer here)</a></div>`;
+      dialog.innerHTML = `<div class="who"><b>Other ways to begin</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body"><a href="/file/">Play a saved file</a><a href="https://human.adamwhite.work/lab/people/">${PEOPLE_ACROSS_GAMES} (Hacer and Sevim can transfer here)</a></div>`;
       document.body.append(dialog);
       dialog.showModal();
       const authored = document.createElement('button');
@@ -2181,7 +2182,7 @@ function sundayPage(s: GameState) {
     <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
     <p class="soft small" data-save-status>${fileMode === 'file' ? 'Progress stays in this page. Download this run before closing.' : saveFailure ? esc(saveFailure) : cachedSaved ? `Saved through ${dayLabel(cachedSaved.engine.world)} ${clockOf(cachedSaved.minute)}.` : 'The complete notebook has not been saved yet.'}</p>
-    ${closingFailures.has(s) ? `<section data-publication-failure><p role="status">Character progress could not be saved to Shared people. Your local notebook is saved. ${esc(closingFailures.get(s) ?? '')} Download this run to keep a copy. Use the recovery controls below if the local recovery archive is full, then retry Close the notebook.</p><a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noopener">Check Shared people (Hacer and Sevim can transfer here)</a></section>` : ''}
+    ${closingFailures.has(s) ? `<section data-publication-failure><p role="status">Character progress could not be saved to ${PEOPLE_ACROSS_GAMES}. Your local notebook is saved. ${esc(closingFailures.get(s) ?? '')} Download this run to keep a copy. Use the recovery controls below if the local recovery archive is full, then retry Close the notebook.</p><a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noopener">Check ${PEOPLE_ACROSS_GAMES} (Hacer and Sevim can transfer here)</a></section>` : ''}
     </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button><button data-a="download">Download this run</button></div>${s.month && s.month.stay === null ? '<button class="primary" data-a="next">Begin the next week</button>' : `<button class="primary" data-a="title" ${closingPending.has(s) ? 'disabled' : ''}>Close the notebook</button>`}</div>
   </div>`;
   mountMenu(app().querySelector('.menu-slot'), s);

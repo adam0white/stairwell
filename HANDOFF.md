@@ -1,5 +1,9 @@
 # Stairwell — current handoff
 
+## HF4.8 candidate — 2026-10-28
+
+This candidate uses HF4.8.0, lab-client0.5.5 and lab-kit0.5.22. The released client validates the source and receiving roles for portable people; the existing host checks still enforce local duties, calendar mapping and ownership. The released client omits Voice source roles. A synthetic Voice-origin Hacer control was refused; the historical HF3 Voice journey below does not establish a current HF4 portable route. The people link uses the shared kit wording. HF4.8 exposes belief credence directly to host and person readings. Older HF Run archives may refuse to open; retain the file and start fresh. The earlier HF4.6 month and replay receipts below are historical, not proof for this candidate. Candidate test and delivery receipts are recorded separately in the coordinator report.
+
 ## Native HF4 port — 2026-10-28
 
 Headless source-proof/file, day-15 continuation and final week/replay controls passed. Technical delivery still requires live retained-shelf browser journeys and acknowledgement, one hosted game review, exact green merged CI and clean deployment. The owner accepts the result separately. The source uses published HF4.6.0 and SDK client0.5.2/kit0.5.19. Native14 is the week,15 the month,16 the explicit Start work option. See [the native port contract](docs/hf4-native-port.md) and `~/code/.lab-scratch/codex/g1-stairwell.md`.

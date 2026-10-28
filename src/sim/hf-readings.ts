@@ -31,8 +31,8 @@ export const currentTies = <W>(run: BuildingRun<W>, person: string) =>
 export const currentSourceTrust = <W>(run: BuildingRun<W>, person: string) =>
   hostPart(run, person, 'sourceTrust');
 
-/** A probability representation of HF's log odds, with no belief update. */
+/** HF's public belief reading, with no belief update. */
 export function beliefProbability<W>(run: BuildingRun<W>, person: string, proposition: string): number {
   const belief = currentBeliefs(run, person).find((belief) => belief.prop === proposition);
-  return belief ? 1 / (1 + Math.exp(-belief.logOdds)) : 0.5;
+  return belief?.credence ?? 0.5;
 }

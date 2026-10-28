@@ -1,8 +1,10 @@
 # Native HF4 port
 
+> HF4.8 candidate (2026-10-28): source pins HF4.8.0, client0.5.5 and kit0.5.22. Older HF Run archives may refuse; keep the file and start fresh. The HF4.6 controls and release decision below are historical and do not prove this candidate. See HANDOFF and the coordinator report for current evidence.
+
 Technical delivery requires signed pushed source, one hosted Codex review, exact green merged CI, a matching clean deployment, real shared-person journeys at both required viewport sizes, and complete replay/privacy/CAS controls. The owner accepts the cross-game feel separately. The review date remains2026-11-03. Current receipts and outstanding work live in `~/code/.lab-scratch/codex/g1-stairwell.md`.
 
-The current source pins published HF4.6.0, lab-client0.5.2 and lab-kit0.5.19. Editions14,15 and16 select the ordinary week, month and explicit Start work option. The game has one Run for all six people. HF owns bodies, beliefs, trust, norms, choices, speech and agenda. Stairwell authors places, schedules, offers, evidence and actual world consequences. It does not patch actors or copy faculty rules. A narrow pnpm override aligns lab-client0.5.2’s HF dependency with the game’s exact4.6.0 runtime. Its original4.4 validator refused genuine month-ending retained state. The private historical workspace preserves exact old runtimes and source readers; the override leaves its SDKs and the explicit HF3 alias unchanged. Old whole-game saves are refused and kept.
+The preceding delivery pinned HF4.6.0, lab-client0.5.2 and lab-kit0.5.19. Editions14,15 and16 select the ordinary week, month and explicit Start work option. The game has one Run for all six people. HF owns bodies, beliefs, trust, norms, choices, speech and agenda. Stairwell authors places, schedules, offers, evidence and actual world consequences. It does not patch actors or copy faculty rules. A narrow pnpm override aligns lab-client0.5.2’s HF dependency with the game’s exact4.6.0 runtime. Its original4.4 validator refused genuine month-ending retained state. The private historical workspace preserves exact old runtimes and source readers; the override leaves its SDKs and the explicit HF3 alias unchanged. Old whole-game saves are refused and kept.
 
 ## Time and consequences
 

@@ -102,7 +102,7 @@ export function tellables(world: BuildingWorld, to: Rid): Tellable[] {
     )
       continue;
     if (prop === 'notice:water' && (world.minute >= 2 * 1440 + 600 || to === 'burak')) continue;
-    const c = 1 / (1 + Math.exp(-belief.logOdds));
+    const c = belief.credence;
     if (Math.abs(c - 0.5) < 0.1) continue;
     const value = c > 0.5;
     if (belief.sources.some((source) => source.id === to && source.value === value)) continue;
