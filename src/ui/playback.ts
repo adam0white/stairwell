@@ -1,4 +1,5 @@
-import { faceToFace, type GameState, openTasks, step } from '../sim/game.ts';
+import { advanceBuildingMinute as step } from '../sim/hf-game.ts';
+import { faceToFace, type GameState, openTasks } from '../sim/hf-view.ts';
 
 /** UI time only. Travel is brisk; decisions and reading keep their time. */
 export function playback(

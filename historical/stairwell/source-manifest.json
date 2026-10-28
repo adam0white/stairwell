@@ -1,0 +1,49 @@
+{
+  "sourceCommit": "329919ad6308a5cda3596e7bf30729a08f81d463",
+  "frameworkPackage": "3.0.0",
+  "frameworkEngine": "2.23.0",
+  "client": "0.4.15",
+  "bindings": "aligned-visit import resolves through exact HF3/client0.4.11 garden workspace; CastReceipts is type-only extracted interface; runtime game source unchanged",
+  "files": {
+    "src/sim/aligned-visit.ts": {
+      "sourceSha256": "fe894464ae61fe0b6a48a8548fbacd5899603232a6043ad9764f72e6317b8aaf",
+      "retainedSha256": "b3d501492a5759236a528de636ef07f7441bed2a236c9252fa22229a34866631"
+    },
+    "src/sim/cast-life.ts": {
+      "sourceSha256": "4131214fba488c32af4816b6f168edb2e3d8984dcbb7b1a7bc95ac09716971d8",
+      "retainedSha256": "4131214fba488c32af4816b6f168edb2e3d8984dcbb7b1a7bc95ac09716971d8"
+    },
+    "src/sim/game.ts": {
+      "sourceSha256": "1d99ce9843f8729ffd6345c3bdd6af477c6ea4914a5efa15831738f593ea831d",
+      "retainedSha256": "1d99ce9843f8729ffd6345c3bdd6af477c6ea4914a5efa15831738f593ea831d"
+    },
+    "src/sim/month.ts": {
+      "sourceSha256": "3e9036976c4ac32e4b2b1e0543c030548094388c8079968325a67678ab90b604",
+      "retainedSha256": "3e9036976c4ac32e4b2b1e0543c030548094388c8079968325a67678ab90b604"
+    },
+    "src/sim/one-cast.ts": {
+      "sourceSha256": "760351cda9b78cb9a4695253f5e977437939aaf5b0da695a779fcf923e91f97d",
+      "retainedSha256": "760351cda9b78cb9a4695253f5e977437939aaf5b0da695a779fcf923e91f97d"
+    },
+    "src/sim/people.ts": {
+      "sourceSha256": "f93fc9cef116d1befd8e73620e0bdab759f9110b6e19b2d3b1efa45818b1f8a0",
+      "retainedSha256": "f93fc9cef116d1befd8e73620e0bdab759f9110b6e19b2d3b1efa45818b1f8a0"
+    },
+    "src/sim/rng.ts": {
+      "sourceSha256": "08f26405647c71faa72d59476d1f9f0185036ee2c985a80f2cb7cc7d48aa7a78",
+      "retainedSha256": "08f26405647c71faa72d59476d1f9f0185036ee2c985a80f2cb7cc7d48aa7a78"
+    },
+    "src/sim/stories.ts": {
+      "sourceSha256": "b1b4364e3420723f0b8f299e4924f5ec99a4e814b31cbc7c70def6604aec7703",
+      "retainedSha256": "b1b4364e3420723f0b8f299e4924f5ec99a4e814b31cbc7c70def6604aec7703"
+    },
+    "src/ui/save.ts": {
+      "sourceSha256": "1dd3a8c6a5e364964eeb50a90aff9ff19c40de91f7e189ee8fc794e2a2fa0852",
+      "retainedSha256": "1dd3a8c6a5e364964eeb50a90aff9ff19c40de91f7e189ee8fc794e2a2fa0852"
+    },
+    "src/ui/local-persona.ts": {
+      "sourceSha256": "3cd98dec3e2bebd0d7eafcbd9e7ec04eed55b9d5cb4c29801343f87d8dac0c0e",
+      "retainedSha256": "3cd98dec3e2bebd0d7eafcbd9e7ec04eed55b9d5cb4c29801343f87d8dac0c0e"
+    }
+  }
+}

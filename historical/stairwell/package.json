@@ -1,0 +1,17 @@
+{
+  "name": "@stairwell/native-replay-history",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./aligned": "./src/sim/aligned-visit.ts"
+  },
+  "dependencies": {
+    "@adam0white/human-framework": "3.0.0",
+    "@adam0white/lab-client": "file:../../vendor/adam0white-lab-client-0.4.15.tgz",
+    "@stairwell/garden-replay-history": "workspace:*",
+    "@stairwell/hf-221": "npm:@adam0white/human-framework@2.21.0",
+    "@adam0white/lab-kit": "file:../../vendor/adam0white-lab-kit-0.5.17.tgz"
+  }
+}

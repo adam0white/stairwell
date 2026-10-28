@@ -25,25 +25,16 @@ interface MenuOptions {
 }
 
 const NAME_KEY = 'hf-lab-feedback-name';
+/** SDK0.5.2 owns the single Recording gate. A complete replay archive cannot
+ * be partially redacted while retaining its verification contract. */
 function feedbackRun(getRun: () => unknown): unknown {
   try {
-    const run = getRun();
-    if (lab.personaRecordingAllowed || !run || typeof run !== 'object') return run;
-    const unlinked = { ...run } as Record<string, unknown>;
-    delete unlinked.castReceipts;
-    for (const key of ['continuity', 'oneCast']) {
-      const value = unlinked[key];
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
-        const continuity = { ...value } as Record<string, unknown>;
-        delete continuity.recordingFileKey;
-        unlinked[key] = continuity;
-      }
-    }
-    return unlinked;
+    return getRun();
   } catch {
     return undefined;
   }
 }
+
 function stored(key: string): string {
   try {
     return localStorage.getItem(key) ?? '';
@@ -134,15 +125,19 @@ function dialogShell(kind: 'menu' | 'feedback', title: string, requestClose?: ()
 }
 
 export function compactRun(run: unknown): unknown {
-  if ((run as { format?: string } | undefined)?.format === 'stairwell-file-session/1') return run;
+  if (
+    ['stairwell-file/4', 'stairwell-notebook/4', 'stairwell-file-session/1'].includes(
+      (run as { format?: string } | undefined)?.format ?? '',
+    )
+  )
+    return run;
   const { state: _state, ...replayable } = run as Record<string, unknown>;
   return replayable;
 }
 
-/** Keep only the replayable seed, inputs and minute in the playtest download. */
-export function downloadRun(run: unknown): void {
+function downloadJson(text: string): void {
   const url = URL.createObjectURL(
-    new Blob([JSON.stringify(compactRun(run), null, 2)], {
+    new Blob([text], {
       type: 'application/json',
     }),
   );
@@ -151,6 +146,62 @@ export function downloadRun(run: unknown): void {
   a.download = 'stairwell-playtest.json';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Native downloads keep the complete compact encoding measured by the file codec. */
+let runDownload: ((getRun: () => unknown) => Promise<void>) | undefined;
+export function setRunDownload(download: (getRun: () => unknown) => Promise<void>) {
+  runDownload = download;
+}
+function requestRunDownload(getRun: () => unknown) {
+  if (runDownload) {
+    void runDownload(getRun);
+    return;
+  }
+  downloadRun(getRun());
+}
+export function downloadRun(run: unknown): void {
+  downloadJson(JSON.stringify(compactRun(run)));
+}
+
+/** Unopened records bypass legacy compaction. Refuse any value JSON would change
+ * or omit, rather than describe a lossy serialization as a recovery copy. */
+export function downloadRawRun(value: unknown): void {
+  const ancestors = new Set<object>();
+  function invalid(): never {
+    throw new Error('This saved record cannot be represented unchanged as JSON.');
+  }
+  const check = (part: unknown): void => {
+    if (part === null || typeof part === 'string' || typeof part === 'boolean') return;
+    if (typeof part === 'number') {
+      if (!Number.isFinite(part) || Object.is(part, -0)) invalid();
+      return;
+    }
+    if (typeof part !== 'object') invalid();
+    const array = Array.isArray(part);
+    const prototype = Object.getPrototypeOf(part);
+    if (
+      (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) ||
+      ancestors.has(part)
+    )
+      invalid();
+    ancestors.add(part);
+    const keys = Reflect.ownKeys(part);
+    if (array && keys.length !== part.length + 1) invalid();
+    for (const key of keys) {
+      if (array && key === 'length') continue;
+      if (typeof key !== 'string') invalid();
+      if (array && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= part.length)) invalid();
+      const descriptor = Object.getOwnPropertyDescriptor(part, key);
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) invalid();
+      check(descriptor.value);
+    }
+    ancestors.delete(part);
+  };
+  check(value);
+  const text = JSON.stringify(value);
+  if (text === undefined) invalid();
+  downloadJson(text);
 }
 
 export function openFeedback(
@@ -227,7 +278,7 @@ export function openFeedback(
   summary.textContent = 'What is sent';
   const preview = document.createElement('p');
   preview.textContent =
-    'If Recording is on or you choose Share, your feedback includes a saved game when one is available. It also links your play history across games on this device. Otherwise, only your note, answer and optional name are sent.';
+    'If Recording is on or you choose Share, your feedback includes the last complete saved game when one is available. It may be earlier than the current screen. It also links your play history across games on this device. Otherwise, only your note, answer and optional name are sent.';
   details.append(summary, preview, privacyLink());
   const preferences = document.createElement('div');
   const status = document.createElement('p');
@@ -239,7 +290,7 @@ export function openFeedback(
   send.type = 'submit';
   send.className = 'primary';
   send.textContent = 'Submit';
-  const copy = button('Keep a copy of this run', () => downloadRun(getRun()));
+  const copy = button('Keep a copy of this run', () => requestRunDownload(getRun));
   try {
     copy.disabled = !getRun();
   } catch {
@@ -340,7 +391,8 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
         explanation.textContent =
           'Progress stays in this page. Download this run before closing the page. Reload returns to the file chooser.';
         body.append(explanation);
-        if (options.hasRun) body.append(button('Download this run', () => downloadRun(options.getRun())));
+        if (options.hasRun)
+          body.append(button('Download this run', () => requestRunDownload(options.getRun)));
         if (options.chooseFile) {
           const chooseFile = options.chooseFile;
           body.append(button('Choose another file', () => leave(chooseFile)));
@@ -360,7 +412,7 @@ export function gameMenu(options: MenuOptions): HTMLButtonElement {
       });
       full.className = 'sw-fullscreen';
       if (fileMode !== 'file' && options.hasRun)
-        body.append(button('Download this run', () => downloadRun(options.getRun())));
+        body.append(button('Download this run', () => requestRunDownload(options.getRun)));
       body.append(full);
       if (fileMode !== 'file' && options.newGame) {
         const confirm = document.createElement('div');

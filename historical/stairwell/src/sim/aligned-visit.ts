@@ -4,11 +4,7 @@
  * Task4 must separately implement a trusted current-controller/native publication contract
  * before exposing a general source entry. General admission remains pending.
  */
-import {
-  exportGardenVisit,
-  type GardenVisitSave,
-  replayGardenVisit,
-} from '@adam0white/hearsay-garden-replay';
+
 import { DEFAULT_NORMS, restore, snapshot } from '@adam0white/human-framework';
 import {
   boundedPersonaJson,
@@ -19,6 +15,7 @@ import {
   validatePersona,
   validatePersonaLife,
 } from '@adam0white/lab-client';
+import { exportGardenVisit, type GardenVisitSave, replayGardenVisit } from '@stairwell/garden-replay-history';
 import { isSaved, type Saved } from '../ui/save.ts';
 import { CALENDAR_ACTIONS, sourceTransfer } from './cast-life.ts';
 import { type GameState, personOf, replay, rOf, step } from './game.ts';

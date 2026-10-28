@@ -1,15 +1,13 @@
 /**
- * The Stairwell UI: a page from the kapıcı's notebook. Plain DOM, no framework. The sim is pure (`sim/game.ts`); this
- * file only reads it and queues inputs. The notebook (seed + inputs) is the save, kept in localStorage after every
- * input and at every page turn.
+ * The Stairwell UI: a page from the kapıcı's notebook. Plain DOM, no framework. The shared native Run owns people.
+ * This file reads public projections and queues host inputs. IndexedDB stores complete checkpoints at save boundaries.
  */
 
-import { snapshot } from '@adam0white/human-framework';
 import { type phoneStage, telemetryNotice } from '@adam0white/lab-kit';
+import { RESIDENTS, RIDS, type Rid } from '../sim/building-cast.ts';
+import { decodeBuildingWorld } from '../sim/building-decode.ts';
+import type { BuildingCheckpoint } from '../sim/hf-run.ts';
 import {
-  act,
-  binsWarning,
-  canReplay,
   canStartWork,
   clockOf,
   dayLabel,
@@ -20,28 +18,36 @@ import {
   floorOf,
   type GameState,
   INVENTABLE,
-  type Input,
+  legsLine,
+  MONTH_VERSION,
   type NewInput,
   nameOf,
   openTasks,
   type Place,
-  personOf,
   placeName,
   readOf,
-  replay,
   rOf,
   type Said,
   SECRET_PROPS,
-  step,
   type Task,
   TOP_FLOOR,
   tellables,
-  travelMinutes,
+  WORK_START_VERSION,
   wordHint,
-} from '../sim/game.ts';
-import { MONTH_VERSION, PRIVATE_WORK, WORK_START_VERSION } from '../sim/month.ts';
-import { RESIDENTS, RIDS, type Rid } from '../sim/people.ts';
+} from '../sim/hf-view.ts';
+import { PRIVATE_WORK } from '../sim/month.ts';
 import { PRIVATE_FACTS, PRIVATE_SECRETS, STORY_SECRETS } from '../sim/stories.ts';
+import {
+  downloadRawRun,
+  downloadRun,
+  fileMode,
+  gameMenu,
+  lab,
+  labScreen,
+  openFeedback,
+  setRunDownload,
+} from './lab.ts';
+import type { NativeGameAccess } from './native-cast-continuity.ts';
 import {
   AdmissionFailure,
   acceptedCastRecoveries,
@@ -55,20 +61,118 @@ import {
   installContinuity,
   invalidateContinuity,
   type PublicationResult,
+  recoveryPending,
   restoreCastReceipts,
-  shelf,
   validateContinuity,
-} from './cast-continuity.ts';
-import { downloadRun, fileMode, gameMenu, lab, labScreen, openFeedback } from './lab.ts';
-import { canWait, playback, untilSomethingHappens } from './playback.ts';
-import { isSaved, type Saved } from './save.ts';
+} from './native-cast-continuity.ts';
+import { NATIVE_FILE_MAX_BYTES } from './native-file.ts';
+import type { NativeNotebook } from './native-notebook.ts';
+import { bindNativeOwner, createNativeOwner, type NativeOwner, nativeOwner } from './native-owner.ts';
+import type { OwnerOperation } from './native-owner-core.ts';
+import {
+  projectedBins as binsWarning,
+  hasNativeForecast,
+  projectedTravel as travelMinutes,
+} from './native-reads.ts';
+import { createNativeSaveCoordinator } from './native-save-coordinator.ts';
+import {
+  clearNativeSaved,
+  LegacyNativeSaveError,
+  loadNativeSaved,
+  saveNativeSaved,
+  UnreadableNativeSaveError,
+} from './native-storage.ts';
+import { canWait, playback } from './playback.ts';
 
+const candidates = new Set<NativeOwner>();
+let activeOwner: NativeOwner | undefined;
+const reader = {
+  cancel() {
+    for (const candidate of candidates) candidate.dispose();
+    candidates.clear();
+  },
+};
+async function ownerCandidate(operation: OwnerOperation) {
+  const owner = createNativeOwner();
+  candidates.add(owner);
+  try {
+    const view = await owner.update(operation);
+    if (owner.disposed) throw new DOMException('The game was discarded.', 'AbortError');
+    bindNativeOwner(view.world, owner);
+    return view;
+  } catch (error) {
+    candidates.delete(owner);
+    owner.dispose();
+    throw error;
+  }
+}
+function discardCandidate(world: GameState) {
+  const owner = nativeOwner(world);
+  if (owner === activeOwner) return;
+  candidates.delete(owner);
+  owner.dispose();
+}
+function promoteOwner(world: GameState) {
+  const owner = nativeOwner(world);
+  const previous = activeOwner;
+  owner.promote();
+  activeOwner = owner;
+  gameStopped = false;
+  candidates.delete(owner);
+  if (previous !== owner) previous?.dispose();
+}
+const gameAccess: NativeGameAccess = {
+  open: async (...args) => (await ownerCandidate({ kind: 'open', args })).world,
+  reopen: async (world, ...args) => {
+    const owner = nativeOwner(world);
+    if (owner === activeOwner) throw Error('An active game cannot be reopened as a candidate.');
+    return (await owner.update({ kind: 'open', args })).world;
+  },
+  checkpoint: (world) => nativeOwner(world).request<BuildingCheckpoint<GameState>>({ kind: 'checkpoint' }),
+  person: (world, id) => nativeOwner(world).person(id),
+  notebook: (world, receipts) => nativeOwner(world).snapshot(receipts),
+  discard: discardCandidate,
+  admit: (world, input, edition) => nativeOwner(world).request({ kind: 'admit', input, edition }),
+  chapter: (world, value) => nativeOwner(world).request({ kind: 'chapter', value }),
+};
+let gameBusy = false;
+let gameStopped = false;
+async function mutate(world: GameState, operation: OwnerOperation) {
+  if (gameBusy) return false;
+  gameBusy = true;
+  try {
+    await nativeOwner(world).update({ ...operation, forecasts: selection ? [selection.to] : [] });
+    return ui.s === world;
+  } finally {
+    gameBusy = false;
+  }
+}
+const completeSnapshots = new WeakMap<GameState, unknown>();
+async function latestRun(world = ui.s): Promise<unknown> {
+  if (!world) return undefined;
+  const packet =
+    fileMode === 'file'
+      ? await nativeOwner(world).export(originalProvenance, castReceipts(world))
+      : await nativeOwner(world).snapshot(castReceipts(world));
+  completeSnapshots.set(world, packet);
+  return packet;
+}
+async function downloadLatest(world = ui.s) {
+  try {
+    const packet = world ? await latestRun(world) : cachedSaved;
+    if (packet) downloadRun(packet);
+    else if (unreadableSaved) downloadRawRun(unreadableSaved.value);
+  } catch (error) {
+    showDownloadFailure(error);
+  }
+}
+let readingNotebook = false;
+let readerSequence = 0;
 let stage: ReturnType<typeof phoneStage> | null = null;
 
 let selectedSpeed: number | null = null;
 let infoOpen = false;
 let selection: { to: Place; person: Rid | null; task: number | null } | null = null;
-const SAVE_KEY = 'stairwell:notebook';
 const journalResizes = new WeakMap<HTMLElement, ResizeObserver>();
 const journalPositions = new WeakMap<
   HTMLElement,
@@ -113,6 +217,46 @@ if (notice) {
   notice.style.paddingInline = '2px';
   notice.style.fontFamily = 'Arial, "Liberation Sans", sans-serif';
 }
+function mountSaveStatus() {
+  let status = document.getElementById('native-save-status');
+  if (!status) {
+    status = document.createElement('aside');
+    status.id = 'native-save-status';
+    status.className = 'native-save-status';
+    status.setAttribute('role', 'status');
+    const words = document.createElement('span');
+    words.dataset.saveStatus = '';
+    const download = document.createElement('button');
+    download.textContent = 'Download this run';
+    download.addEventListener('click', () => {
+      void downloadLatest();
+    });
+    const fallback = document.createElement('button');
+    fallback.dataset.lastComplete = '';
+    fallback.textContent = 'Download the last complete notebook';
+    fallback.addEventListener('click', () => {
+      const packet = runOf() ?? cachedSaved;
+      if (packet) {
+        try {
+          downloadRun(packet);
+        } catch (error) {
+          showDownloadFailure(error);
+        }
+      }
+    });
+    status.append(words, download, fallback);
+    document.body.append(status);
+  }
+  const file = fileMode === 'file' && !!ui.s && !fileChoosing;
+  status.hidden = !saveFailure && !file;
+  const words = status.querySelector('[data-save-status]');
+  if (words)
+    words.textContent = file ? 'Progress stays in this page. Download this run before closing.' : saveFailure;
+  const download = status.querySelector<HTMLButtonElement>('button');
+  if (download) download.hidden = !ui.s && !cachedSaved && !unreadableSaved;
+  const fallback = status.querySelector<HTMLElement>('[data-last-complete]');
+  if (fallback) fallback.hidden = !saveFailure || !(runOf() ?? cachedSaved);
+}
 function mountNotice() {
   if (!notice || document.getElementById('telemetry-footer')) return;
   const footer = document.createElement('footer');
@@ -120,9 +264,9 @@ function mountNotice() {
   footer.append(notice);
   document.body.append(footer);
 }
-function showLoadError(error: unknown, action: string) {
+async function showLoadError(error: unknown, action: string) {
+  if (error instanceof Error && error.name === 'AbortError') return;
   console.error(action, error);
-  if (ui.s) void gateContinuity(ui.s);
   const detail = error instanceof Error ? error.message : '';
   const submitted = error instanceof AdmissionFailure && error.submitted;
   const accepted = error instanceof AdmissionFailure && error.accepted;
@@ -174,24 +318,25 @@ function showLoadError(error: unknown, action: string) {
     add('Try again', () => {
       void startFresh();
     });
-  const saved = loadSaved();
-  if (saved)
-    add('Continue saved game', () => {
-      void begin(restoreNotebook(saved)).catch((error) =>
-        showLoadError(error, 'The saved game could not open.'),
-      );
-    });
-  if (submitted)
-    for (const recovery of acceptedCastRecoveries().filter(
+  if (submitted) {
+    let recoveries: Awaited<ReturnType<typeof acceptedCastRecoveries>> = [];
+    try {
+      recoveries = await acceptedCastRecoveries();
+    } catch (secondary) {
+      console.error('Recovery records could not be read.', secondary);
+      const warning = document.createElement('p');
+      warning.textContent =
+        'Recovery records could not be read. Keep your saved notebook. You can retry later.';
+      body.append(warning);
+    }
+    for (const recovery of recoveries.filter(
       (recovery) => error instanceof AdmissionFailure && recovery.key === error.recoveryKey,
     )) {
-      if (!isSaved(recovery.notebook)) continue;
       add('Open recovered game', () => {
-        void begin(restoreNotebook(recovery.notebook)).catch((error) =>
-          showLoadError(error, 'The recovered game could not open.'),
-        );
+        void continueNotebook(recovery.notebook);
       });
     }
+  }
   const games = document.createElement('a');
   games.href = 'https://human.adamwhite.work/games/';
   games.textContent = 'All games';
@@ -215,108 +360,150 @@ const esc = (x: string) => x.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 // ---------- saves ----------
 
-function save(): boolean {
-  const s = ui.s;
-  if (!s) return false;
-  if (fileMode === 'file') {
-    try {
-      lab.captureSave(fileSessionExport());
+let cachedSaved: NativeNotebook | null = null;
+let legacySaved = false;
+// A wrapper distinguishes a stored null/false/0/string from no unreadable record.
+let unreadableSaved: { value: unknown } | undefined;
+let savedReadFailed = false;
+let saveFailure = '';
+let capturedPacket: NativeNotebook | undefined;
+const saves = createNativeSaveCoordinator<GameState>({
+  current: () => ui.s ?? undefined,
+  enabled: () => fileMode !== 'file',
+  snapshot: async (world) => {
+    const packet = await nativeOwner(world).snapshot(castReceipts(world));
+    completeSnapshots.set(world, packet);
+    return packet;
+  },
+  save: saveNativeSaved,
+  clear: clearNativeSaved,
+});
+async function save(): Promise<boolean> {
+  if (!ui.s || fileMode === 'file') return false;
+  try {
+    const result = await saves.requestSave();
+    if (result.kind === 'saved' && result.current) {
+      cachedSaved = result.notebook;
+      unreadableSaved = undefined;
+      savedReadFailed = false;
+      saveFailure = '';
+      mountSaveStatus();
+      if (capturedPacket !== cachedSaved) {
+        capturedPacket = cachedSaved;
+        try {
+          lab.captureSave(cachedSaved);
+        } catch (error) {
+          console.error('The complete saved notebook could not be attached to telemetry.', error);
+        }
+      }
       return true;
-    } catch {
-      return false;
     }
+    return false;
+  } catch (error) {
+    saveFailure = 'Progress could not be saved. Download this run before closing.';
+    console.error('The notebook could not be saved.', error);
+    mountSaveStatus();
+    return false;
   }
+}
+function rememberSavedReadFailure(error: unknown): void {
+  if (error instanceof LegacyNativeSaveError) {
+    legacySaved = true;
+    savedReadFailed = false;
+    return;
+  }
+  if (error instanceof UnreadableNativeSaveError) {
+    unreadableSaved = { value: error.raw };
+    savedReadFailed = false;
+    saveFailure = 'This saved notebook could not be opened. Download it before replacing it.';
+  } else {
+    savedReadFailed = true;
+    saveFailure =
+      'The saved notebook could not be checked. Retry later or confirm before beginning a new game.';
+  }
+}
+function showDownloadFailure(error: unknown): void {
+  console.error('The original notebook could not be downloaded unchanged.', error);
+  saveFailure =
+    'This notebook could not be downloaded unchanged. This page has not replaced its stored copy.';
+  mountSaveStatus();
+}
+function downloadUnopened(value: unknown): void {
   try {
-    const text = JSON.stringify({
-      game: s.version,
-      seed: s.seed,
-      inputs: s.inputs,
-      minute: s.minute,
-      oneCast: s.oneCast,
-      castChapter: s.castChapter,
-      castReceipts: castReceipts(s),
+    downloadRawRun(value);
+  } catch (error) {
+    showDownloadFailure(error);
+  }
+}
+function mountReaderStatus() {
+  let status = document.getElementById('native-reader-status');
+  if (!status) {
+    status = document.createElement('aside');
+    status.id = 'native-reader-status';
+    status.className = 'native-save-status';
+    status.setAttribute('role', 'status');
+    const words = document.createElement('span');
+    words.textContent = 'Checking the complete saved notebook…';
+    const cancel = document.createElement('button');
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', () => {
+      ++loadSerial;
+      ++fileImportSerial;
+      reader.cancel();
     });
-    localStorage.setItem(SAVE_KEY, text);
-    lab.captureSave(JSON.parse(text));
-    return true;
-  } catch {
-    return false;
+    status.append(words, cancel);
+    document.body.append(status);
   }
+  status.hidden = !readingNotebook;
 }
-
-function restoreNotebook(x: Saved, file = false): GameState {
-  const s = replay(x.seed, x.inputs, x.minute, x.game, x.oneCast?.admission, x.castChapter);
-  if (x.oneCast) s.oneCast = structuredClone(x.oneCast);
-  restoreCastReceipts(s, x.castReceipts, file);
-  return s;
-}
-
-function olderNotebook(): boolean {
-  if (fileMode === 'file') return false;
+async function readInBackground<T>(operation: () => Promise<T>): Promise<T> {
+  const sequence = ++readerSequence;
+  readingNotebook = true;
+  mountReaderStatus();
   try {
-    const saved = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null');
-    return typeof saved?.game === 'string' && !canReplay(saved.game);
-  } catch {
-    return false;
-  }
-}
-
-function loadSaved(): Saved | null {
-  if (fileMode === 'file') return null;
-  try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return null;
-    const x: unknown = JSON.parse(raw);
-    if (!isSaved(x)) return null;
-    restoreNotebook(x);
-    return x;
-  } catch {
-    return null;
-  }
-}
-
-/** Mornings in a saved notebook: the inputs up to each page turn. */
-function mornings(saved: Saved): { day: number; inputs: Input[] }[] {
-  const out = [{ day: 1, inputs: [] as Input[] }];
-  let day = 1;
-  saved.inputs.forEach((inp, i) => {
-    if (inp.kind === 'next' && day < 6) {
-      day++;
-      out.push({ day, inputs: saved.inputs.slice(0, i + 1) });
+    return await operation();
+  } finally {
+    if (sequence === readerSequence) {
+      readingNotebook = false;
+      mountReaderStatus();
     }
-  });
-  return out;
+  }
 }
-
-function runOf(s = ui.s) {
-  if (!s) return;
-  if (fileMode === 'file') return fileSessionExport(s);
-  return {
-    game: s.version,
-    seed: s.seed,
-    inputs: s.inputs,
-    minute: s.minute,
-    oneCast: s.oneCast?.rows ?? [],
-    continuity: s.oneCast,
-    castChapter: s.castChapter,
-    castReceipts: castReceipts(s),
-    state: {
-      day: dayOf(s.minute),
-      clock: clockOf(s.minute),
-      phase: s.phase,
-      money: s.k.money,
-      reports: s.reports,
-      meeting: s.meeting,
-      stamps: s.stamps,
-      secrets: s.secrets,
-      said: s.said.slice(-120),
-    },
-  };
+async function restoreRecoveryNotebook(value: NativeNotebook): Promise<GameState> {
+  return holdLoad(
+    async () => (await readInBackground(() => ownerCandidate({ kind: 'notebook', input: value }))).world,
+  );
+}
+async function restoreNotebook(value: unknown, file = false): Promise<GameState> {
+  const view = await readInBackground(() => ownerCandidate({ kind: 'notebook', input: value }));
+  try {
+    restoreCastReceipts(view.world, view.receipts, file);
+    completeSnapshots.set(view.world, value);
+    return view.world;
+  } catch (error) {
+    discardCandidate(view.world);
+    throw error;
+  }
+}
+async function continueNotebook(value: unknown, file = false): Promise<void> {
+  try {
+    await begin(() => restoreNotebook(value, file), file);
+  } catch (error) {
+    await showLoadError(error, 'The saved game could not open.');
+  }
+}
+function olderNotebook(): boolean {
+  return legacySaved;
+}
+function runOf(world = ui.s) {
+  if (!world) return;
+  return completeSnapshots.get(world);
 }
 
 function importRun(file: File) {
   if (fileMode === 'file') {
     const serial = ++fileImportSerial;
+    reader.cancel();
     if (file.size > FILE_BYTES) {
       setFileStatus(
         'The game could not read that complete file within the size limit. Your current run has not changed.',
@@ -339,11 +526,10 @@ function importRun(file: File) {
   throw new Error('Open Play a saved file before choosing a file.');
 }
 
-// Host file sessions do not invent a new simulation edition or ownership authority.
-const FILE_FORMAT = 'stairwell-file-session/1';
-const FILE_BYTES = 4 * 1024 * 1024;
-let originalFile: { text: string; sha256: string; edition: string } | undefined;
-let originalProvenance: unknown;
+// Local complete files use a separate finite bound from telemetry packets.
+// This provisional bound must be checked against the complete month artifact.
+const FILE_BYTES = NATIVE_FILE_MAX_BYTES;
+let originalProvenance: unknown = {};
 let fileImportSerial = 0;
 let fileStatus = '';
 let fileChoosing = false;
@@ -351,147 +537,70 @@ function setFileStatus(text: string) {
   fileStatus = text;
   for (const line of document.querySelectorAll('[data-file-status]')) line.textContent = text;
 }
-function checkedJson(text: string): unknown {
-  if (new TextEncoder().encode(text).length > FILE_BYTES) throw new Error('The complete file exceeds 4 MiB.');
-  const value: unknown = JSON.parse(text);
-  let nodes = 0;
-  const visit = (x: unknown, depth: number) => {
-    if (++nodes > 480000 || depth > 64) throw new Error('The complete file exceeds the structure limit.');
-    if (typeof x === 'number' && !Number.isFinite(x)) throw new Error('Invalid number.');
-    if (!x || typeof x !== 'object') return;
-    for (const [key, child] of Object.entries(x)) {
-      if (['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error('Unsafe file key.');
-      visit(child, depth + 1);
-    }
-  };
-  visit(value, 0);
-  return value;
+export async function fileSessionExport(world = ui.s) {
+  if (fileMode !== 'file' || !world) throw Error('No saved-file run is open.');
+  return nativeOwner(world).export(originalProvenance, castReceipts(world));
 }
-async function textDigest(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-function nativePacket(s: GameState): Saved {
-  return structuredClone({
-    game: s.version,
-    seed: s.seed,
-    inputs: s.inputs,
-    minute: s.minute,
-    oneCast: s.oneCast,
-    castChapter: s.castChapter,
-    castReceipts: castReceipts(s),
-  });
-}
-function completeState(s: GameState) {
-  return structuredClone({
-    ...s,
-    people: s.people.map((person) => snapshot(person)),
-    kapici: snapshot(s.kapici),
-  });
-}
-function fileExport(s: GameState, original: NonNullable<typeof originalFile>, provenance: unknown) {
-  const value = {
-    format: FILE_FORMAT,
-    original: structuredClone(original),
-    current: { native: nativePacket(s), state: completeState(s) },
-    provenance: structuredClone(provenance),
-  };
-  // Never compact/truncate Person, duties, claims or sources to fit a host limit.
-  checkedJson(JSON.stringify(value));
-  return value;
-}
-export function fileSessionExport(s = ui.s) {
-  if (fileMode !== 'file' || !s || !originalFile) throw new Error('No saved-file run is open.');
-  return fileExport(s, originalFile, originalProvenance);
-}
-function savedFromRaw(raw: unknown): Saved {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid notebook.');
-  const object = raw as Record<string, unknown>;
-  const saved = {
-    ...object,
-    oneCast: object.continuity ?? (Array.isArray(object.oneCast) ? undefined : object.oneCast),
-  };
-  if (!isSaved(saved)) throw new Error('Unsupported or malformed notebook.');
-  return saved;
-}
-/** Parse/validate a detached candidate completely before changing the active run or caller values. */
 export function importFileText(text: string): Promise<void> {
+  reader.cancel();
   return importFileCandidate(text, ++fileImportSerial);
 }
 async function importFileCandidate(text: string, serial: number): Promise<void> {
-  if (fileMode !== 'file') throw new Error('Use Play a saved file first.');
-  if (serial !== fileImportSerial) return;
-  const raw = checkedJson(text) as Record<string, unknown>;
-  if (raw?.format !== undefined && raw.format !== FILE_FORMAT) throw new Error('Unsupported file session.');
-  let original: NonNullable<typeof originalFile>;
-  let provenance: unknown;
-  let saved: Saved;
-  let expected: unknown;
-  if (raw?.format === FILE_FORMAT) {
-    const envelope = raw as unknown as ReturnType<typeof fileExport>;
-    if (typeof envelope.original?.text !== 'string' || typeof envelope.original.sha256 !== 'string')
-      throw new Error('Missing original file.');
-    const originalSaved = savedFromRaw(checkedJson(envelope.original.text));
-    await validateContinuity(restoreNotebook(originalSaved, true));
+  return holdLoad(async () => {
+    if (fileMode !== 'file') throw Error('Use Play a saved file first.');
     if (serial !== fileImportSerial) return;
-    const boundProvenance = {
-      castReceipts: originalSaved.castReceipts,
-      oneCast: originalSaved.oneCast,
-      castChapter: originalSaved.castChapter,
-    };
-    if (JSON.stringify(boundProvenance) !== JSON.stringify(envelope.provenance))
-      throw new Error('Original provenance binding mismatch.');
-    const digest = await textDigest(envelope.original.text);
-    if (serial !== fileImportSerial) return;
-    if (envelope.original.edition !== originalSaved.game || digest !== envelope.original.sha256)
-      throw new Error('Original file binding mismatch.');
-    original = structuredClone(envelope.original);
-    provenance = structuredClone(envelope.provenance);
-    saved = savedFromRaw(envelope.current?.native);
-    expected = envelope;
-  } else {
-    saved = savedFromRaw(raw);
-    const digest = await textDigest(text);
-    if (serial !== fileImportSerial) return;
-    original = { text, sha256: digest, edition: saved.game };
-    provenance = structuredClone({
-      castReceipts: saved.castReceipts,
-      oneCast: saved.oneCast,
-      castChapter: saved.castChapter,
-    });
-  }
-  const s = restoreNotebook(saved, true);
-  await validateContinuity(s);
-  if (serial !== fileImportSerial) return;
-  // File origin is runtime authority only. Do not rewrite simulation continuity or original claims.
-  const candidate = fileExport(s, original, provenance);
-  if (expected !== undefined && JSON.stringify(candidate) !== JSON.stringify(expected))
-    throw new Error('The complete current export does not match replay.');
-  if (serial !== fileImportSerial) return;
-  ++loadSerial;
-  // The current gate has no await: commit continuity metadata and the accepted UI run
-  // in one synchronous turn after the last generation check. Never yield between them.
-  invalidateContinuity();
-  void gateContinuity(s, true);
-  fileChoosing = false;
-  originalFile = original;
-  originalProvenance = provenance;
-  ui.s = s;
-  ui.sheet = 'none';
-  ui.sheetFor = null;
-  selection = null;
-  ui.pendingPerson = null;
-  ui.acc = 0;
-  ui.readUntil = 0;
-  ui.dismissed = '';
-  save();
-  render(true);
-  setFileStatus('Loaded saved file. Download this run before closing the page.');
+    const { world, provenance } = await readInBackground(() => ownerCandidate({ kind: 'file', input: text }));
+    if (serial !== fileImportSerial) {
+      discardCandidate(world);
+      return;
+    }
+    try {
+      const receipts =
+        provenance && typeof provenance === 'object' && !Array.isArray(provenance)
+          ? (provenance as Record<string, unknown>).nativeCast
+          : undefined;
+      restoreCastReceipts(world, receipts, true);
+      await validateContinuity(world);
+      const packet = await nativeOwner(world).export(provenance, castReceipts(world));
+      if (serial !== fileImportSerial) {
+        discardCandidate(world);
+        return;
+      }
+      ++loadSerial;
+      saves.invalidate();
+      invalidateContinuity();
+      await gateContinuity(world, true);
+      if (serial !== fileImportSerial) {
+        discardCandidate(world);
+        return;
+      }
+      promoteOwner(world);
+      originalProvenance = provenance;
+      ui.s = world;
+      completeSnapshots.set(world, packet);
+      fileChoosing = false;
+      ui.sheet = 'none';
+      ui.sheetFor = null;
+      selection = null;
+      ui.pendingPerson = null;
+      ui.acc = 0;
+      ui.readUntil = 0;
+      ui.dismissed = '';
+      render(true);
+      setFileStatus(
+        'Loaded the complete saved file. Download this run before closing the page. This file owns no shared person.',
+      );
+    } catch (error) {
+      discardCandidate(world);
+      throw error;
+    }
+  });
 }
 function fileChooser() {
   fileChoosing = true;
   ++fileImportSerial;
   ++loadSerial;
+  reader.cancel();
   stage?.destroy();
   stage = null;
   // A rejected replacement file must leave the current memory run available.
@@ -502,6 +611,7 @@ function fileChooser() {
     .querySelector('[data-file-resume]')
     ?.addEventListener('click', () => {
       ++fileImportSerial;
+      reader.cancel();
       render(true);
     });
   app()
@@ -509,17 +619,34 @@ function fileChooser() {
     ?.addEventListener('change', (event) => {
       const file = (event.target as HTMLInputElement).files?.[0];
       if (file) importRun(file);
-      else ++fileImportSerial;
+      else {
+        ++fileImportSerial;
+        reader.cancel();
+      }
     });
 }
 
 // ---------- flow ----------
 
-function send(inp: NewInput) {
+async function send(inp: NewInput) {
   const s = ui.s;
-  if (!s) return;
+  if (!s || gameStopped || gameBusy || readingNotebook || pendingLoads > 0 || recoveryPending()) return;
   const lines = s.lineNo;
-  act(s, inp);
+  try {
+    if (!(await mutate(s, { kind: 'act', input: inp }))) return;
+  } catch (error) {
+    if (ui.s !== s) return;
+    gameStopped = nativeOwner(s).disposed;
+    console.error('The game command could not be completed.', error);
+    saveFailure = 'The game could not complete that action. Download the last complete notebook or reload.';
+    mountSaveStatus();
+    return inp.kind === 'next'
+      ? {
+          ok: false as const,
+          failures: [{ name: 'This game', error: 'The closing action could not be completed.' }],
+        }
+      : undefined;
+  }
   ui.acc = 0;
   if (inp.kind === 'go') ui.readUntil = 0;
   else if (s.said.some((line) => (line.n ?? -1) >= lines && line.kind !== 'journal'))
@@ -544,6 +671,7 @@ async function startFresh(authored = false, month = false, workStart = false) {
   if (fileMode === 'file') throw new Error('Choose a saved file to play.');
   return holdLoad(async () => {
     const serial = ++loadSerial;
+    reader.cancel();
     invalidateContinuity();
     let s: GameState;
     try {
@@ -556,64 +684,90 @@ async function startFresh(authored = false, month = false, workStart = false) {
       showLoadError(error, 'The new game could not start.');
       return;
     }
-    if (serial !== loadSerial) return;
+    if (serial !== loadSerial) {
+      discardCandidate(s);
+      return;
+    }
     await begin(s).catch((error) => showLoadError(error, 'The new game could not start.'));
   });
 }
 
-async function begin(s: GameState, file = false) {
+async function begin(candidate: GameState | (() => Promise<GameState>), file = false) {
   return holdLoad(async () => {
     const serial = ++loadSerial;
-    invalidateContinuity();
-    await validateContinuity(s);
-    if (file && s.oneCast) {
-      s.oneCast.originScope = 'file';
-      s.oneCast.recordingFileKey = crypto.randomUUID();
+    const s = typeof candidate === 'function' ? await candidate() : candidate;
+    try {
+      if (serial !== loadSerial) {
+        discardCandidate(s);
+        return;
+      }
+      await validateContinuity(s);
+      if (serial !== loadSerial) {
+        discardCandidate(s);
+        return;
+      }
+      invalidateContinuity();
+      await gateContinuity(s, file);
+      if (serial !== loadSerial) {
+        discardCandidate(s);
+        return;
+      }
+      saves.invalidate();
+      promoteOwner(s);
+      ui.s = s;
+      selection = null;
+      ui.sheet = 'none';
+      ui.sheetFor = null;
+      ui.pendingPerson = null;
+      ui.acc = 0;
+      ui.readUntil = 0;
+      ui.dismissed = '';
+      if (await save()) acknowledgeContinuity(s);
+      render(true);
+    } catch (error) {
+      discardCandidate(s);
+      throw error;
     }
-    if (serial !== loadSerial) return;
-    await gateContinuity(s, file);
-    if (serial !== loadSerial) return;
-    ui.s = s;
-    selection = null;
-    ui.sheet = 'none';
-    ui.sheetFor = null;
-    ui.pendingPerson = null;
-    ui.acc = 0;
-    ui.readUntil = 0;
-    ui.dismissed = '';
-    if (save()) acknowledgeContinuity(s);
-    render(true);
   });
 }
 
 export async function start() {
+  setRunDownload(() => downloadLatest());
   lab.setPersonaRecording('pending-history');
-  if (fileMode !== 'file') await shelf?.ready;
   installContinuity(
     () => ui.s ?? undefined,
-    save,
+    async () => {
+      if (!(await save()) && fileMode !== 'file') throw Error('The complete notebook has not been saved.');
+    },
     async (s) => {
       await begin(s);
     },
-  );
-  lab.trackRun(
-    () => {
-      try {
-        if (fileMode === 'file') {
-          if (ui.s) lab.captureSave(fileSessionExport());
-          return ui.s ? fileSessionExport() : null;
-        }
-        const saved = localStorage.getItem(SAVE_KEY);
-        if (saved) lab.captureSave(JSON.parse(saved));
-      } catch {}
-      return ui.s ? structuredClone({ ...runOf(), state: ui.s }) : null;
-    },
     {
-      runKey: () => ui.s?.seed ?? 'title',
-      getLogs: () => ui.s?.said.slice(-40).map((line) => line.text) ?? [],
+      game: gameAccess,
+      build: () => lab.build().c ?? 'development',
+      restoreNotebook: restoreRecoveryNotebook,
+      recording: (key, allowed) => {
+        lab.setPersonaRecording(key);
+        lab.allowPersonaRecording(allowed);
+      },
     },
   );
-  titlePage();
+  lab.trackRun(() => runOf(), {
+    runKey: () => ui.s?.seed ?? 'title',
+    getLogs: () => ui.s?.said.slice(-40).map((line) => line.text) ?? [],
+  });
+  if (fileMode !== 'file') {
+    try {
+      cachedSaved = await loadNativeSaved();
+      unreadableSaved = undefined;
+      savedReadFailed = false;
+    } catch (error) {
+      rememberSavedReadFailure(error);
+      if (!(error instanceof LegacyNativeSaveError) && !(error instanceof UnreadableNativeSaveError))
+        void showLoadError(error, 'The saved notebook could not be read.');
+    }
+  }
+  await titlePage();
   // Font swaps can reflow the log after render, without advancing the game clock.
   document.fonts.addEventListener('loadingdone', () => {
     const el = app().querySelector<HTMLElement>('.journal');
@@ -622,6 +776,7 @@ export async function start() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) save();
   });
+  window.addEventListener('pagehide', () => reader.cancel());
   window.addEventListener(
     'pagehide',
     fileMode === 'file'
@@ -639,72 +794,86 @@ export async function start() {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
-function loop(t: number) {
-  // Keep reading position current even while the clock is held. Browser scroll
-  // events can remain queued until after a late font changes the line heights.
-  const overlay = app().querySelector<HTMLElement>('.speech-overlay');
-  if (overlay && t >= ui.readUntil) overlay.textContent = '';
-  const log = app().querySelector<HTMLElement>('.journal');
-  if (log) rememberJournalScroll(log);
-  const s = ui.s;
-  const dt = ui.last ? Math.min(0.25, (t - ui.last) / 1000) : 0;
-  ui.last = t;
-  if (
-    s &&
-    s.phase === 'day' &&
+function canAdvance(world: GameState) {
+  return (
+    ui.s === world &&
     !fileChoosing &&
+    !readingNotebook &&
+    !gameBusy &&
+    !gameStopped &&
     pendingLoads === 0 &&
+    !recoveryPending() &&
     !document.hidden &&
     !document.querySelector('dialog[open], [role=dialog][aria-modal=true]')
-  ) {
-    const timing = clockPlayback(s);
-    const rate = s.month && t < ui.readUntil ? Math.min(0.6, timing.rate) : timing.rate;
-    if (rate === 0 || (!s.month && t < ui.readUntil)) ui.acc = 0;
-    else ui.acc += dt * rate;
-    let n = 0;
-    while (ui.acc >= 1 && n < 30 && s.phase === 'day') {
-      ui.acc -= 1;
-      const lines = s.lineNo;
-      const tasks = openTasks(s)
-        .map((task) => task.id)
-        .join(',');
-      const faces = faceToFace(s).join(',');
-      const departure = s.oneCast?.departure;
-      step(s);
-      if (!departure && s.oneCast?.departure) {
+  );
+}
+
+async function loop(t: number) {
+  const loopWorld = ui.s;
+  // Keep reading position current even while the clock is held. Browser scroll
+  // events can remain queued until after a late font changes the line heights.
+  try {
+    const overlay = app().querySelector<HTMLElement>('.speech-overlay');
+    if (overlay && t >= ui.readUntil) overlay.textContent = '';
+    const log = app().querySelector<HTMLElement>('.journal');
+    if (log) rememberJournalScroll(log);
+    const s = ui.s;
+    const dt = ui.last ? Math.min(0.25, (t - ui.last) / 1000) : 0;
+    ui.last = t;
+    if (s && s.phase === 'day' && canAdvance(s)) {
+      const timing = clockPlayback(s);
+      const rate = s.month && t < ui.readUntil ? Math.min(0.6, timing.rate) : timing.rate;
+      if (rate === 0 || (!s.month && t < ui.readUntil)) ui.acc = 0;
+      else ui.acc += dt * rate;
+      let n = 0;
+      while (ui.acc >= 1 && n < 30 && s.phase === 'day' && canAdvance(s)) {
+        ui.acc -= 1;
+        const lines = s.lineNo;
+        const tasks = openTasks(s)
+          .map((task) => task.id)
+          .join(',');
+        const faces = faceToFace(s).join(',');
+        if (!(await mutate(s, { kind: 'step' }))) break;
+        n++;
+        if (!canAdvance(s)) break;
+        if (
+          s.said.some((line) => (line.n ?? -1) >= lines && line.kind !== 'journal') ||
+          openTasks(s)
+            .map((task) => task.id)
+            .join(',') !== tasks ||
+          faceToFace(s).join(',') !== faces
+        ) {
+          const words = s.said
+            .filter((line) => (line.n ?? -1) >= lines)
+            .map((line) => line.text)
+            .join(' ');
+          ui.readUntil = Math.max(t, performance.now()) + Math.min(12000, Math.max(4000, words.length * 45));
+          ui.acc = 0;
+          break;
+        }
+        if (clockPlayback(s).rate !== rate) {
+          ui.acc = 0;
+          break;
+        }
+      }
+      if (!canAdvance(s)) return;
+      if (n > 0) render(false);
+      if (n > 0 && s.minute % 60 === 0) save();
+      if (s.phase !== 'day') {
         save();
         void checkpointContinuity();
-      }
-      n++;
-      if (
-        s.said.some((line) => (line.n ?? -1) >= lines && line.kind !== 'journal') ||
-        openTasks(s)
-          .map((task) => task.id)
-          .join(',') !== tasks ||
-        faceToFace(s).join(',') !== faces
-      ) {
-        const words = s.said
-          .filter((line) => (line.n ?? -1) >= lines)
-          .map((line) => line.text)
-          .join(' ');
-        ui.readUntil = t + Math.min(12000, Math.max(4000, words.length * 45));
-        ui.acc = 0;
-        break;
-      }
-      if (clockPlayback(s).rate !== rate) {
-        ui.acc = 0;
-        break;
+        render(true);
       }
     }
-    if (n > 0) render(false);
-    if (n > 0 && s.minute % 10 === 0) save();
-    if (s.phase !== 'day') {
-      save();
-      void checkpointContinuity();
-      render(true);
-    }
+  } catch (error) {
+    if (ui.s !== loopWorld) return;
+    gameStopped = true;
+    saveFailure = 'The game could not advance. Download the last complete notebook or reload.';
+    console.error('The game worker could not advance.', error);
+    mountSaveStatus();
+  } finally {
+    requestAnimationFrame(loop);
   }
-  requestAnimationFrame(loop);
 }
 
 function pacingContext(s: GameState) {
@@ -785,7 +954,10 @@ function mountMenu(target: Element | null, s: GameState | null) {
       beforeClose:
         fileMode === 'file'
           ? () => {
-              if (target.isConnected) ++fileImportSerial;
+              if (target.isConnected) {
+                ++fileImportSerial;
+                reader.cancel();
+              }
             }
           : undefined,
       onClose: () => {
@@ -838,31 +1010,75 @@ function mountMenu(target: Element | null, s: GameState | null) {
   }
 }
 
-function titlePage() {
+async function titlePage() {
   if (fileMode === 'file') {
     fileChooser();
     return;
   }
-  save();
+  const serial = ++loadSerial;
+  reader.cancel();
+  pendingLoads++;
+  let loaded: NativeNotebook | null;
+  try {
+    const saved = await save();
+    if (ui.s && !saved) {
+      mountSaveStatus();
+      return;
+    }
+    await saves.flush();
+    loaded = await loadNativeSaved();
+    unreadableSaved = undefined;
+    savedReadFailed = false;
+  } catch (error) {
+    loaded = cachedSaved;
+    rememberSavedReadFailure(error);
+    if (ui.s) {
+      mountSaveStatus();
+      return;
+    }
+  } finally {
+    pendingLoads--;
+  }
+  if (serial !== loadSerial) return;
+  let savedState: GameState | null = null;
+  let titleFailure = false;
+  try {
+    if (loaded) savedState = decodeBuildingWorld(loaded.engine.world);
+  } catch (error) {
+    console.error('The complete saved notebook could not be opened.', error);
+    titleFailure = true;
+    if (ui.s) {
+      await showLoadError(error, 'The saved notebook could not be opened.');
+      return;
+    }
+  }
+  if (serial !== loadSerial) return;
+  cachedSaved = loaded;
   labScreen('title');
   stage?.destroy();
   stage = null;
+  saves.invalidate();
   ui.s = null;
-  ++loadSerial;
   invalidateContinuity();
   infoOpen = false;
-  const saved = loadSaved();
-  const savedState = saved ? restoreNotebook(saved) : null;
-  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${olderNotebook() ? '<p role="status">This notebook is from a different version of the game. Start a new game.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label><label><input type="checkbox" data-work-start>Play four weeks with a Start work button for ordinary jobs here. Start without earlier character history; character transfer is unavailable. You can download this run.</label><button data-a="other">Other ways to begin ▸</button><div class="title-spacer"></div></main><div class="action-bar">
-    ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Continue</button><span class="soft small" id="saved-summary" data-save-summary>${dayLabel(savedState)} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
-    <button class="${saved ? '' : 'primary'}" data-a="new">${saved ? 'New game' : 'Begin on Monday'}</button><div class="new-confirm" hidden>The old notebook will be replaced.<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
+  const saved = loaded;
+  const unopened = unreadableSaved ?? (titleFailure && saved ? { value: saved } : undefined);
+  const needsReplacement = !!saved || !!unopened || savedReadFailed;
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${unopened ? '<p role="status">This saved notebook could not be opened. It has been kept. Download it before starting a new game.</p><button data-download-unopened>Download unopened notebook</button>' : ''}${olderNotebook() ? '<p role="status">This old notebook cannot open in this version. The old save has been kept.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label><label><input type="checkbox" data-work-start>Play four weeks with a Start work button for ordinary jobs here. Start without earlier character history; character transfer is unavailable. You can download this run.</label><button data-a="other">Other ways to begin ▸</button><div class="title-spacer"></div></main><div class="action-bar">
+    ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Check and continue</button><span class="soft small" id="saved-summary" data-save-summary>${dayLabel(savedState)} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
+    <button class="${needsReplacement ? '' : 'primary'}" data-a="new">${needsReplacement ? 'New game' : 'Begin on Monday'}</button><div class="new-confirm" hidden>${savedReadFailed ? 'The saved notebook could not be checked. Beginning may replace an existing notebook.' : 'The old notebook will be replaced.'}<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
   mountNotice();
-  mountMenu(app().querySelector('.menu-slot'), savedState);
+  mountMenu(app().querySelector('.menu-slot'), null);
+  mountSaveStatus();
+  app()
+    .querySelector('[data-download-unopened]')
+    ?.addEventListener('click', () => {
+      if (unopened) downloadUnopened(unopened.value);
+    });
   app()
     .querySelector('[data-a=continue]')
     ?.addEventListener('click', () => {
-      if (savedState)
-        void begin(savedState).catch((error) => showLoadError(error, 'The saved game could not open.'));
+      if (saved && savedState) void continueNotebook(saved);
     });
   const fresh = () =>
     startFresh(
@@ -873,7 +1089,7 @@ function titlePage() {
   app()
     .querySelector('[data-a=new]')
     ?.addEventListener('click', () => {
-      if (saved)
+      if (needsReplacement)
         requiredUiValue(app().querySelector<HTMLElement>('.new-confirm'), 'new-game confirmation').hidden =
           false;
       else fresh();
@@ -890,51 +1106,28 @@ function titlePage() {
     ?.addEventListener('click', () => {
       const dialog = document.createElement('dialog');
       dialog.className = 'other-ways';
-      const unlinked =
-        !saved?.oneCast ||
-        (Object.keys(saved.oneCast).every((key) => key === 'rows') && saved.oneCast.rows.length === 0);
-      const ms = saved && unlinked && !saved.castChapter ? mornings(saved) : [];
-      dialog.innerHTML = `<div class="who"><b>Other ways to begin</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body">${ms.length > 1 ? ms.map((m, i) => `<div><button data-morning="${i}">Turn back to ${dayName(m.day)} morning</button><div data-confirm="${i}" hidden>Your progress after that morning will be removed.<div class="row"><button data-yes="${i}">Yes, turn back</button><button data-no="${i}">No</button></div></div></div>`).join('') : ''}<a href="/file/">Play a saved file</a><a href="https://human.adamwhite.work/lab/people/">Shared people</a></div>`;
+      dialog.innerHTML = `<div class="who"><b>Other ways to begin</b><button class="x" data-a="close" aria-label="Close other ways in">×</button></div><div class="sheet-body"><a href="/file/">Play a saved file</a><a href="https://human.adamwhite.work/lab/people/">Shared people (Hacer and Sevim can transfer here)</a></div>`;
       document.body.append(dialog);
       dialog.showModal();
       const authored = document.createElement('button');
-      authored.textContent = 'Begin a new week without earlier character history';
+      authored.textContent = needsReplacement
+        ? 'Replace the saved notebook and begin without earlier character history'
+        : 'Begin a new week without earlier character history';
       authored.addEventListener('click', async () => {
         dialog.close();
         await startFresh(true);
       });
-      dialog.querySelector('.sheet-body')?.append(authored, continuityPanel());
+      dialog.querySelector('.sheet-body')?.append(authored);
+      void continuityPanel().then((panel) => {
+        if (dialog.isConnected) dialog.querySelector('.sheet-body')?.append(panel);
+      });
       dialog.querySelector('[data-a=close]')?.addEventListener('click', () => dialog.close());
       dialog.addEventListener('close', () => dialog.remove());
-      dialog.querySelectorAll<HTMLElement>('[data-morning]').forEach((b) => {
-        b.addEventListener('click', () => {
-          requiredUiValue(
-            dialog.querySelector<HTMLElement>(`[data-confirm="${b.dataset.morning}"]`),
-            'morning confirmation',
-          ).hidden = false;
-        });
-      });
-      dialog.querySelectorAll<HTMLElement>('[data-no]').forEach((b) => {
-        b.addEventListener('click', () => {
-          requiredUiValue(
-            dialog.querySelector<HTMLElement>(`[data-confirm="${b.dataset.no}"]`),
-            'morning confirmation',
-          ).hidden = true;
-        });
-      });
-      dialog.querySelectorAll<HTMLElement>('[data-yes]').forEach((b) => {
-        b.addEventListener('click', () => {
-          const m = ms[Number(b.dataset.yes)];
-          if (saved && m) {
-            dialog.close();
-            begin(replay(saved.seed, m.inputs, undefined, saved.game));
-          }
-        });
-      });
     });
 }
 
 function render(full: boolean) {
+  mountSaveStatus();
   labScreen('play');
   const s = ui.s;
   if (s && fileMode === 'file') fileChoosing = false;
@@ -1127,13 +1320,28 @@ function tripActions(s: GameState, el: HTMLElement) {
     const first = travelMinutes(s, s.k.at, to);
     const second = task && !task.carried && task.pickup ? travelMinutes(s, to, task.place) : 0;
     const arrive = s.minute + first + second;
+    const forecast = legsLine(s, to);
+    if (!hasNativeForecast(s, to) && !gameBusy) {
+      gameBusy = true;
+      void (async () => {
+        try {
+          await nativeOwner(s).update({ kind: 'project', forecasts: [to] });
+        } catch (error) {
+          console.error('The route forecast could not be read.', error);
+          return;
+        } finally {
+          gameBusy = false;
+        }
+        if (ui.s === s) render(false);
+      })();
+    }
     const person = selection?.person;
     const title = task
       ? `${task.kind === 'bins' ? 'Bins' : RESIDENTS[task.for].name} · ${task.label}`
       : person
         ? `${RESIDENTS[person].name} · flat ${RESIDENTS[person].flat}`
         : placeName(to);
-    el.innerHTML = `<div class="trip-line"><b>${esc(title)}</b><span>${esc(placeName(to))} · ${first} min walk${second ? `, then ${esc(placeName(requiredUiValue(task, 'second trip task').place))} · ${second} min walk` : ''} · there about ${clockOf(arrive)}${task ? ` · due ${clockOf(task.by)}` : ''}${task && arrive > task.by ? `<strong class="late"> · about ${arrive - task.by} min late</strong>` : ''}${!task && to.startsWith('door:') && rOf(s, to.slice(5) as Rid).where === 'work' ? ` · ${RESIDENTS[to.slice(5) as Rid].name} is out` : ''}</span></div><button class="primary" data-a="go">Go to ${esc(placeName(to))}</button>${selection && !task ? '<button data-a="clear-trip">Back</button>' : ''}`;
+    el.innerHTML = `<div class="trip-line"><b>${esc(title)}</b><span>${esc(placeName(to))} · ${first} min walk${second ? `, then ${esc(placeName(requiredUiValue(task, 'second trip task').place))} · ${second} min walk` : ''} · there about ${clockOf(arrive)}${task ? ` · due ${clockOf(task.by)}` : ''}${task && arrive > task.by ? `<strong class="late"> · about ${arrive - task.by} min late</strong>` : ''}${!task && to.startsWith('door:') && rOf(s, to.slice(5) as Rid).where === 'work' ? ` · ${RESIDENTS[to.slice(5) as Rid].name} is out` : ''}</span>${forecast ? `<span class="soft">${esc(forecast)}</span>` : ''}</div><button class="primary" data-a="go">Go to ${esc(placeName(to))}</button>${selection && !task ? '<button data-a="clear-trip">Back</button>' : ''}`;
     el.querySelector('[data-a=go]')?.addEventListener('click', () => {
       const p = selection?.person ?? null;
       selection = null;
@@ -1148,10 +1356,17 @@ function tripActions(s: GameState, el: HTMLElement) {
     el.innerHTML = canWait(s, talking, inspecting)
       ? '<button class="primary" data-a="wait" aria-label="Skip to the next event">Skip ⏩</button>'
       : '';
-    el.querySelector('[data-a=wait]')?.addEventListener('click', () => {
+    el.querySelector('[data-a=wait]')?.addEventListener('click', async () => {
       const ctx = pacingContext(s);
       if (!canWait(s, ctx.talking, ctx.inspecting)) return;
-      untilSomethingHappens(s);
+      if (!canAdvance(s)) return;
+      try {
+        if (!(await mutate(s, { kind: 'wait' })) || !canAdvance(s)) return;
+      } catch (error) {
+        gameStopped = true;
+        showDownloadFailure(error);
+        return;
+      }
       ui.acc = 0;
       ui.readUntil = performance.now() + 8000;
       save();
@@ -1955,10 +2170,9 @@ function sundayPage(s: GameState) {
     ${lines.map(saidLine).join('')}
     <div class="votes">${RIDS.map((id) => {
       const r = rOf(s, id);
-      const p = personOf(s, id);
       const kept = r.word === 'yes' && r.vote === 'yes';
       const broke = r.word === 'yes' && r.vote === 'no';
-      return `<div class="flatline"><b>${RESIDENTS[id].name}</b> <span class="hand ${r.vote === 'yes' ? 'moss' : 'soft'}">${r.vote === 'yes' ? (s.month?.stay !== null && s.month ? 'voted to renew your agreement' : 'voted for your raise') : r.vote === 'away' ? 'did not come' : (s.month?.stay !== null && s.month ? 'voted against renewing your agreement' : 'voted against your raise')}</span>${kept ? ' <span class="soft small">as promised</span>' : broke ? ' <span class="rope small">despite a promise</span>' : ''}${p ? '' : ''}</div>`;
+      return `<div class="flatline"><b>${RESIDENTS[id].name}</b> <span class="hand ${r.vote === 'yes' ? 'moss' : 'soft'}">${r.vote === 'yes' ? (s.month?.stay !== null && s.month ? 'voted to renew your agreement' : 'voted for your raise') : r.vote === 'away' ? 'did not come' : (s.month?.stay !== null && s.month ? 'voted against renewing your agreement' : 'voted against your raise')}</span>${kept ? ' <span class="soft small">as promised</span>' : broke ? ' <span class="rope small">despite a promise</span>' : ''}</div>`;
     }).join('')}</div>
     <p>You received <span class="money">₺${total}</span> in tips ${s.month ? 'so far this month' : 'over six days'}.${m?.raise ? ' Your tea money will increase.' : ''} You have <span class="money">₺${s.k.money}</span> in your tin.</p>
     <p>${s.ring.answer === 'yes' ? 'Burak showed his moving paper ferry. ' : s.ring.answer === 'not yet' ? 'Burak kept his paper project private. ' : 'Burak has his own unfinished work. '}${s.catHome ? 'Pamuk sleeps on the step.' : ''}</p>
@@ -1966,12 +2180,15 @@ function sundayPage(s: GameState) {
     <div class="margin hand">${s.month ? (s.month.stay === null ? 'There is another working week ahead. The building remembers this one.' : s.month.stay ? 'Your agreement is renewed. The building still needs its daily work.' : 'The agreement ends here. Your work and the people you met remain in this notebook.') : m?.raise ? 'You did well in your first week. They will want more next week.' : 'Your first week is over. Next week they will know you better.'} <span class="soft">— R.</span></div>
     <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
-    <p class="soft small">${fileMode === 'file' ? 'Progress stays in this page. Download this run before closing.' : 'Your notebook is saved.'}</p>
-    ${closingFailures.has(s) ? `<section data-publication-failure><p role="status">Character progress could not be saved to Shared people. Your local notebook is saved. ${esc(closingFailures.get(s) ?? '')} Download this run to keep a copy. Use the recovery controls below if the local recovery archive is full, then retry Close the notebook.</p><a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noopener">Check Shared people</a></section>` : ''}
+    <p class="soft small" data-save-status>${fileMode === 'file' ? 'Progress stays in this page. Download this run before closing.' : saveFailure ? esc(saveFailure) : cachedSaved ? `Saved through ${dayLabel(cachedSaved.engine.world)} ${clockOf(cachedSaved.minute)}.` : 'The complete notebook has not been saved yet.'}</p>
+    ${closingFailures.has(s) ? `<section data-publication-failure><p role="status">Character progress could not be saved to Shared people. Your local notebook is saved. ${esc(closingFailures.get(s) ?? '')} Download this run to keep a copy. Use the recovery controls below if the local recovery archive is full, then retry Close the notebook.</p><a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noopener">Check Shared people (Hacer and Sevim can transfer here)</a></section>` : ''}
     </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button><button data-a="download">Download this run</button></div>${s.month && s.month.stay === null ? '<button class="primary" data-a="next">Begin the next week</button>' : `<button class="primary" data-a="title" ${closingPending.has(s) ? 'disabled' : ''}>Close the notebook</button>`}</div>
   </div>`;
   mountMenu(app().querySelector('.menu-slot'), s);
-  if (closingFailures.has(s)) app().querySelector('[data-publication-failure]')?.append(continuityPanel());
+  if (closingFailures.has(s))
+    void continuityPanel().then((panel) => {
+      if (ui.s === s) app().querySelector('[data-publication-failure]')?.append(panel);
+    });
   app()
     .querySelector('[data-a="see-tally"]')
     ?.addEventListener('click', (event) => {
@@ -1988,7 +2205,9 @@ function sundayPage(s: GameState) {
     ?.addEventListener('click', () => openFeedback(() => runOf(s), undefined, chooseContinuityRecording));
   app()
     .querySelector('[data-a="download"]')
-    ?.addEventListener('click', () => downloadRun(runOf(s)));
+    ?.addEventListener('click', () => {
+      void downloadLatest(s);
+    });
   app()
     .querySelector('[data-a="title"]')
     ?.addEventListener('click', () => {
@@ -2000,20 +2219,28 @@ function sundayPage(s: GameState) {
 }
 
 export const _debug = {
+  begin,
+  titlePage,
+  continueNotebook,
+  showLoadError,
   get s() {
     return ui.s;
   },
   send,
+  frame: loop,
+  queueMinutes: (minutes: number) => {
+    ui.acc = minutes;
+  },
   render: () => render(false),
-  advance: (n: number) => {
+  advance: async (n: number) => {
     if (!ui.s) return;
-    for (let i = 0; i < n && ui.s.phase === 'day'; i++) step(ui.s);
+    for (let i = 0; i < n && ui.s.phase === 'day'; i++) await mutate(ui.s, { kind: 'step' });
     render(false);
   },
-  step: (n: number) => {
+  step: async (n: number) => {
     const s = ui.s;
     if (!s) return;
-    for (let i = 0; i < n && s.phase === 'day'; i++) step(s);
+    for (let i = 0; i < n && s.phase === 'day'; i++) await mutate(s, { kind: 'step' });
     render(true);
   },
 };

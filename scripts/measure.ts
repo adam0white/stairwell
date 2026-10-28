@@ -1,5 +1,6 @@
 // Headless balance measure: scripted players over many seeds. `npm run measure [-- seeds]`.
-import { replay } from '../src/sim/game.ts';
+import { buildingEngine } from '../src/sim/hf-game.ts';
+import { replayBuilding } from '../src/sim/hf-replay.ts';
 import { playWeek, type Style } from './policy.ts';
 
 const n = Number(process.argv[2] ?? 6);
@@ -27,7 +28,7 @@ for (const style of styles) {
       Object.keys(s.secrets).length,
     ]);
     if (i === 0) {
-      const again = replay(s.seed, s.inputs);
+      const again = replayBuilding(buildingEngine(s).checkpoint());
       while (again.phase !== 'end' && again.inputs.length < s.inputs.length) break;
       replayOk += again.k.money === s.k.money && again.meeting?.yes === s.meeting?.yes ? 1 : 0;
     }

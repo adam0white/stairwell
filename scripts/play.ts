@@ -2,8 +2,9 @@
 // Usage: node scripts/play.ts <save.json> <command> [args]   (run with no command for help)
 // The save is the same notebook as the web game: seed, inputs and the minute you stopped at.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { RESIDENTS, RIDS, type Rid } from '../src/sim/building-cast.ts';
+import { actBuilding as act, openBuilding, advanceBuildingMinute as step } from '../src/sim/hf-game.ts';
 import {
-  act,
   canReplay,
   clockOf,
   DAY_NAMES,
@@ -15,27 +16,22 @@ import {
   legsLine,
   type NewInput,
   nameOf,
-  newGame,
   openTasks,
   type Place,
   placeName,
   readOf,
-  replay,
   rOf,
   SECRET_PROPS,
-  step,
   tellables,
   travelMinutes,
   wordHint,
-} from '../src/sim/game.ts';
-import { RESIDENTS, RIDS, type Rid } from '../src/sim/people.ts';
+} from '../src/sim/hf-view.ts';
 import { PRIVATE_SECRETS, STORY_SECRETS } from '../src/sim/stories.ts';
+import { type NativeNotebook, nativeNotebook, restoreNativeNotebook } from '../src/ui/native-notebook.ts';
 
 interface Save {
-  game: string;
-  seed: number;
-  inputs: Input[];
-  minute: number;
+  format: 'stairwell-cli/4';
+  notebook: NativeNotebook;
   seen: number;
 }
 
@@ -67,12 +63,12 @@ const HELP = `Commands:
 function load(): { s: GameState; save: Save } | null {
   if (!existsSync(file as string)) return null;
   const save = JSON.parse(readFileSync(file as string, 'utf8')) as Save;
-  if (!canReplay(save.game))
-    throw new Error('This saved game is from an unsupported version. Start a new game.');
-  return { s: replay(save.seed, save.inputs, save.minute, save.game), save };
+  if (save.format !== 'stairwell-cli/4' || !Number.isSafeInteger(save.seen) || save.seen < 0)
+    throw Error('This old saved game cannot open in this version. Keep the file.');
+  return { s: restoreNativeNotebook(save.notebook).world, save };
 }
 function store(s: GameState, seen: number) {
-  const save: Save = { game: s.version, seed: s.seed, inputs: s.inputs, minute: s.minute, seen };
+  const save: Save = { format: 'stairwell-cli/4', notebook: nativeNotebook(s), seen };
   writeFileSync(file as string, JSON.stringify(save));
 }
 
@@ -185,7 +181,7 @@ function main() {
     return;
   }
   if (cmd === 'new') {
-    const s = newGame(Number(args[0] ?? Date.now() % 1_000_000));
+    const s = openBuilding(Number(args[0] ?? Date.now() % 1_000_000));
     store(s, screen(s, 0));
     return;
   }
