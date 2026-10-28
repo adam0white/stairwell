@@ -40,6 +40,10 @@
     "src/ui/save.ts": {
       "sourceSha256": "1dd3a8c6a5e364964eeb50a90aff9ff19c40de91f7e189ee8fc794e2a2fa0852",
       "retainedSha256": "1dd3a8c6a5e364964eeb50a90aff9ff19c40de91f7e189ee8fc794e2a2fa0852"
+    },
+    "src/ui/local-persona.ts": {
+      "sourceSha256": "3cd98dec3e2bebd0d7eafcbd9e7ec04eed55b9d5cb4c29801343f87d8dac0c0e",
+      "retainedSha256": "3cd98dec3e2bebd0d7eafcbd9e7ec04eed55b9d5cb4c29801343f87d8dac0c0e"
     }
   }
 }
