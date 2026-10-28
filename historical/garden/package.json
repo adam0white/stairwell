@@ -1,0 +1,12 @@
+{
+  "name": "@stairwell/garden-replay-history",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./index.ts",
+  "dependencies": {
+    "@adam0white/human-framework": "3.0.0",
+    "@adam0white/lab-client": "file:../../vendor/adam0white-lab-client-0.4.11.tgz",
+    "@adam0white/hearsay-garden-replay": "file:../../vendor/hearsay-garden-replay-0.0.0-task2.tgz"
+  }
+}

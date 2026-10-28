@@ -4,12 +4,6 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  exportGardenVisit,
-  importGardenVisit,
-  replayGardenVisit,
-  validateGardenVisitSave,
-} from '@adam0white/hearsay-garden-replay';
 import { restore, snapshot } from '@adam0white/human-framework';
 import {
   boundedPersonaJson,
@@ -18,6 +12,12 @@ import {
   createPersona,
   validatePersona,
 } from '@adam0white/lab-client';
+import {
+  exportGardenVisit,
+  importGardenVisit,
+  replayGardenVisit,
+  validateGardenVisitSave,
+} from '@stairwell/garden-replay-history';
 import { expect, it } from 'vitest';
 import { canReplay, personOf, replay, rOf, step } from '../src/sim/game.ts';
 
