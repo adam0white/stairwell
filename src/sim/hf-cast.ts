@@ -1,21 +1,83 @@
 /** Current-source exchange uses HF's public projection and mapped authoring.
  * The shelf still owns identity, transport and CAS. A file never owns a head.
  */
+
+import type { PersonAuthoring, PortablePerson, RunSpec } from '@adam0white/human-framework';
 import {
   admitPortablePerson,
   canonicalCast,
+  canonicalPersona,
   type PersonaEnvelope,
   portablePersonRole,
   validatePortablePerson,
 } from '@adam0white/lab-client';
-import type { PersonAuthoring, PortablePerson } from '@stairwell/hf4';
-import { RESIDENTS, type Rid } from './building-cast.ts';
+import { RESIDENTS, RIDS, type Rid } from './building-cast.ts';
+import { buildingSpec, emptyPortableOpening } from './hf-authoring.ts';
 import type { BuildingRun } from './hf-run.ts';
+
+/** Shared ingress/recovery guard. Valid HF portability alone cannot change
+ * the building's shared calendar or authorize another local reference mapping. */
+export function checkBuildingPortable(
+  admission: NonNullable<PersonAuthoring['portable']>,
+  role: string,
+  at: number,
+  calendar: RunSpec['definitions']['calendar'] = buildingSpec(0).definitions.calendar,
+): void {
+  const portable = validatePortablePerson(admission.person);
+  if (
+    portable.version !== 2 ||
+    !RIDS.includes(role as Rid) ||
+    portable.castId !== RESIDENTS[role as Rid].castId ||
+    portable.castRevision !== canonicalCast(portable.castId).revision ||
+    admission.mapping.offsetMs !== at - portable.retained.at
+  )
+    throw new Error('This retained source or clock mapping cannot continue here. Keep the file.');
+  const references =
+    portable.source.personId === role
+      ? []
+      : [
+          { kind: 'entity', source: portable.source.personId, target: role },
+          { kind: 'source', source: portable.source.personId, target: role },
+        ];
+  if (canonicalPersona(references) !== canonicalPersona(admission.mapping.references))
+    throw new Error('This character needs a reference mapping from its source chapter. Keep the file.');
+  // A run has one authored calendar for the entire building. A remembered
+  // foreign window cannot silently replace that shared world calendar or vanish.
+  const offset = admission.mapping.offsetMs;
+  const sourceCalendar = portable.retained.calendar.definition;
+  if (sourceCalendar.dayMs !== calendar.dayMs)
+    throw new Error('This calendar needs its source chapter. Keep the file.');
+  for (const day of sourceCalendar.days) {
+    if (!day.prayers && !day.fasting && !day.eid && !day.windows.length && day.nextFajrMs === undefined)
+      continue;
+    const mapped = structuredClone(day);
+    mapped.start += offset;
+    if (mapped.fasting) {
+      mapped.fasting.from += offset;
+      mapped.fasting.until += offset;
+    }
+    if (mapped.eid) {
+      mapped.eid.from += offset;
+      mapped.eid.until += offset;
+    }
+    mapped.windows = mapped.windows.map((window) => ({
+      ...window,
+      from: window.from + offset,
+      until: window.until + offset,
+    }));
+    const target = calendar.days.find((candidate) => candidate.start === mapped.start);
+    if (!target || canonicalPersona({ ...mapped, dayIndex: target.dayIndex }) !== canonicalPersona(target))
+      throw new Error(
+        'This character’s calendar windows need their source chapter. Keep the file; no duties have been removed.',
+      );
+  }
+}
 
 export function retainedOpening(
   parent: PersonaEnvelope,
   at: number,
   opening: PersonAuthoring,
+  calendar: RunSpec['definitions']['calendar'] = buildingSpec(0).definitions.calendar,
 ): PersonAuthoring {
   const role = portablePersonRole(parent, 'stairwell');
   const portable = validatePortablePerson(parent.transfer.portable);
@@ -31,20 +93,8 @@ export function retainedOpening(
     throw new Error(
       'This character still needs its source chapter. Keep the file and finish its responsibilities there.',
     );
-  const arrival = structuredClone(opening);
-  // These are fresh-opening seeds, not the incoming remembered life. HF requires
-  // an empty authoring slot and installs the complete retained memory and duties
-  // atomically. Local roles and relationships remain receiving-world authoring.
-  arrival.biography = [];
-  arrival.state.beliefs = [];
-  arrival.state.expectations = [];
-  arrival.state.sourceTrust = [];
-  arrival.state.heldNorms = [];
-  arrival.state.agenda.commitments = [];
-  arrival.state.agenda.owed = [];
-  arrival.state.agenda.goals = [];
-  arrival.state.agenda.precommitments = [];
-  return admitPortablePerson(parent, 'stairwell', arrival, {
+  const arrival = emptyPortableOpening(opening);
+  const admitted = admitPortablePerson(parent, 'stairwell', arrival, {
     offsetMs: at - portable.retained.at,
     references:
       portable.source.personId === role
@@ -54,6 +104,9 @@ export function retainedOpening(
             { kind: 'source', source: portable.source.personId, target: role },
           ],
   });
+  if (!admitted.portable) throw new Error('This character needs its retained source. Keep the file.');
+  checkBuildingPortable(admitted.portable, role, at, calendar);
+  return admitted;
 }
 
 export function currentDeparture<W>(run: BuildingRun<W>, id: Rid, hostObligations: readonly string[]) {

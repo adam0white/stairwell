@@ -1,5 +1,5 @@
 /** Player-facing hints from the caretaker's public perspective. */
-import type { BodyForecastLoad, PersonView } from '@stairwell/hf4';
+import type { BodyForecastLoad, PersonView } from '@adam0white/human-framework';
 import { KAPICI } from './building-cast.ts';
 import type { BuildingRun } from './hf-run.ts';
 

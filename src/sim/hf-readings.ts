@@ -1,7 +1,7 @@
 /** Privileged readings for actual building rules. UI knowledge must use its own
  * explicit person perspective; these readings do not grant the caretaker facts.
  */
-import type { PersonView } from '@stairwell/hf4';
+import type { PersonView } from '@adam0white/human-framework';
 import type { BuildingRun } from './hf-run.ts';
 
 type HostPart = Extract<PersonView, { kind: 'host' }>['parts'][number];

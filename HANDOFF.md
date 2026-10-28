@@ -1,5 +1,12 @@
 # Stairwell — current handoff
 
+## Native HF4 port — 2026-10-28
+
+Headless source-proof/file, day-15 continuation and final week/replay controls passed. Technical delivery still requires live retained-shelf browser journeys and acknowledgement, one hosted game review, exact green merged CI and clean deployment. The owner accepts the result separately. The source uses published HF4.6.0 and SDK client0.5.2/kit0.5.19. Native14 is the week,15 the month,16 the explicit Start work option. See [the native port contract](docs/hf4-native-port.md) and `~/code/.lab-scratch/codex/g1-stairwell.md`.
+
+The actual 28-day month completed. Complete cold restoration matched the whole checkpoint, HF and host in611865.8ms. The persistent Worker owns the authoritative Run. No history is pruned. The sections below retain their original dated evidence.
+
+
 ## Public controls and automatic people — 2026-10-27
 
 Source removes query-string feature switches. Gameplay options, clock speed, exports, New game and Other ways to begin are public. File play uses the real built `/file/` entry before native services are constructed. It keeps native notebooks, recovery storage and shared people isolated. Returning to `/` restores normal local play. Invalid or cancelled files preserve the current file run. Closing the notebook waits for automatic publication. A rejected or unconfirmed publication keeps the ending open with the reason, a download, retry and accepted recovery-copy controls. The recorded closing input is not repeated on retry. Menu diagnostics occupy one closed Debug item beside permanent Lab privacy. Accepted local recovery copies remain public in Other ways to begin. Character controls belong to the central people shelf.
@@ -18,7 +25,7 @@ The dependency configuration uses pnpm 12.14.0 and shared Node 26.12.0. Install 
 
 Owner acceptance of the cross-game feel remains separate, with review on 2026-11-03. Design and Deferred work belong to the games-deferred owner. Docsweb starts no playtest rounds. The playtest director may run lab-panel rounds on HF3 builds; friends’ playtests and Show HN remain paused. No new owner acceptance or completed lab cycle is claimed here.
 
-## Current source and deployed receipt — 2026-10-25
+## Historical HF3 source and deployed receipt — 2026-10-25
 
 Current signed source is `7902fe25ace3dce8596ef4dc017ab991a158ba20`. The games-deferred
 report records exact green CI40251706840, 192 passing tests in 17 files, and clean live
@@ -36,7 +43,7 @@ Source pins HF3.0.0/engine2.23.0, immutable client0.4.11/kit0.5.12 and TypeScrip
 
 The real native Hacer edition9/engine2.23 source fixture and finite central receiver have controlled exact-replay evidence in `~/code/.lab-scratch/v3/stairwell/report.md`. Finite actor admission retains historical8/2.21 and9–11/2.23 tuples with its other guards. Edition10 actor-calendar admission does not make an edition10 game replayable. Other hosts still need actual11 source/receiving evidence. This proves bounded source/receiving replay, not a new production human ownership journey. Current Hearsay mounts its garden, not the retired Derya shell. Do not infer a current Derya route from synthetic historical controls.
 
-## Current controls and storage
+## Historical HF3 controls and storage
 
 The default week delivers supplies through Saturday, then ends with Sunday’s vote on
 extra pay. The unchecked title option “Play four weeks, ending with a vote on whether
@@ -58,7 +65,7 @@ Exports are public: Game menu → Download this run, Feedback → Keep a copy of
 
 ## Operations
 
-Use the managed worktree helper, Node>=24 and `/opt/homebrew/bin` first. Hold HF `scripts/suite-lock.ts` once around the normal full `npm run check:lane` and deployment; Stairwell does not take the lock. New launches require8GB free; stop below5GB. Preserve other workers, saves and shared-profile browser leases. Keep signing enabled and include `Co-Authored-By: Codex <noreply@openai.com>`. Fetch/rebase before push, require exact green CI, and verify the clean live manifest after an app deployment. Source-only documentation needs no app deployment.
+Use the managed worktree helper, Node>=24 and `/opt/homebrew/bin` first. The coordinator’s 2026-10-28 13:40 game-lane ruling requires `npm run check:lane` before a signed commit without the machine lock. Hosted CI runs the full suite. Long native replay controls still use the shared HF suite lease in first come, first served order. New launches require8GB free; stop below5GB. Preserve other workers, saves and shared-profile browser leases. Keep signing enabled and include `Co-Authored-By: Codex <noreply@openai.com>`. Fetch/rebase before push, require exact green CI, and verify the clean live manifest after an app deployment. Source-only documentation needs no app deployment.
 
 Current month/SDK technical receipts: `~/code/.lab-scratch/games-deferred/stairwell-report.md` and `stairwell-handoff-for-docsweb.md`. Earlier HF3 receipts: `~/code/.lab-scratch/v3/stairwell/report.md` and STATUS. Canonical history: [docs/cast-adoption.md](docs/cast-adoption.md). HF3 contract: [docs/hf3-adoption.md](docs/hf3-adoption.md). Preserve owner words and historical receipts below; their package versions, incomplete phases and task-specific round restrictions describe their dates, not current source or current lab-panel authorization.
 
@@ -209,3 +216,44 @@ is parent/coordinator-owned, target2026-10-26T23:30Z; separate published marker1
 artifact adoption, exact SDK contract/source verification, active-SW/cache preservation (an
 existing controller acts before JS), actual Chrome admission and stored recording receipts
 remain gates. Review this dependency on2026-10-27. No owner profile was run by this author.
+
+
+## 2026-10-28 HF4 candidate: host session blocks delivery
+
+Goal: finish the Stairwell HF4 port with signed source, one hosted review, exact
+merged CI, clean live deployment and genuine retained-person browser journeys.
+The owner accepts cross-game feel separately. Delivery remains incomplete.
+
+Done and verified:
+
+- Exact HF4.6/client0.5.2/kit0.5.19; frozen install and191 HF registry-file matches.
+- Lock-free game check:lane,113focused tests/17files and production build pass.
+- Actual28-day month, complete cold restore, day15 exact file continuation,
+  complete178747746B production file replay, both retained source proofs,
+  zero file-authority writes and exact two-parent next opening pass headlessly.
+- Finalweek5040steps; whole-checkpoint cold and outer-replay equality pass.
+- Narrow modernSDK HF4.6 override fixes genuine retained withdrawalBase refusal;
+  original failed receipt and unchanged parents are retained. Historical runtimes stay pinned.
+
+Done but unchecked:
+
+- Persistent Worker ownership, replacement/cancellation, IndexedDB save/recovery,
+  raw unreadable-record preservation and downloads need actual browser verification.
+
+Untouched delivery gates:
+
+- New source signed commit/push, hosted review, PR/main CI and deployment.
+- Browser/live central ACK and owner acceptance. Separate recipe dependency
+  correction is prepared but has no PR.
+
+The execution UID504 has no user record. SSH refuses it;1Password signing cannot
+connect to its socket. Browser access reports host unavailable. Signing stays on.
+Next action: restore the existing Mac/user/1Password/browser session, then recreate
+an isolated tree from the verified recovery capsule recorded in
+`~/code/.lab-scratch/codex/g3g4-resume-backup.txt`. Preserve the unmerged g3g4-port
+branch and signed6ae5af4 foundation. Fetch/rebase normally before signed push.
+
+Receipts and exact recovery instructions:
+`~/code/.lab-scratch/codex/hf-g3g4.md`, `g1-stairwell.md` and
+`g3g4-final-acceptance/headless-assessment.json`. No background job remains after
+this completed native lane. The source tree is archived before worktree cleanup.

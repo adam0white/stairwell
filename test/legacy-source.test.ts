@@ -1,7 +1,7 @@
 import { createPersona, initialPersonaLife } from '@adam0white/lab-client';
 import { replayLegacyNotebook } from '@stairwell/native-replay-history';
 import { expect, test } from 'vitest';
-import { sourceTransfer } from '../src/sim/cast-life.ts';
+import { sourceTransfer } from '../historical/stairwell/src/sim/cast-life.ts';
 import { verifyLegacySource } from '../src/sim/legacy-source.ts';
 
 test('source digest and an independently replayed native prefix verify omitted memories without a reset', async () => {

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { newGame } from '../src/sim/game.ts';
+import { newGame } from '../historical/stairwell/src/sim/game.ts';
 import { openingWorld } from '../src/sim/hf-world.ts';
 
 test('new native openings retain the existing week/month/work material premises and generated task difficulty', () => {

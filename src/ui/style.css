@@ -1143,3 +1143,16 @@ body {
   display: flex;
   align-items: center;
 }
+
+.native-save-status {
+  flex: none;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid currentColor;
+  background: var(--paper);
+}
+.native-save-status[hidden] {
+  display: none;
+}
+.native-save-status button {
+  margin-inline-start: 0.75rem;
+}

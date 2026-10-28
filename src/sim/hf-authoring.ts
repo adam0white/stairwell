@@ -2,8 +2,8 @@
  * fictional premises, not runtime setters or copies of HF physiology/reputation.
  */
 
+import { DEFAULT_NORMS, type Offer, type PersonAuthoring, type RunSpec } from '@adam0white/human-framework';
 import { canonicalCast } from '@adam0white/lab-client';
-import { DEFAULT_NORMS, type Offer, type PersonAuthoring, type RunSpec } from '@stairwell/hf4';
 import { FACTS, KAPICI, RESIDENTS, RIDS, type Rid } from './building-cast.ts';
 import { atMinute, HF_MINUTE } from './hf-run.ts';
 export const OPENING = atMinute(420);
@@ -35,6 +35,21 @@ const ACTIONS = [
   'pray-qada',
   'pray-eid',
 ];
+export function parcelPrivacyNorm(): RunSpec['definitions']['norms'][number] {
+  return {
+    id: 'privacy',
+    label: 'Leave another resident’s parcel sealed',
+    standing: 'disliked',
+    sources: [{ kind: 'assumption', ref: 'stairwell:329919a:misdeliver' }],
+    provenance: {
+      kind: 'authored-world',
+      author: 'stairwell',
+      ruleId: 'parcel-privacy',
+      edition: 'parcel-privacy/1',
+    },
+    exemptions: [],
+  };
+}
 export function buildingSpec(seed: number, edition = 'stairwell@14'): RunSpec {
   return {
     id: `stairwell:${edition}:${seed}`,
@@ -51,7 +66,11 @@ export function buildingSpec(seed: number, edition = 'stairwell@14'): RunSpec {
           ? [{ normId: id === 'pray-eid' ? 'eid-prayer' : 'salah', relation: 'fulfills' }]
           : [],
       })),
-      norms: structuredClone(DEFAULT_NORMS),
+      norms: [...structuredClone(DEFAULT_NORMS), parcelPrivacyNorm()],
+      reputationTraits: [
+        { id: 'nosy', affection: -0.03, trust: -0.03, respect: -0.03 },
+        { id: 'sweet', affection: 0, trust: 0, respect: 0 },
+      ],
       marriageCustoms: [],
       skills: [],
       skillTransfers: [],
@@ -285,4 +304,20 @@ export function buildingOffer(
     diminishes: [],
     ...options,
   };
+}
+
+/** Only the receiving template is emptied. The complete incoming state stays
+ * in the public portable input and the HF owner validates/installs it atomically. */
+export function emptyPortableOpening(opening: PersonAuthoring): PersonAuthoring {
+  const arrival = structuredClone(opening);
+  arrival.biography = [];
+  arrival.state.beliefs = [];
+  arrival.state.expectations = [];
+  arrival.state.sourceTrust = [];
+  arrival.state.heldNorms = [];
+  arrival.state.agenda.commitments = [];
+  arrival.state.agenda.owed = [];
+  arrival.state.agenda.goals = [];
+  arrival.state.agenda.precommitments = [];
+  return arrival;
 }

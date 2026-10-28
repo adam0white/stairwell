@@ -10,7 +10,9 @@
       "!scratch",
       "!docs/playtests/*.json",
       "!.claude",
-      "!pnpm-lock.yaml"
+      "!pnpm-lock.yaml",
+      "!historical/stairwell/test/fixtures/*.json",
+      "!historical/stairwell/test/browser-reference"
     ]
   },
   "formatter": {

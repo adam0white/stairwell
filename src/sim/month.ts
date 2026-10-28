@@ -2,7 +2,7 @@
  * HF still owns assent, reputation, body and votes. No general planning, private publication,
  * financial discharge outside this chapter, or changes to edition9 continuation are modelled here.
  */
-import type { Rid } from './people.ts';
+import type { Rid } from './building-cast.ts';
 export const MONTH_VERSION = 'stairwell@11';
 /** Explicit same-place ordinary work, with unchanged edition11 month rules. */
 export const WORK_START_VERSION = 'stairwell@13';
@@ -20,7 +20,7 @@ export interface MonthVisit {
 }
 export interface MonthState {
   rain: { started: boolean; ended: boolean };
-  meetings: { day: number; yes: number; no: number; raise: boolean }[];
+  meetings: { day: number; yes: number; no: number; raise: boolean; done?: boolean }[];
   seats: Partial<Record<Rid, Rid>>;
   helped: Partial<Record<Rid, boolean>>;
   testimony: {

@@ -1,7 +1,7 @@
 /** Protocol controls for the new building boundary. These do not claim the old
  * live game.ts has been ported; the ordinary game-action proof follows wiring.
  */
-import { replay } from '@stairwell/hf4';
+import { createPerson, createRun, exportRun, replay, restoreRun, step } from '@adam0white/human-framework';
 import { expect, test } from 'vitest';
 import { buildingOffer, buildingSpec, OPENING, openingPerson } from '../src/sim/hf-authoring.ts';
 import {
@@ -107,6 +107,69 @@ function session(action = 'work') {
 }
 const clone = <W>(checkpoint: BuildingCheckpoint<W>): unknown => JSON.parse(JSON.stringify(checkpoint));
 
+test('cold recovery rejects inconsistent host offer bindings in an otherwise valid public HF archive', () => {
+  for (const mismatch of ['none', 'offer', 'revision', 'duplicate'] as const) {
+    const raw = admitted(createRun(buildingSpec(42)));
+    admitted(createPerson(raw, openingPerson('kapici')));
+    const { inputs } = session();
+    const pending = admitted(step(raw, { until: OPENING, inputs }));
+    if (pending.boundary.type !== 'world-required') throw Error('Missing public request');
+    const request = pending.boundary.requests[0];
+    if (request?.kind !== 'action') throw Error('Missing public action');
+    const book = inputs.find((input) => input.kind === 'offers.received');
+    const offered = book?.payload.offers[0];
+    if (!offered) throw Error('Missing actual offered work');
+    const binding = {
+      id: request.activityId,
+      person: request.person,
+      start: request.boundaryAt,
+      offerRevision: mismatch === 'revision' ? 999 : request.offerRevision,
+      offer: mismatch === 'offer' ? { ...offered, actionId: 'rest' } : offered,
+    };
+    admitted(
+      step(raw, {
+        until: OPENING,
+        inputs: [
+          {
+            id: `receipt:${request.id}`,
+            at: OPENING,
+            source: { type: 'host', id: 'stairwell' },
+            kind: 'action.resolved',
+            payload: {
+              requestId: request.id,
+              requestHash: request.requestHash,
+              person: request.person,
+              activityId: request.activityId,
+              stage: 'start',
+              worldRevision: request.worldRevision,
+              disposition: 'accepted',
+              observations: [],
+              worldChange: {
+                expectedRevision: 0,
+                revision: 1,
+                put: [],
+                remove: [],
+                hostState: JSON.parse(
+                  JSON.stringify({
+                    format: 'stairwell-hf-world/1',
+                    receipts: 1,
+                    active: mismatch === 'duplicate' ? [binding, binding] : [binding],
+                  }),
+                ),
+              },
+            },
+          },
+        ],
+      }),
+    );
+    const archive = exportRun(raw);
+    expect(restoreRun(JSON.parse(JSON.stringify(archive))).ok).toBe(true);
+    const checkpoint = { format: 'stairwell-engine/1', world: empty(), archive };
+    if (mismatch === 'none') expect(() => BuildingRun.restore(checkpoint, decode)).not.toThrow();
+    else expect(() => BuildingRun.restore(checkpoint, decode)).toThrow();
+  }
+});
+
 test('a rejected outer game action restores earlier accepted HF inputs and every staged host effect', () => {
   const { run, inputs } = session();
   const before = run.checkpoint(),
@@ -210,4 +273,88 @@ test('a two-person communication boundary restores and records actual received i
   if (person?.kind !== 'self') throw Error('Missing self reading');
   const beliefs = person.parts.find((p) => p.select === 'beliefs');
   expect(beliefs?.select === 'beliefs' && beliefs.value.some((b) => b.prop === 'notice:water')).toBe(true);
+});
+
+test('successful action transactions retain public recovery material without exporting a new archive', () => {
+  const { run, inputs } = session();
+  let exports = 0;
+  const checkpoint = run.checkpoint.bind(run);
+  run.checkpoint = () => {
+    exports++;
+    return checkpoint();
+  };
+  run.transaction((candidate) => candidate.advance(OPENING + 1, resolver, inputs));
+  expect(exports).toBe(0);
+  expect(run.active).toHaveLength(1);
+});
+
+for (const state of ['fresh', 'pending', 'active'] as const)
+  test(`journal rollback restores ${state} recovery and excludes accepted failed-action suffix`, () => {
+    let { run, inputs } = session();
+    if (state === 'pending') run.ingest(OPENING, inputs);
+    if (state === 'active') run.advance(OPENING + 1, resolver, inputs);
+    if (state !== 'fresh') run = BuildingRun.restore(clone(run.checkpoint()), decode);
+    const control = BuildingRun.restore(clone(run.checkpoint()), decode);
+    // Leave an accepted prefix after the last export. Recovery must replay it,
+    // including empty requests that stop at a pending owner boundary.
+    for (const at of [OPENING + 1, OPENING + 2]) {
+      run.ingest(at);
+      control.ingest(at);
+    }
+    const before = control.checkpoint();
+    expect(() =>
+      run.transaction((candidate) => {
+        if (state === 'fresh')
+          candidate.advance(
+            OPENING + 3,
+            resolver,
+            inputs.map((input) => ({ ...input, at: OPENING + 3 })),
+          );
+        else candidate.advance(OPENING + 2, resolver);
+        candidate.world.money = 999;
+        candidate.checkpoint(); // Must not replace the pre-action recovery base.
+        candidate.ingest(OPENING + 3);
+        candidate.ingest(OPENING - 1); // Rejected input batch must not enter the journal.
+      }),
+    ).toThrow();
+    expect(run.checkpoint()).toEqual(before);
+    expect(() => run.transaction((candidate) => candidate.transaction(() => {}))).toThrow(/nest/);
+    expect(run.checkpoint()).toEqual(before);
+    const until = OPENING + 6 * HF_MINUTE;
+    run.advance(until, resolver);
+    control.advance(until, resolver);
+    expect(run.checkpoint()).toEqual(control.checkpoint());
+    expect(admitted(replay(run.checkpoint().archive)).fullHash).toBe(run.checkpoint().archive.hashes.full);
+  });
+
+test('cold recovery reconstructs the original accepted start after the public diagnostic window expires', () => {
+  const { run, inputs } = session();
+  run.advance(OPENING + 1, resolver, inputs);
+  const original = run.active[0];
+  if (!original) throw Error('Missing active work');
+  for (let revision = 2; revision < 82; revision++) {
+    run.ingest(OPENING + revision, [
+      {
+        id: `later-offers:${revision}`,
+        at: OPENING + revision,
+        source: { type: 'host', id: 'stairwell' },
+        kind: 'offers.received',
+        payload: { person: 'kapici', revision, offers: [] },
+      },
+    ]);
+  }
+  const checkpoint = run.checkpoint();
+  expect(
+    checkpoint.archive.current.events.some(
+      (e) => e.data.kind === 'action-requested' && e.data.request.activityId === original.id,
+    ),
+  ).toBe(false);
+  const restored = BuildingRun.restore(clone(checkpoint), decode);
+  expect(restored.active).toEqual(run.active);
+  expect(restored.coldActionReceipt(original.id, original.person)?.offer).toEqual(original.offer);
+  run.advance(OPENING + 5 * HF_MINUTE, resolver);
+  restored.advance(OPENING + 5 * HF_MINUTE, resolver);
+  expect(restored.checkpoint()).toEqual(run.checkpoint());
+  const ended = BuildingRun.restore(clone(run.checkpoint()), decode);
+  expect(ended.coldActionReceipt(original.id, original.person)?.outcome?.status).toBe('completed');
 });

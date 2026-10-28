@@ -19,15 +19,14 @@
     "measure": "node scripts/measure.ts",
     "check": "npm run lint && npm run typecheck && npm test",
     "deploy": "npm run check && npm run build && wrangler deploy",
-    "check:lane": "npm run check"
+    "check:lane": "npm run lint && npm run typecheck"
   },
   "dependencies": {
-    "@adam0white/human-framework": "3.0.0",
+    "@adam0white/human-framework": "4.6.0",
     "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.5.2.tgz",
     "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.19.tgz",
     "@stairwell/garden-replay-history": "workspace:*",
-    "@stairwell/native-replay-history": "workspace:*",
-    "@stairwell/hf4": "npm:@adam0white/human-framework@4.5.0"
+    "@stairwell/native-replay-history": "workspace:*"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",

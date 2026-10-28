@@ -1,18 +1,17 @@
 // Scripted players for the headless measure and tests: an errand runner with a talking style.
+
+import { RESIDENTS, RIDS, type Rid } from '../src/sim/building-cast.ts';
+import { actBuilding as act, openBuilding, advanceBuildingMinute as step } from '../src/sim/hf-game.ts';
 import {
-  act,
   faceToFace,
   floorOf,
   type GameState,
-  newGame,
   openTasks,
   type Place,
   rOf,
-  step,
   tellables,
   travelMinutes,
-} from '../src/sim/game.ts';
-import { RESIDENTS, RIDS, type Rid } from '../src/sim/people.ts';
+} from '../src/sim/hf-view.ts';
 
 export type Style = 'quiet' | 'honest' | 'gossip' | 'liar';
 
@@ -71,7 +70,7 @@ function speak(s: GameState, who: Rid, style: Style) {
 }
 
 export function playWeek(seed: number, style: Style): GameState {
-  const s = newGame(seed);
+  const s = openBuilding(seed);
   while (s.phase !== 'end') {
     if (s.phase === 'day') playDay(s, style);
     else act(s, { kind: 'next' });

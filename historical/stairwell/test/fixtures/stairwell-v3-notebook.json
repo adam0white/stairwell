@@ -1,0 +1,44 @@
+{
+  "capturedFrom": "cc23f351cfbce45cfeb655884de24aaf311b047e",
+  "humanFramework": "2.8.0",
+  "notebook": {
+    "game": "stairwell@3",
+    "seed": 11,
+    "inputs": [
+      {
+        "kind": "go",
+        "to": "door:nermin",
+        "at": 420
+      },
+      {
+        "kind": "news",
+        "who": "nermin",
+        "at": 430
+      },
+      {
+        "kind": "tell",
+        "who": "nermin",
+        "prop": "huseyin:stingy",
+        "value": true,
+        "sure": false,
+        "at": 430
+      },
+      {
+        "kind": "sit",
+        "who": "nermin",
+        "at": 430
+      },
+      {
+        "kind": "go",
+        "to": "bakery",
+        "at": 445
+      }
+    ],
+    "minute": 480
+  },
+  "savedStateSha256": "f230531d6694c978178d94403b1c5ee126d80fbe50a563e669c8fcdb8247e42c",
+  "continuation": {
+    "minute": 720,
+    "stateSha256": "88c353d38e4400892a5c13423a2fe1f71192f3e33e98ad23614c21ce63197382"
+  }
+}

@@ -1,20 +1,72 @@
 /** The authored building schedule and material state. These are host rules,
  * never a parallel physiology, belief, reputation or decision model. */
 
-import { FACTS, RESIDENTS, RIDS, type Rid } from './building-cast.ts';
-import type { GameState, Place, Task, TaskKind } from './game.ts';
+import type { LifePreparation } from '@adam0white/lab-client';
+import { FACTS, KAPICI, RESIDENTS, RIDS, type Rid } from './building-cast.ts';
+import type { DayReport, Place, Said, Task, TaskKind, WorldState } from './building-types.ts';
 import { newMonth } from './month.ts';
 import { DRAW, hashUnit } from './rng.ts';
 import { newStories } from './stories.ts';
-export type BuildingWorld = Omit<GameState, 'people' | 'kapici' | 'oneCast' | 'castChapter'> & {
+export type BuildingWorld = WorldState & {
+  nativeLife?: LifePreparation[];
   protocol: {
     sequence: number;
+    evidence: number;
     offers: Record<string, number>;
     phase: number;
     ingresses: { phase: number; minute: number; inputIds: string[] }[];
+    arrivals: { at: number; place: Place }[];
+    finishedTasks: { task: number; at: number; hook: boolean }[];
+    seatMeetings: {
+      day: number;
+      a: Rid;
+      b: Rid;
+      aActivityId: string;
+      bActivityId: string;
+      done?: number;
+      outcome?: 'completed' | 'interrupted';
+    }[];
+    paperMixups: { at: number; reader: Rid; other: Rid }[];
+    wrongParcels: {
+      task: number;
+      holder: Rid;
+      activityId: string;
+      choice: 'peek' | 'set_aside';
+      forwardAt: number;
+      resolved?: { atMs: number; status: 'completed' | 'interrupted'; receipt: string };
+      done?: number;
+    }[];
+    monthVisits: {
+      actorActivityId: string;
+      receiverActivityId: string;
+      actor: Rid;
+      other: Rid;
+      visit: number;
+    }[];
   };
 };
 export type BuildingEdition = 'stairwell@14' | 'stairwell@15' | 'stairwell@16';
+export const buildingDay = (world: BuildingWorld): number => Math.floor(world.minute / 1440) + 1;
+export function sayBuilding(
+  world: BuildingWorld,
+  who: string,
+  text: string,
+  kind: Said['kind'] = 'journal',
+): void {
+  world.said.push({ at: world.minute, who, text, kind, n: world.lineNo++ });
+  if (world.said.length > 1500) world.said.splice(0, world.said.length - 1500);
+}
+export function reportBuilding(world: BuildingWorld): DayReport {
+  const day = buildingDay(world),
+    found = world.reports.find((report) => report.day === day);
+  if (found) return found;
+  const report: DayReport = { day, tips: 0, treats: [], done: 0, late: 0, missed: 0, caught: [], talks: 0 };
+  world.reports.push(report);
+  return report;
+}
+export function stampBuilding(world: BuildingWorld, id: string): void {
+  if (!world.stamps.some((stamp) => stamp.id === id)) world.stamps.push({ id, day: buildingDay(world) });
+}
 const DAY_START = 420;
 const TOP_FLOOR = 4;
 function addTask(s: BuildingWorld, t: Omit<Task, 'id'>): Task {
@@ -175,7 +227,19 @@ export function planDay(s: BuildingWorld, day: number) {
 export function openingWorld(seed: number, edition: BuildingEdition): BuildingWorld {
   const now = DAY_START;
   const s: BuildingWorld = {
-    protocol: { sequence: 1, offers: {}, phase: 0, ingresses: [] },
+    protocol: {
+      sequence: 1,
+      evidence: 1,
+      offers: {},
+      phase: 0,
+      ingresses: [],
+      arrivals: [],
+      finishedTasks: [],
+      monthVisits: [],
+      paperMixups: [],
+      seatMeetings: [],
+      wrongParcels: [],
+    },
     version: edition,
     seed,
     minute: now,
@@ -229,4 +293,34 @@ export function openingWorld(seed: number, edition: BuildingEdition): BuildingWo
   derya.until = 480;
   planDay(s, 1);
   return s;
+}
+
+/** Actual co-location under this building's authored doors and stair intervals. */
+export function buildingPeopleTogether(world: BuildingWorld, first: string, second: string): boolean {
+  if (first === second) return false;
+  const a = world.residents.find((resident) => resident.id === first);
+  const b = world.residents.find((resident) => resident.id === second);
+  if (first === KAPICI || second === KAPICI) {
+    const resident = first === KAPICI ? b : a;
+    return (
+      !!resident &&
+      !world.k.walk &&
+      ((world.k.at === 'step' && resident.where === 'step') ||
+        (world.k.at === `door:${resident.id}` && resident.where === 'home'))
+    );
+  }
+  if (!a || !b) return false;
+  if (a.where === b.where && ['step', 'shop', 'roof'].includes(a.where)) return true;
+  if (
+    (a.where === `visit:${b.id}` && b.where === 'home') ||
+    (b.where === `visit:${a.id}` && a.where === 'home')
+  )
+    return true;
+  if (a.where.startsWith('visit:') && a.where === b.where) return true;
+  return (
+    a.stairsUntil >= world.minute &&
+    b.stairsUntil >= world.minute &&
+    a.stairsFloors[1] >= b.stairsFloors[0] &&
+    b.stairsFloors[1] >= a.stairsFloors[0]
+  );
 }

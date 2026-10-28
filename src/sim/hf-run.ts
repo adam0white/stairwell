@@ -2,6 +2,7 @@
  * protocol boundary, not a Person/faculty compatibility layer. Host consequences
  * are staged until HF accepts the complete reply batch. Actor reads stay in HF.
  */
+
 import {
   type ActionResolution,
   type CommunicationResolution,
@@ -25,7 +26,9 @@ import {
   restoreRun,
   type StepResult,
   step,
-} from '@stairwell/hf4';
+} from '@adam0white/human-framework';
+import { canonicalPersona } from '@adam0white/lab-client';
+import { ColdActionReceipts } from './hf-cold-receipts.ts';
 
 export const HF_MINUTE = 60_000;
 export const atMinute = (minute: number): number => {
@@ -84,7 +87,7 @@ function publishWorld(current: unknown, candidate: unknown): unknown {
   return candidate;
 }
 
-function readLedger(archive: DeepReadonly<RunArchive>): BuildingLedger {
+function readLedger(archive: DeepReadonly<RunArchive>, receipts: ColdActionReceipts): BuildingLedger {
   const data = archive.current.world.hostState;
   if (
     !object(data) ||
@@ -108,11 +111,19 @@ function readLedger(archive: DeepReadonly<RunArchive>): BuildingLedger {
     )
       throw new Error('The saved building has an invalid accepted activity.');
     const actor = archive.current.people[value.person];
+    const accepted = receipts.accepted(value.id, value.person),
+      started = accepted?.request;
     if (
       !actor?.activity ||
       actor.activity.id !== value.id ||
       actor.activity.startedAt !== value.start ||
-      actor.activity.offer.id !== value.offer.id
+      canonicalPersona(actor.activity.offer) !== canonicalPersona(value.offer) ||
+      !started ||
+      canonicalPersona(accepted?.offer) !== canonicalPersona(value.offer) ||
+      started.offerRevision !== value.offerRevision ||
+      started.offerId !== value.offer.id ||
+      started.boundaryAt !== value.start ||
+      active.some((binding) => binding.id === value.id || binding.person === value.person)
     )
       throw new Error('The accepted building activity does not match its HF archive.');
     active.push(structuredClone(value) as BuildingActivity);
@@ -135,6 +146,7 @@ function readLedger(archive: DeepReadonly<RunArchive>): BuildingLedger {
 
 export class BuildingRun<W> {
   #run: Run;
+  #coldReceipts?: ColdActionReceipts;
   readonly #source: string;
   #world: W;
   #ledger: BuildingLedger;
@@ -142,6 +154,9 @@ export class BuildingRun<W> {
   #now: number;
   #pending: DeepReadonly<StepResult> | undefined;
   #transaction = false;
+  #recoveryBase: DeepReadonly<RunArchive>;
+  #journal: { until: number; inputs: Input[] }[] = [];
+  #recoveryFailed = false;
   readonly #offers = new Map<string, DeepReadonly<readonly Offer[]>>();
   private constructor(
     run: Run,
@@ -150,6 +165,7 @@ export class BuildingRun<W> {
     ledger: BuildingLedger,
     revision: number,
     at: number,
+    recoveryBase: DeepReadonly<RunArchive>,
   ) {
     this.#run = run;
     this.#world = world;
@@ -157,6 +173,7 @@ export class BuildingRun<W> {
     this.#ledger = ledger;
     this.#revision = revision;
     this.#now = at;
+    this.#recoveryBase = recoveryBase;
   }
   static open<W>(spec: RunSpec, people: readonly PersonAuthoring[], world: W): BuildingRun<W> {
     const authored = structuredClone(spec);
@@ -171,6 +188,7 @@ export class BuildingRun<W> {
       ledger,
       spec.world.revision,
       spec.start,
+      exportRun(run),
     );
   }
   static restore<W>(input: unknown, decodeWorld: (value: unknown) => W): BuildingRun<W> {
@@ -185,7 +203,8 @@ export class BuildingRun<W> {
     // Cold restoration is the only decoder of archived actor/offer records. Live
     // UI reads never use the archive as an inspection or mutation interface.
     const archive = exportRun(run),
-      ledger = readLedger(archive);
+      receipts = new ColdActionReceipts(archive, run),
+      ledger = readLedger(archive, receipts);
     const session = new BuildingRun(
       run,
       structuredClone(world),
@@ -193,7 +212,9 @@ export class BuildingRun<W> {
       ledger,
       archive.current.world.revision,
       archive.current.at,
+      archive,
     );
+    session.#coldReceipts = receipts;
     if (archive.current.pending.length)
       session.#pending = {
         at: archive.current.at,
@@ -208,24 +229,42 @@ export class BuildingRun<W> {
       session.#offers.set(key(active.person, active.offerRevision), [active.offer]);
     return session;
   }
+  /** Original accepted public requests, shared by cold building validators. */
+  coldActionReceipt(id: string, person: string) {
+    this.#coldReceipts ??= new ColdActionReceipts(this.checkpoint().archive, this.#run);
+    return this.#coldReceipts.accepted(id, person);
+  }
   get world(): W {
+    this.usable();
     return this.#world;
   }
   get now(): number {
+    this.usable();
     return this.#now;
   }
   get active(): DeepReadonly<readonly BuildingActivity[]> {
+    this.usable();
     return structuredClone(this.#ledger.active);
   }
   get pendingRequests(): DeepReadonly<readonly HostRequest[]> {
+    this.usable();
     return this.#pending?.boundary.type === 'world-required'
       ? structuredClone(this.#pending.boundary.requests)
       : [];
   }
   transaction<T>(operation: (candidate: BuildingRun<W>) => T): T {
+    this.usable();
     if (this.#transaction) throw new Error('A building action cannot nest another action transaction.');
-    const before = this.checkpoint(),
-      published = this.#world;
+    const published = this.#world,
+      base = this.#recoveryBase,
+      prefix = this.#journal.length,
+      host = structuredClone({
+        ledger: this.#ledger,
+        revision: this.#revision,
+        now: this.#now,
+        pending: this.#pending,
+        offers: [...this.#offers],
+      });
     this.#world = structuredClone(published);
     this.#transaction = true;
     try {
@@ -233,38 +272,60 @@ export class BuildingRun<W> {
       this.#world = publishWorld(published, this.#world) as W;
       return result;
     } catch (error) {
-      // Roll back through the same public recovery route as a saved notebook.
-      // The checkpoint is our own pre-action export, not untrusted input and
-      // never a raw actor patch. Successful actions do not replay the archive.
-      const restored = BuildingRun.restore(before, (world) => structuredClone(world as W));
-      this.#run = restored.#run;
+      // The complete public base and exact accepted input prefix are recovery
+      // material. Successful actions need no growing archive export. Recovery
+      // replays public steps, including empty advances and actual host replies.
+      try {
+        const restored = admitted(restoreRun(base));
+        for (const batch of this.#journal.slice(0, prefix)) admitted(step(restored, batch));
+        this.#run = restored;
+      } catch (cause) {
+        this.#recoveryFailed = true;
+        throw new Error(
+          'The complete public recovery journal could not replay. Keep the last saved notebook.',
+          { cause },
+        );
+      }
       this.#world = published;
-      this.#ledger = restored.#ledger;
-      this.#revision = restored.#revision;
-      this.#now = restored.#now;
-      this.#pending = restored.#pending;
+      this.#ledger = host.ledger;
+      this.#revision = host.revision;
+      this.#now = host.now;
+      this.#pending = host.pending;
+      this.#journal.length = prefix;
       this.#offers.clear();
-      for (const [id, offers] of restored.#offers) this.#offers.set(id, offers);
+      for (const [id, offers] of host.offers) this.#offers.set(id, offers);
       throw error;
     } finally {
       this.#transaction = false;
     }
   }
   inspect(query: InspectQuery) {
+    this.usable();
     return admitted(inspect(this.#run, query));
   }
   preview(query: PreviewQuery) {
+    this.usable();
     return admitted(preview(this.#run, query));
   }
   checkpoint(): BuildingCheckpoint<W> {
+    this.usable();
+    const archive = exportRun(this.#run);
+    // A checkpoint requested by an action cannot erase its rollback prefix.
+    if (!this.#transaction) {
+      this.#recoveryBase = structuredClone(archive);
+      this.#journal = [];
+    }
     return {
       format: 'stairwell-engine/1',
       world: structuredClone(this.#world),
-      archive: exportRun(this.#run),
+      archive,
     };
   }
   ingest(until: number, inputs: readonly Input[] = []): DeepReadonly<StepResult> {
-    const result = admitted(step(this.#run, { until, inputs }));
+    this.usable();
+    const batch = { until, inputs: structuredClone(inputs) as Input[] };
+    const result = admitted(step(this.#run, batch));
+    this.#journal.push(batch);
     // These are accepted host inputs. HF still owns whether and when each offer
     // book is consumed; a request names its exact admitted book revision.
     for (const input of inputs)
@@ -277,12 +338,17 @@ export class BuildingRun<W> {
     this.#pending = result.boundary.type === 'world-required' ? result : undefined;
     return result;
   }
+  private usable(): void {
+    if (this.#recoveryFailed)
+      throw new Error('This session failed public recovery. Reopen the last complete saved notebook.');
+  }
   advance(
     until: number,
     resolver: BuildingResolver<W>,
     inputs: readonly Input[] = [],
     pending?: DeepReadonly<StepResult>,
   ): DeepReadonly<StepResult> {
+    this.usable();
     pending ??= this.#pending;
     if (pending && inputs.length)
       throw new Error('A pending HF boundary cannot resubmit its accepted inputs.');

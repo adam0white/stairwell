@@ -3,7 +3,6 @@
  * the raw source whose exact digest was published supplies those memories.
  */
 import { canonicalPersona, type PersonaEnvelope } from '@adam0white/lab-client';
-import { replayLegacyNotebook, verifyLegacyRaw } from '@stairwell/native-replay-history';
 
 const object = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -44,6 +43,9 @@ export async function verifyLegacySource(
     parent.castId === 'hf.cast.hacer.voice' &&
     transfer.castPassport === 'site-cast/1';
   if (!own && !voice) refuse();
+  // The old engines load only after this explicit finite historical boundary.
+  // Ordinary native play imports no legacy Person or faculty through this module.
+  const { replayLegacyNotebook, verifyLegacyRaw } = await import('@stairwell/native-replay-history');
   const checkpoint = transfer.checkpoint;
   if (
     !object(checkpoint) ||
