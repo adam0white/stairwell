@@ -1,5 +1,9 @@
 # Stairwell — current handoff
 
+## Phone pointer follow-through — 2026-10-29
+
+PR4 merged before the required pointer check was settled. The director authorized one disclosed UI follow-up PR. A new normal clean cff build reproduced the phone obstruction: after arrival, fixed building height left a zero-height resident list beneath the action bar. The grid now reserves list space and lets the building and action rows share the remaining height. Existing action scrolling, gameplay slowdown and menu pause remain. Simulation, native storage, replay and dependency pins are byte-identical to cff. Exact pointer, CI and final live receipts belong to `~/code/.lab-scratch/games-deferred/recovery-stairwell-followthrough-report.md`. Keyboard access alone is not pointer proof. The separate actual-hide limitation remains; no player or owner acceptance is inferred.
+
 ## Host and file follow-through — 2026-10-29
 
 Source uses published HF4.8.1/client0.5.7/kit0.5.24 in one physical current HF graph. The public SDK portable-write guard runs before shared worker/local projections, publication, terminal closure and forks. Its released reader registry currently blocks shared peers. Blocked incoming heads refuse before a candidate opens; empty shelves and explicit local play remain available. No excluded person is replaced during an admission. Automatic publication keeps the ending open with its reason, download and retry. Native source journals and exact-parent CAS remain. Generic retirement/reentry and custody remain shared-owner dependencies, checkpoint2026-10-29.
