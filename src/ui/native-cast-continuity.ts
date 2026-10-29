@@ -35,6 +35,7 @@ import {
   validateNativeLifeInputs,
 } from '../sim/native-cast-life.ts';
 import { type NativeNotebook, nativeNotebook, readNativeNotebook } from './native-notebook.ts';
+import { requirePortableWrite } from './portable-write-guard.ts';
 import { fileMode } from './session-route.ts';
 
 type Shelf = ReturnType<typeof personaChannel>;
@@ -156,13 +157,16 @@ const localGame: NativeGameAccess = {
   open: async (...args) => openBuilding(...args),
   reopen: async (_world, ...args) => openBuilding(...args),
   checkpoint: async (world) => buildingEngine(world).checkpoint(),
-  person: async (world, id) => ({
-    body: currentBody(buildingEngine(world), id).state,
-    now: buildingEngine(world).now,
-    departure: currentBody(buildingEngine(world), id).state.alive
-      ? { transfer: currentDeparture(buildingEngine(world), id, []).transfer }
-      : undefined,
-  }),
+  person: async (world, id) => {
+    requirePortableWrite(id);
+    return {
+      body: currentBody(buildingEngine(world), id).state,
+      now: buildingEngine(world).now,
+      departure: currentBody(buildingEngine(world), id).state.alive
+        ? { transfer: currentDeparture(buildingEngine(world), id, []).transfer }
+        : undefined,
+    };
+  },
   notebook: async (world, receipts) => nativeNotebook(world, receipts),
   discard: () => {},
   admit: async (_world, ...args) => admitNativeCast(...args),
@@ -366,7 +370,7 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
       delete value.rawOwned;
     }
   }
-  async function gateContinuity(world: BuildingWorld | undefined, imported = false) {
+  function gateContinuity(world: BuildingWorld | undefined, imported = false) {
     if (!world) return;
     const value = runtime(world);
     if (file || imported) {
@@ -399,6 +403,19 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
     if (fresh) return game.open(seed, edition);
     const channel = await ready();
     requireCurrent(serial, previous);
+    const preparedBatch = await channel.request<LifeBatchPreparation>({
+      action: 'prepareBatch',
+      castIds: ALLOCATION.map((c) => c.castId),
+    });
+    requireCurrent(serial, previous);
+    assertPlainBuildingData(preparedBatch);
+    if (!preparedBatch || !object(preparedBatch.expectedHeads))
+      throw new Error('The prepared shelf heads are missing. Keep the source chapter.');
+    for (const person of ALLOCATION) {
+      if (!Object.hasOwn(preparedBatch.expectedHeads, person.castId))
+        throw new Error('The prepared shelf heads are missing. Keep the source chapter.');
+      if (preparedBatch.expectedHeads[person.castId] !== null) requirePortableWrite(roleFor(person.castId));
+    }
     let world = await game.open(seed, edition);
     let inputs: LifePreparation[] = [],
       arrivals: NativeCastChapter['arrivals'] = [];
@@ -414,7 +431,7 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
       setEnabled: (value) => channel.setEnabled(value),
       async request<T>(request: PersonaRequest): Promise<T> {
         if (request.action === 'prepareBatch') {
-          const batch = await channel.request<LifeBatchPreparation>(request);
+          const batch = preparedBatch;
           requireCurrent(serial, previous);
           assertPlainBuildingData(batch);
           if (
@@ -628,6 +645,8 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
   }
   async function checkpointPerson(world: BuildingWorld, id: Rid, fork = false, serial = generation) {
     requireCurrent(serial, world);
+    if (file) throw new Error('Saved-file play cannot write shared character history.');
+    requirePortableWrite(id);
     const channel = await ready();
     refuseWorkTransfer(world.version);
     const value = runtime(world),

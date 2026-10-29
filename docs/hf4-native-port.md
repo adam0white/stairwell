@@ -1,3 +1,5 @@
+> Current follow-through (2026-10-29): HF4.8.1/client0.5.7/kit0.5.24. Public portableWriteBlockers protects shared projection and every publication/terminal/fork boundary. The empty released reader registry blocks shared peers; native journals and blocked heads remain unchanged. Incompatible older files refuse with original bytes preserved. The receipts below retain their original release/horizon; they do not prove a current month. See HANDOFF and games-deferred/recovery-stairwell-followthrough-report.md.
+
 # Native HF4 port
 
 > HF4.8 candidate (2026-10-28): source pins HF4.8.0, client0.5.5 and kit0.5.22. Older HF Run archives may refuse; keep the file and start fresh. The HF4.6 controls and release decision below are historical and do not prove this candidate. See HANDOFF and the coordinator report for current evidence.

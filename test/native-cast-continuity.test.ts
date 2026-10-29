@@ -9,7 +9,22 @@ import {
   type PersonaShelfState,
   preparePersonaLife,
 } from '@adam0white/lab-client';
-import { expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test } from 'vitest';
+import { PORTABLE_READERS } from '../node_modules/@adam0white/lab-client/dist/portable-readers.js';
+
+// Exercise the historical ownership controls with a simulated future registry.
+// The last five tests use the actual released empty registry instead.
+beforeEach((context) => {
+  const registry = PORTABLE_READERS as Record<string, { client: string; perPersonSkips: boolean }>;
+  for (const key of Object.keys(registry)) delete registry[key];
+  if (!/uncertified|empty shelf|worker refuses/.test(context.task.name))
+    for (const key of ['voice', 'days', 'well', 'warren', 'valley', 'stairwell', 'commonstead'])
+      registry[key] = { client: '0.5.5', perPersonSkips: true };
+});
+afterEach(() => {
+  for (const key of Object.keys(PORTABLE_READERS)) delete (PORTABLE_READERS as Record<string, unknown>)[key];
+});
+
 import type { Rid } from '../src/sim/building-cast.ts';
 import { buildingSpec, openingPerson } from '../src/sim/hf-authoring.ts';
 import { currentDeparture } from '../src/sim/hf-cast.ts';
@@ -24,6 +39,7 @@ import {
   type NativeRecovery,
 } from '../src/ui/native-cast-continuity.ts';
 import { type NativeNotebook, nativeNotebook, restoreNativeNotebook } from '../src/ui/native-notebook.ts';
+import { createNativeOwnerDispatcher } from '../src/ui/native-owner-core.ts';
 
 async function sourcePerson(id: Rid) {
   const departure = currentDeparture(BuildingRun.open(buildingSpec(31), [openingPerson(id)], {}), id, []);
@@ -142,6 +158,9 @@ async function fixture(file = false) {
     },
     currentHead: (castId: string) => state.revisions.find((p) => p.revision === state.heads[castId]),
     head: () => state.revisions.find((p) => p.revision === state.heads[parent.castId]),
+    clear: () => {
+      state = { heads: {}, revisions: [] };
+    },
   };
 }
 
@@ -422,4 +441,52 @@ test('unrelated account-bound shelf histories do not block the explicitly eligib
     ALLOCATION.map((person) => person.castId).sort(),
   );
   expect(f.currentHead(burak.castId)).toEqual(burak);
+});
+
+test('uncertified shared heads refuse admission without a claim or recovery write', async () => {
+  const f = await fixture();
+  const before = structuredClone(f.head());
+  await expect(f.controller.arrive(7)).rejects.toThrow(/read-only|still in|source chapter/i);
+  expect(f.head()).toEqual(before);
+  expect(f.requests.some((request) => request.action === 'putBatch')).toBe(false);
+  expect(f.records.size).toBe(0);
+});
+
+test('uncertified shared people refuse an explicit fork before writing recovery or shelf', async () => {
+  const f = await fixture();
+  const world = await f.controller.arrive(7, true);
+  f.setCurrent(world);
+  world.phase = 'end';
+  const before = structuredClone(f.head());
+  await expect(f.controller.forkPerson('hacer')).rejects.toThrow(/read-only/i);
+  expect(f.head()).toEqual(before);
+  expect(f.requests).toEqual([]);
+  expect(f.records.size).toBe(0);
+});
+
+test('an empty shelf can start a native chapter while peers are uncertified', async () => {
+  const f = await fixture();
+  f.clear();
+  const world = await f.controller.arrive(7);
+  expect(world).toBeDefined();
+  expect(f.requests.filter((request) => request.action === 'putBatch')).toHaveLength(1);
+});
+
+test('the worker refuses a shared projection for an uncertified person', () => {
+  const dispatch = createNativeOwnerDispatcher({ project: () => ({}) as never });
+  dispatch({ kind: 'open', args: [7] });
+  expect(() => dispatch({ kind: 'person', id: 'hacer' })).toThrow(/read-only/i);
+});
+
+test('automatic publication refuses uncertified people without recovery or shelf writes', async () => {
+  const f = await fixture();
+  const world = await f.controller.arrive(7, true);
+  f.setCurrent(world);
+  world.phase = 'end';
+  const before = structuredClone(f.head());
+  const result = await f.controller.checkpointContinuity();
+  expect(result.ok).toBe(false);
+  expect(f.head()).toEqual(before);
+  expect(f.requests).toEqual([]);
+  expect(f.records.size).toBe(0);
 });

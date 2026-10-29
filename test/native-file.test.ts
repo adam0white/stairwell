@@ -82,3 +82,13 @@ test('refuses provenance that JSON would silently discard or alter', () => {
   ])
     expect(() => exportNativeFile(world, provenance, {})).toThrow(/keep the file/i);
 });
+
+test('older host checkpoints refuse with the entire original file preserved', () => {
+  const notebook = nativeNotebook(openBuilding(7));
+  const original = notebook as unknown as { engine: { world: Record<string, unknown> } };
+  delete original.engine.world.pendingWork;
+  delete original.engine.world.pendingReply;
+  const text = JSON.stringify(notebook);
+  expect(() => readNativeFileText(text)).toThrow(/keep the file/i);
+  expect(JSON.stringify(notebook)).toBe(text);
+});

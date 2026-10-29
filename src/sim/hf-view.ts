@@ -52,7 +52,6 @@ export const faceToFace = (world: BuildingWorld): Rid[] =>
 /** A UI hint; the simulation owns the final admission check. */
 export function canStartWork(world: BuildingWorld, job: Task): boolean {
   return (
-    world.version === WORK_START_VERSION &&
     world.phase === 'day' &&
     !world.k.walk &&
     world.k.busyTask === null &&

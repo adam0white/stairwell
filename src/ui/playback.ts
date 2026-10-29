@@ -17,6 +17,19 @@ export function playback(
   if (talking) return { rate: 0, reason: 'You are talking. Time is paused.' };
   if (state.k.walk || state.k.busyUntil > state.minute)
     return { rate: selectedSpeed ?? 6, reason: 'You are travelling or working.' };
+  if (
+    openTasks(state).some(
+      (task) =>
+        task.kind === 'parcel' &&
+        task.carried &&
+        task.place === state.k.at &&
+        state.residents.find((person) => person.id === task.for)?.where !== 'home',
+    )
+  )
+    return {
+      rate: selectedSpeed ?? 6,
+      reason: 'You are waiting with a parcel. Time follows your chosen speed.',
+    };
   if (openTasks(state).length > 0) return { rate: 0.6, reason: 'Orders are waiting.' };
   return { rate: selectedSpeed ?? 6, reason: 'Time is passing.' };
 }
