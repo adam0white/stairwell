@@ -184,3 +184,52 @@ test('a refused sitting does not offer a personal reply', async () => {
   actBuilding(world, { kind: 'sit', who: 'hacer' });
   expect(canReplyBuilding(world, 'hacer')).toBe(false);
 });
+
+test.each([1, 20])('a reply replaces the old resident boundary of %s minutes', (oldRemaining) => {
+  const world = openBuilding(7);
+  world.k.at = 'door:hacer';
+  actBuilding(world, { kind: 'sit', who: 'hacer' });
+  for (let i = 0; i < 10; i++) advanceBuildingMinute(world);
+  const resident = world.residents.find((person) => person.id === 'hacer');
+  if (!resident) throw Error('Missing resident');
+  resident.until = world.minute + oldRemaining; // Controlled interrupted timetable.
+  const expected = world.minute + 2;
+  actBuilding(world, { kind: 'reply', who: 'hacer', reply: 'listen' });
+  expect(() => advanceBuildingMinute(world)).not.toThrow();
+  expect(resident.until).toBe(expected);
+  expect(() => advanceBuildingMinute(world)).not.toThrow();
+  expect(world.pendingReply).toBeNull();
+  expect(
+    world.said.some(
+      (line) =>
+        line.who === 'hacer' &&
+        (line.text === 'I am glad you listened.' || line.text === 'I would rather leave it there.'),
+    ),
+  ).toBe(true);
+});
+
+test('a played reply keeps complete native/file replay and an identical continuation', async () => {
+  const { buildingEngine } = await import('../src/sim/hf-game.ts');
+  const { nativeNotebook, restoreNativeNotebook } = await import('../src/ui/native-notebook.ts');
+  const { readNativeFileText } = await import('../src/ui/native-file.ts');
+  const { replayBuilding } = await import('../src/sim/hf-replay.ts');
+  const world = openBuilding(7);
+  actBuilding(world, { kind: 'go', to: 'door:hacer' });
+  while (world.k.walk) advanceBuildingMinute(world);
+  actBuilding(world, { kind: 'sit', who: 'hacer' });
+  while (world.k.walk) advanceBuildingMinute(world);
+  actBuilding(world, { kind: 'reply', who: 'hacer', reply: 'listen' });
+  expect(world.pendingReply).not.toBeNull();
+  const notebook = nativeNotebook(world);
+  const native = restoreNativeNotebook(JSON.parse(JSON.stringify(notebook))).world;
+  const file = readNativeFileText(JSON.stringify(notebook)).world;
+  for (let i = 0; i < 3; i++) {
+    advanceBuildingMinute(world);
+    advanceBuildingMinute(native);
+    advanceBuildingMinute(file);
+  }
+  const expected = buildingEngine(world).checkpoint();
+  expect(buildingEngine(native).checkpoint()).toEqual(expected);
+  expect(buildingEngine(file).checkpoint()).toEqual(expected);
+  expect(buildingEngine(replayBuilding(expected)).checkpoint()).toEqual(expected);
+});

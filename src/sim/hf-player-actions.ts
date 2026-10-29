@@ -13,7 +13,7 @@ import {
   interruptBuildingPerson,
 } from './hf-game.ts';
 import { currentBody, currentTies } from './hf-readings.ts';
-import { atMinute } from './hf-run.ts';
+import { atMinute, HF_MINUTE } from './hf-run.ts';
 import { storySittingBuilding } from './hf-stories.ts';
 import { type BuildingWorld, buildingDay, buildingPeopleTogether, sayBuilding } from './hf-world.ts';
 import { PRIVATE_LINES, STORY_LINES } from './stories.ts';
@@ -141,6 +141,11 @@ export function replyBuilding(world: BuildingWorld, who: Rid, reply: 'thank' | '
   const listener = buildingEngine(world).active.find(
     (activity) => activity.person === who && activity.offer.id === choice.chosenAffordanceId,
   );
+  // The interrupted routine no longer owns the resident's next boundary.
+  // A rejected offer leaves the next ordinary decision available.
+  resident(world, who).until = listener
+    ? Math.ceil((listener.start + listener.offer.durationMs - world.protocol.phase) / HF_MINUTE)
+    : world.minute + 1;
   if (caretaker && listener)
     world.pendingReply = {
       who,

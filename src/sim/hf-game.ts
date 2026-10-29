@@ -652,23 +652,7 @@ export function advanceBuildingMinute(world: BuildingWorld): void {
     settledArrivals(candidate);
     monthEvents(candidate);
     settleMeetingSeatsBuilding(candidate);
-    for (const id of RIDS)
-      for (const encounter of decideResidentBuilding(candidate, id))
-        talkResidentsBuilding(candidate, encounter.a, encounter.b, encounter.where, encounter.maxClaims);
-    if (!candidate.k.walk && candidate.k.busyTask === null) {
-      if (candidate.k.at.startsWith('door:')) deliverBuilding(candidate, candidate.k.at);
-      if (candidate.k.at === 'step')
-        for (const task of candidate.tasks) {
-          if (
-            task.done === undefined &&
-            task.carried &&
-            task.kind !== 'bins' &&
-            candidate.residents.find((resident) => resident.id === task.for)?.where === 'step'
-          )
-            completeBuildingTask(candidate, task, false);
-        }
-    }
-    acknowledgeFoundWork(candidate);
+    // Deliver the completed exchange before the resident starts a new routine.
     if (
       candidate.pendingReply &&
       candidate.pendingReply.caretakerStatus &&
@@ -688,6 +672,23 @@ export function advanceBuildingMinute(world: BuildingWorld): void {
           'voice',
         );
     }
+    for (const id of RIDS)
+      for (const encounter of decideResidentBuilding(candidate, id))
+        talkResidentsBuilding(candidate, encounter.a, encounter.b, encounter.where, encounter.maxClaims);
+    if (!candidate.k.walk && candidate.k.busyTask === null) {
+      if (candidate.k.at.startsWith('door:')) deliverBuilding(candidate, candidate.k.at);
+      if (candidate.k.at === 'step')
+        for (const task of candidate.tasks) {
+          if (
+            task.done === undefined &&
+            task.carried &&
+            task.kind !== 'bins' &&
+            candidate.residents.find((resident) => resident.id === task.for)?.where === 'step'
+          )
+            completeBuildingTask(candidate, task, false);
+        }
+    }
+    acknowledgeFoundWork(candidate);
     storyEventsBuilding(candidate);
     if (candidate.minute === 5 * 1440 + 1110 && !candidate.ring.asked) ringEveningBuilding(candidate);
     if (candidate.minute % 1440 === 1260) endBuildingDay(candidate);
