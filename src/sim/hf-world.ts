@@ -263,6 +263,8 @@ export function openingWorld(seed: number, edition: BuildingEdition): BuildingWo
     })),
     tasks: [],
     nextTask: 1,
+    pendingWork: [],
+    pendingReply: null,
     said: [],
     talks: [],
     reports: [],

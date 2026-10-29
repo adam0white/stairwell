@@ -7,6 +7,7 @@ import { PEOPLE_ACROSS_GAMES } from '@adam0white/lab-kit';
 import { type phoneStage, telemetryNotice } from '@adam0white/lab-kit';
 import { RESIDENTS, RIDS, type Rid } from '../sim/building-cast.ts';
 import { decodeBuildingWorld } from '../sim/building-decode.ts';
+import { canReplyBuilding } from '../sim/hf-player-actions.ts';
 import type { BuildingCheckpoint } from '../sim/hf-run.ts';
 import {
   canStartWork,
@@ -570,11 +571,9 @@ async function importFileCandidate(text: string, serial: number): Promise<void> 
       ++loadSerial;
       saves.invalidate();
       invalidateContinuity();
-      await gateContinuity(world, true);
-      if (serial !== fileImportSerial) {
-        discardCandidate(world);
-        return;
-      }
+      // The file gate is synchronous. Commit its metadata and worker ownership
+      // in the same turn after the last selection check.
+      gateContinuity(world, true);
       promoteOwner(world);
       originalProvenance = provenance;
       ui.s = world;
@@ -614,6 +613,12 @@ function fileChooser() {
       ++fileImportSerial;
       reader.cancel();
       render(true);
+    });
+  app()
+    .querySelector('input')
+    ?.addEventListener('cancel', () => {
+      ++fileImportSerial;
+      reader.cancel();
     });
   app()
     .querySelector('input')
@@ -923,7 +928,7 @@ function infoContent(s: GameState | null) {
             ]
           : [
               'Orders and the stairs',
-              'Tap an order, a name or a place on the building to see the trip. Choose Go to start walking. You cannot turn back during a walk. You pick up or deliver items automatically when you arrive. A dot over a door means you have something to deliver to that flat. Climbing tires you. The trip preview tells you how tiring it will be. Time slows while orders wait and stops while you talk or read a list.',
+              'Tap an order, a name or a place on the building to see the trip. Choose Go to start walking. You cannot turn back during a walk. You pick up or deliver items automatically when you arrive. A dot over a door means you have something to deliver to that flat. Climbing tires you. The trip preview tells you how tiring it will be. Time slows while orders wait. When you are waiting at a door with a parcel, it follows your chosen speed. Time pauses while you talk or read a list in the week.',
             ];
   return `<h2>${heading}</h2><p>${text}</p>`;
 }
@@ -1065,7 +1070,7 @@ async function titlePage() {
   const saved = loaded;
   const unopened = unreadableSaved ?? (titleFailure && saved ? { value: saved } : undefined);
   const needsReplacement = !!saved || !!unopened || savedReadFailed;
-  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${unopened ? '<p role="status">This saved notebook could not be opened. It has been kept. Download it before starting a new game.</p><button data-download-unopened>Download unopened notebook</button>' : ''}${olderNotebook() ? '<p role="status">This old notebook cannot open in this version. The old save has been kept.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label><label><input type="checkbox" data-work-start>Play four weeks with a Start work button for ordinary jobs here. Start without earlier character history; character transfer is unavailable. You can download this run.</label><button data-a="other">Other ways to begin ▸</button><div class="title-spacer"></div></main><div class="action-bar">
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${unopened ? '<p role="status">This saved notebook could not be opened. It has been kept. Download it before starting a new game.</p><button data-download-unopened>Download unopened notebook</button>' : ''}${olderNotebook() ? '<p role="status">This old notebook cannot open in this version. The old save has been kept.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label><label><input type="checkbox" data-work-start>Play four weeks without earlier shared character history. Character transfer is unavailable. You can download this run.</label><button data-a="other">Other ways to begin ▸</button><div class="title-spacer"></div></main><div class="action-bar">
     ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Check and continue</button><span class="soft small" id="saved-summary" data-save-summary>${dayLabel(savedState)} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
     <button class="${needsReplacement ? '' : 'primary'}" data-a="new">${needsReplacement ? 'New game' : 'Begin on Monday'}</button><div class="new-confirm" hidden>${savedReadFailed ? 'The saved notebook could not be checked. Beginning may replace an existing notebook.' : 'The old notebook will be replaced.'}<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
   mountNotice();
@@ -1198,7 +1203,7 @@ function dayView(s: GameState, full: boolean) {
     : ctx.talking
       ? `${who ? RESIDENTS[who].name : 'Someone'} is talking. Time ${s.month ? 'moves slowly' : 'is paused'}.`
       : !s.k.walk && s.k.busyUntil <= s.minute && openTasks(s).length
-        ? 'Orders waiting · 0.6 game minutes/second'
+        ? playback(s, false, false, selectedSpeed).reason
         : `${clockPlayback(s).rate} game minutes/second`;
   requiredUiValue(root.querySelector('.clock-rate'), 'day clock rate').textContent = slowed;
   const tasks = openTasks(s).sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
@@ -1283,7 +1288,7 @@ function dayView(s: GameState, full: boolean) {
 
 function choose(s: GameState, to: Place, person: Rid | null = null, task: number | null = null) {
   if (s.k.walk || s.k.busyTask !== null) return;
-  if (to === s.k.at && !(s.version === WORK_START_VERSION && task !== null)) {
+  if (to === s.k.at && task === null) {
     selection = null;
     goTo(s, to, person);
     return;
@@ -1343,6 +1348,8 @@ function tripActions(s: GameState, el: HTMLElement) {
         ? `${RESIDENTS[person].name} · flat ${RESIDENTS[person].flat}`
         : placeName(to);
     el.innerHTML = `<div class="trip-line"><b>${esc(title)}</b><span>${esc(placeName(to))} · ${first} min walk${second ? `, then ${esc(placeName(requiredUiValue(task, 'second trip task').place))} · ${second} min walk` : ''} · there about ${clockOf(arrive)}${task ? ` · due ${clockOf(task.by)}` : ''}${task && arrive > task.by ? `<strong class="late"> · about ${arrive - task.by} min late</strong>` : ''}${!task && to.startsWith('door:') && rOf(s, to.slice(5) as Rid).where === 'work' ? ` · ${RESIDENTS[to.slice(5) as Rid].name} is out` : ''}</span>${forecast ? `<span class="soft">${esc(forecast)}</span>` : ''}</div><button class="primary" data-a="go">Go to ${esc(placeName(to))}</button>${selection && !task ? '<button data-a="clear-trip">Back</button>' : ''}`;
+    el.insertAdjacentHTML('beforeend', '<button data-rest-trip>Take a ten-minute break</button>');
+    el.querySelector('[data-rest-trip]')?.addEventListener('click', () => send({ kind: 'rest' }));
     el.querySelector('[data-a=go]')?.addEventListener('click', () => {
       const p = selection?.person ?? null;
       selection = null;
@@ -1912,7 +1919,9 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
     ${present ? carriedOther.map((t) => `<button class="prank" data-mis="${t.id}">Leave ${esc(RESIDENTS[t.for].name)}’s ${esc(t.label.replace(/^a /, ''))} here</button>`).join('') : ''}</div>
     <div class="verbs lk-commit">
       <button data-a="news" ${asked || !present ? 'disabled' : ''}>Anything new?${asked ? '<span class="h">You asked today. Ask again tomorrow.</span>' : ''}</button>
+      <button data-rest>Take a ten-minute break</button>
       <button data-a="tell" ${!present ? 'disabled' : ''}>Tell…</button>
+      ${canReplyBuilding(s, who) ? `<button data-reply="thank">Thank you for telling me</button><button data-reply="listen">I am listening</button><p class="soft small">A reply takes two minutes. They can choose to leave the subject.</p>` : ''}
       <button data-a="sit" ${sat || !present ? 'disabled' : ''}>Sit together${sat ? '<span class="h">You sat together today. Return tomorrow.</span>' : ''}</button>
       ${who === 'derya' ? `<button data-a="sit-boundaries" ${sat || !present ? 'disabled' : ''}>Ask about work boundaries and training${sat ? '<span class="h">You sat together today. Return tomorrow.</span>' : ''}</button>` : ''}
 ${s.month && dayOf(s.minute) >= 15 && s.secrets[PRIVATE_FACTS[who]] !== undefined && !s.month.helped[who] ? `<button data-help-story ${!present || s.k.at !== `door:${who}` ? 'disabled' : ''}>Offer to ${esc(PRIVATE_WORK[who].label)}<span class="h">A private confidence and their agreement are needed. It takes time before seven.</span></button>` : ''}
@@ -1964,8 +1973,10 @@ function wireDoor(s: GameState, el: HTMLElement, who: Rid) {
     reset();
   });
   on('[data-a="news"]', () => send({ kind: 'news', who }));
+  on('[data-rest]', () => send({ kind: 'rest' }));
   on('[data-a="word"]', () => send({ kind: 'word', who }));
   on('[data-a="sit"]', () => send({ kind: 'sit', who }));
+  on('[data-reply]', (b) => send({ kind: 'reply', who, reply: b.dataset.reply as 'thank' | 'listen' }));
   on('[data-a="sit-boundaries"]', () => send({ kind: 'sit', who, topic: 'boundaries' }));
   on('[data-a="tell"]', () => {
     ui.sheet = 'tell';

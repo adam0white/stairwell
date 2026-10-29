@@ -58,11 +58,13 @@ test('Start work begins an available job after an actual early walk and wait, wi
   );
 }, 120000);
 
-test('the default week refuses the Start work command without any world or owner change', () => {
+test('an unavailable Start work command leaves the job and owner unchanged', () => {
   const world = openBuilding(740488);
   const task = world.tasks.find((entry) => entry.kind === 'job' && entry.work && !entry.pickup);
   if (!task) throw Error('Missing ordinary job');
   const before = buildingEngine(world).checkpoint();
-  expect(() => actBuilding(world, { kind: 'start-work', task: task.id })).toThrow(/separate option/);
-  expect(buildingEngine(world).checkpoint()).toEqual(before);
+  actBuilding(world, { kind: 'start-work', task: task.id });
+  expect(world.k.busyTask).toBeNull();
+  expect(task.done).toBeUndefined();
+  expect(buildingEngine(world).checkpoint().archive).toEqual(before.archive);
 });

@@ -1,5 +1,11 @@
 # Stairwell — current handoff
 
+## Host and file follow-through — 2026-10-29
+
+Source uses published HF4.8.1/client0.5.7/kit0.5.24 in one physical current HF graph. The public SDK portable-write guard runs before shared worker/local projections, publication, terminal closure and forks. Its released reader registry currently blocks shared peers. Blocked incoming heads refuse before a candidate opens; empty shelves and explicit local play remain available. No excluded person is replaced during an admission. Automatic publication keeps the ending open with its reason, download and retry. Native source journals and exact-parent CAS remain. Generic retirement/reentry and custody remain shared-owner dependencies, checkpoint2026-10-29.
+
+File selection cancels stale workers and validates a complete detached candidate. The final file metadata gate and worker promotion commit in one synchronous turn. No older HF3 engine is installed in new play. Old notebooks may refuse; retain their original bytes and start fresh explicitly. The earlier HF4.6 month proofs remain historical. Current source/test/browser/delivery receipts belong to `~/code/.lab-scratch/games-deferred/recovery-stairwell-followthrough-report.md`. Technical delivery and owner acceptance remain separate. Player rounds, friends and Show HN remain paused for this task.
+
 ## HF4.8 candidate — 2026-10-28
 
 This candidate uses HF4.8.0, lab-client0.5.5 and lab-kit0.5.22. The released client validates the source and receiving roles for portable people; the existing host checks still enforce local duties, calendar mapping and ownership. The released client omits Voice source roles. A synthetic Voice-origin Hacer control was refused; the historical HF3 Voice journey below does not establish a current HF4 portable route. The people link uses the shared kit wording. HF4.8 exposes belief credence directly to host and person readings. Older HF Run archives may refuse to open; retain the file and start fresh. The earlier HF4.6 month and replay receipts below are historical, not proof for this candidate. Candidate test and delivery receipts are recorded separately in the coordinator report.

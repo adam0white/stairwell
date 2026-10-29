@@ -52,6 +52,6 @@ describe('native UI projections', () => {
     expect(canStartWork(world, job)).toBe(false);
     delete job.custody;
     world.version = 'stairwell@15';
-    expect(canStartWork(world, job)).toBe(false);
+    expect(canStartWork(world, job)).toBe(true);
   });
 });

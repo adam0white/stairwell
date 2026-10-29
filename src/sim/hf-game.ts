@@ -42,7 +42,13 @@ import {
   settleMeetingSeatsBuilding,
   validateMeetingSeatsBuilding,
 } from './hf-month-player.ts';
-import { askWordBuilding, knockBuilding, sitBuilding } from './hf-player-actions.ts';
+import {
+  askWordBuilding,
+  caretakerScene,
+  knockBuilding,
+  replyBuilding,
+  sitBuilding,
+} from './hf-player-actions.ts';
 import { askNewsBuilding, inventBuilding, tellBuilding } from './hf-player-speech.ts';
 import { beliefProbability, currentAgenda, currentBody, currentTies } from './hf-readings.ts';
 import { decideResidentBuilding } from './hf-residents.ts';
@@ -229,6 +235,8 @@ function resolver(engine: BuildingRun<BuildingWorld>): BuildingResolver<Building
       if (request.stage === 'start') return { disposition: 'accepted', observations: [] };
       const status = request.stage === 'finish' ? 'completed' : 'interrupted';
       const minute = Math.floor(request.boundaryAt / HF_MINUTE);
+      if (world.pendingReply?.caretakerId === activity.id) world.pendingReply.caretakerStatus = status;
+      if (world.pendingReply?.residentId === activity.id) world.pendingReply.residentStatus = status;
       const actual: NonNullable<ReturnType<BuildingResolver<BuildingWorld>['action']>['outcome']>['actual'] =
         {
           exposures: [],
@@ -347,6 +355,21 @@ export function buildingTransaction<T>(world: BuildingWorld, operation: (candida
   });
 }
 
+function acknowledgeFoundWork(world: BuildingWorld): void {
+  for (const work of world.pendingWork) {
+    const resident = world.residents.find((person) => person.id === work.who);
+    if (resident?.where === 'home') work.found = true;
+    if (
+      work.found &&
+      buildingPeopleTogether(world, KAPICI, work.who) &&
+      !currentBody(buildingEngine(world), work.who).state.asleep
+    ) {
+      sayBuilding(world, work.who, `I noticed the work you did: ${work.label}. Thank you.`, 'voice');
+      world.pendingWork = world.pendingWork.filter((item) => item !== work);
+    }
+  }
+}
+
 export function completeBuildingTask(
   world: BuildingWorld,
   task: Task,
@@ -444,6 +467,8 @@ export function completeBuildingTask(
   const resident = world.residents.find((resident) => resident.id === task.for);
   const present = resident?.where === 'home' || (world.k.at === 'step' && resident?.where === 'step');
   if (!present) {
+    if (task.kind === 'job')
+      world.pendingWork.push({ who: task.for, task: task.id, label: task.label, found: false });
     if (late) report.late++;
     else report.done++;
     sayBuilding(
@@ -627,6 +652,26 @@ export function advanceBuildingMinute(world: BuildingWorld): void {
     settledArrivals(candidate);
     monthEvents(candidate);
     settleMeetingSeatsBuilding(candidate);
+    // Deliver the completed exchange before the resident starts a new routine.
+    if (
+      candidate.pendingReply &&
+      candidate.pendingReply.caretakerStatus &&
+      candidate.pendingReply.residentStatus
+    ) {
+      const reply = candidate.pendingReply;
+      candidate.pendingReply = null;
+      if (
+        reply.caretakerStatus === 'completed' &&
+        reply.residentStatus === 'completed' &&
+        buildingPeopleTogether(candidate, KAPICI, reply.who)
+      )
+        sayBuilding(
+          candidate,
+          reply.who,
+          reply.accepted ? 'I am glad you listened.' : 'I would rather leave it there.',
+          'voice',
+        );
+    }
     for (const id of RIDS)
       for (const encounter of decideResidentBuilding(candidate, id))
         talkResidentsBuilding(candidate, encounter.a, encounter.b, encounter.where, encounter.maxClaims);
@@ -643,6 +688,7 @@ export function advanceBuildingMinute(world: BuildingWorld): void {
             completeBuildingTask(candidate, task, false);
         }
     }
+    acknowledgeFoundWork(candidate);
     storyEventsBuilding(candidate);
     if (candidate.minute === 5 * 1440 + 1110 && !candidate.ring.asked) ringEveningBuilding(candidate);
     if (candidate.minute % 1440 === 1260) endBuildingDay(candidate);
@@ -670,18 +716,12 @@ export function startPrivateBuildingWork(world: BuildingWorld, taskId: number): 
     consent.offer.durationMs !== task.work * HF_MINUTE
   )
     throw Error('The resident has not actually accepted this private help.');
-  return beginBuildingWork(world, taskId, false, true);
+  return beginBuildingWork(world, taskId, true);
 }
-function beginBuildingWork(
-  world: BuildingWorld,
-  taskId: number,
-  manual = true,
-  privateTask = false,
-): boolean {
+function beginBuildingWork(world: BuildingWorld, taskId: number, privateTask = false): boolean {
   const task = world.tasks.find((task) => task.id === taskId);
   if (
     !task?.work ||
-    (manual && world.version !== 'stairwell@16') ||
     task.done !== undefined ||
     task.from > world.minute ||
     world.phase !== 'day' ||
@@ -837,7 +877,7 @@ function settledArrivals(world: BuildingWorld): void {
         task.from <= world.minute &&
         !task.pickup,
     );
-    if (job?.work && beginBuildingWork(world, job.id, false)) continue;
+    if (job?.work && beginBuildingWork(world, job.id)) continue;
     restCaretaker(world, 15);
     if (
       world.k.at === 'door:tarik' &&
@@ -856,10 +896,10 @@ function beginBuildingWalk(candidate: BuildingWorld, to: Place): boolean {
   if (candidate.phase !== 'day' || candidate.k.walk || candidate.k.busyTask !== null) return false;
   const duration = buildingTravelMinutes(candidate, candidate.k.at, to);
   if (!duration) {
-    const before = candidate.tasks.filter((task) => task.carried || task.done !== undefined).length;
+    const before = candidate.tasks.map((task) => `${task.id}:${!!task.carried}:${task.done ?? ''}`).join('|');
     pickupBuilding(candidate, to);
     deliverBuilding(candidate, to);
-    if (candidate.tasks.filter((task) => task.carried || task.done !== undefined).length === before)
+    if (candidate.tasks.map((task) => `${task.id}:${!!task.carried}:${task.done ?? ''}`).join('|') === before)
       sayBuilding(
         candidate,
         'narrator',
@@ -896,13 +936,13 @@ function beginBuildingWalk(candidate: BuildingWorld, to: Place): boolean {
 export function actBuilding(world: BuildingWorld, requested: NewInput): void {
   assertPlainBuildingData(requested);
   const command = decodeBuildingInput({ ...requested, at: world.minute });
-  if (command.kind === 'start-work' && world.version !== 'stairwell@16')
-    throw Error('Start work needs its separate option in a new game. Keep your notebook.');
   if (
     command.kind !== 'go' &&
     command.kind !== 'start-work' &&
+    command.kind !== 'rest' &&
     command.kind !== 'next' &&
     command.kind !== 'news' &&
+    command.kind !== 'reply' &&
     command.kind !== 'tell' &&
     command.kind !== 'invent' &&
     command.kind !== 'sit' &&
@@ -917,10 +957,20 @@ export function actBuilding(world: BuildingWorld, requested: NewInput): void {
   )
     throw Error('This native command has not been ported yet. The current notebook has not changed.');
   buildingTransaction(world, (candidate) => {
+    acknowledgeFoundWork(candidate);
+    if (command.kind === 'reply') replyBuilding(candidate, command.who, command.reply);
     candidate.inputs.push(command);
     candidate.applied++;
     if (command.kind === 'go') beginBuildingWalk(candidate, command.to);
     else if (command.kind === 'start-work') beginBuildingWork(candidate, command.task);
+    else if (
+      command.kind === 'rest' &&
+      candidate.phase === 'day' &&
+      !candidate.k.walk &&
+      candidate.k.busyTask === null &&
+      candidate.k.busyUntil <= candidate.minute
+    )
+      caretakerScene(candidate, 'quiet-break', 'rest', 10, 0.02);
     else if (command.kind === 'entrust') entrustBuilding(candidate, command.who, command.task);
     else if (command.kind === 'repayment') arrangeRepaymentBuilding(candidate);
     else if (command.kind === 'help-story') helpStoryBuilding(candidate, command.who);
@@ -930,7 +980,9 @@ export function actBuilding(world: BuildingWorld, requested: NewInput): void {
     else if (command.kind === 'knock') knockBuilding(candidate, command.who);
     else if (command.kind === 'sit') sitBuilding(candidate, command.who, command.topic);
     else if (command.kind === 'word') askWordBuilding(candidate, command.who);
-    else if (command.kind === 'news') askNewsBuilding(candidate, command.who, promiseDues);
+    else if (command.kind === 'reply') {
+      /* handled before recording */
+    } else if (command.kind === 'news') askNewsBuilding(candidate, command.who, promiseDues);
     else if (command.kind === 'tell')
       tellBuilding(candidate, command.who, command.prop, command.value, command.sure);
     else if (command.kind === 'invent') inventBuilding(candidate, command.who, command.about, command.trait);

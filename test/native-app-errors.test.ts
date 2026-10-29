@@ -14,6 +14,7 @@ const io = vi.hoisted(() => ({
   candidate: undefined as ReturnType<typeof openBuilding> | undefined,
   dialog: false,
   invalidate: vi.fn(),
+  gate: vi.fn(),
   recoveryBusy: false,
   arrive: vi.fn(),
   AdmissionFailure: class extends Error {
@@ -81,7 +82,7 @@ vi.mock('../src/ui/native-cast-continuity.ts', () => ({
   invalidateContinuity: io.invalidate,
   recoveryPending: () => io.recoveryBusy,
   validateContinuity: io.validate,
-  gateContinuity: vi.fn(),
+  gateContinuity: io.gate,
   acknowledgeContinuity: vi.fn(),
   checkpointContinuity: vi.fn(),
   castReceipts: () => undefined,
@@ -119,7 +120,10 @@ class ElementStub {
     this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
   }
   click() {
-    for (const listener of this.listeners.get('click') ?? []) listener();
+    this.fire('click');
+  }
+  fire(event: string) {
+    for (const listener of this.listeners.get(event) ?? []) listener();
   }
   querySelector(selector: string): ElementStub | null {
     const attribute = /^\[([a-z-]+)(?:="?([^"\]]+)"?)?\]$/.exec(selector);
@@ -128,7 +132,11 @@ class ElementStub {
       (attribute[2]
         ? this.innerHTML.includes(`${attribute[1]}="${attribute[2]}"`)
         : this.innerHTML.includes(attribute[1] ?? ''));
-    if (present || (selector === '.new-confirm' && this.innerHTML.includes('class="new-confirm"'))) {
+    if (
+      (selector === 'input' && this.innerHTML.includes('<input')) ||
+      present ||
+      (selector === '.new-confirm' && this.innerHTML.includes('class="new-confirm"'))
+    ) {
       if (!this.selected.has(selector)) {
         const found = new ElementStub('button');
         found.hidden = selector === '.new-confirm';
@@ -168,6 +176,7 @@ beforeEach(() => {
   io.candidate = undefined;
   io.dialog = false;
   io.invalidate.mockReset();
+  io.gate.mockReset();
   io.recoveryBusy = false;
   io.arrive.mockReset();
   body = new ElementStub('body');
@@ -462,5 +471,56 @@ test('file replacement holds old actions through late source validation and rele
   await _debug.send({ kind: 'next' });
   expect(io.update).toHaveBeenCalledTimes(1);
   expect(_debug.s).toBe(world);
+  expect(io.save).not.toHaveBeenCalled();
+});
+
+test('accepted file continuity and worker promotion commit before another selection can run', async () => {
+  io.mode = 'file';
+  const { openBuilding: openCurrentBuilding } = await import('../src/sim/hf-game.ts');
+  const original = openCurrentBuilding(7);
+  original.phase = 'night';
+  const { _debug, importFileText } = await import('../src/ui/app.ts');
+  await _debug.begin(original, true);
+  const accepted = openCurrentBuilding(8);
+  accepted.phase = 'night';
+  io.candidate = accepted;
+  let atNextSelection: unknown;
+  io.gate.mockImplementationOnce(() => {
+    queueMicrotask(() => {
+      atNextSelection = _debug.s;
+    });
+  });
+  await importFileText('complete file, checked by owner');
+  expect(atNextSelection).toBe(accepted);
+  expect(_debug.s).toBe(accepted);
+  expect(io.save).not.toHaveBeenCalled();
+});
+
+test('native file-picker cancel prevents an already selected pending file from installing', async () => {
+  io.mode = 'file';
+  const { openBuilding: openCurrentBuilding } = await import('../src/sim/hf-game.ts');
+  const original = openCurrentBuilding(7);
+  original.phase = 'night';
+  const { _debug, importFileText } = await import('../src/ui/app.ts');
+  await _debug.begin(original, true);
+  await _debug.titlePage();
+  const candidate = openCurrentBuilding(8);
+  candidate.phase = 'night';
+  io.candidate = candidate;
+  let finish!: () => void;
+  io.validate.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const loading = importFileText('complete detached pending file');
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+  const input = app.querySelector('input');
+  expect(input).not.toBeNull();
+  input?.fire('cancel');
+  finish();
+  await loading;
+  expect(_debug.s).toBe(original);
   expect(io.save).not.toHaveBeenCalled();
 });

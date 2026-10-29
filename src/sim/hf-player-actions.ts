@@ -13,9 +13,10 @@ import {
   interruptBuildingPerson,
 } from './hf-game.ts';
 import { currentBody, currentTies } from './hf-readings.ts';
-import { atMinute } from './hf-run.ts';
+import { atMinute, HF_MINUTE } from './hf-run.ts';
 import { storySittingBuilding } from './hf-stories.ts';
 import { type BuildingWorld, buildingDay, buildingPeopleTogether, sayBuilding } from './hf-world.ts';
+import { PRIVATE_LINES, STORY_LINES } from './stories.ts';
 
 function resident(world: BuildingWorld, id: Rid) {
   const found = world.residents.find((resident) => resident.id === id);
@@ -57,16 +58,16 @@ export function sitBuilding(world: BuildingWorld, who: Rid, topic?: 'boundaries'
   }
   if (!caretakerScene(world, `sit:${who}`, 'rest', 10, 0.02)) return;
   person.sitDay = buildingDay(world);
-  const line = SIT_LINES[who][person.sits % SIT_LINES[who].length];
-  if (!line) throw Error('The authored sitting has no story.');
-  sayBuilding(
-    world,
-    who,
+  const boundaries =
+    'Work boundaries and training? I want to choose what I tell you. Nursing does not make me available to the whole building.';
+  const line =
     who === 'derya' && topic === 'boundaries'
-      ? 'Work boundaries and training? I want to choose what I tell you. Nursing does not make me available to the whole building.'
-      : line,
-    'voice',
-  );
+      ? world.said.some((entry) => entry.who === who && entry.text === boundaries)
+        ? undefined
+        : boundaries
+      : SIT_LINES[who][person.sits];
+  if (line) sayBuilding(world, who, line, 'voice');
+  else sayBuilding(world, 'narrator', `You sit quietly with ${nameOf(who)}.`, 'journal');
   person.sits++;
   applyBuildingEvents(world, [
     {
@@ -81,6 +82,81 @@ export function sitBuilding(world: BuildingWorld, who: Rid, topic?: 'boundaries'
   ]);
   storySittingBuilding(world, who, topic);
 }
+export function canReplyBuilding(world: BuildingWorld, who: Rid): boolean {
+  const sit = [...world.inputs].reverse().find((input) => input.kind === 'sit' || input.kind === 'reply');
+  const line =
+    sit?.kind === 'sit'
+      ? [...world.said]
+          .reverse()
+          .find(
+            (entry) =>
+              entry.at === sit.at &&
+              ((entry.who === who && entry.kind === 'voice') ||
+                (entry.who === 'narrator' && entry.text === `You sit quietly with ${nameOf(who)}.`)),
+          )
+      : undefined;
+  const authored =
+    line?.who === who &&
+    [
+      ...SIT_LINES[who],
+      ...Object.values(PRIVATE_LINES),
+      ...Object.values(STORY_LINES),
+      'Work boundaries and training? I want to choose what I tell you. Nursing does not make me available to the whole building.',
+    ].includes(line.text);
+  return (
+    !!authored &&
+    !world.pendingReply &&
+    sit?.kind === 'sit' &&
+    sit.who === who &&
+    world.minute - sit.at <= 30 &&
+    buildingPeopleTogether(world, KAPICI, who) &&
+    !world.k.walk &&
+    world.k.busyTask === null
+  );
+}
+export function replyBuilding(world: BuildingWorld, who: Rid, reply: 'thank' | 'listen'): void {
+  if (!canReplyBuilding(world, who) || !canSpeakBuilding(world, who)) return;
+  if (!caretakerScene(world, `reply:${who}`, 'talk', 2, 0.02)) return;
+  sayBuilding(world, KAPICI, reply === 'thank' ? 'Thank you for telling me.' : 'I am listening.', 'voice');
+  interruptBuildingPerson(world, who, 'The resident considers a reply.');
+  const choice = chooseBuilding(
+    world,
+    who,
+    [
+      buildingOffer(who, 'reply-continue', 'talk', 2, {
+        label: 'respond',
+        target: KAPICI,
+        expected: { needs: { belonging: 0.04 }, followedBy: [], provenance: [] },
+      }),
+      buildingOffer(who, 'reply-stop', 'wait', 2, {
+        label: 'leave the subject',
+        expected: { needs: { autonomy: 0.1 }, followedBy: [], provenance: [] },
+      }),
+    ],
+    'The resident chooses whether to continue.',
+  );
+  const caretaker = buildingEngine(world).active.find(
+    (activity) => activity.person === KAPICI && activity.offer.id === `scene:reply:${who}`,
+  );
+  const listener = buildingEngine(world).active.find(
+    (activity) => activity.person === who && activity.offer.id === choice.chosenAffordanceId,
+  );
+  // The interrupted routine no longer owns the resident's next boundary.
+  // A rejected offer leaves the next ordinary decision available.
+  resident(world, who).until = listener
+    ? Math.ceil((listener.start + listener.offer.durationMs - world.protocol.phase) / HF_MINUTE)
+    : world.minute + 1;
+  if (caretaker && listener)
+    world.pendingReply = {
+      who,
+      accepted: choice.chosenAffordanceId === 'reply-continue',
+      caretakerId: caretaker.id,
+      residentId: listener.id,
+      caretakerStatus: null,
+      residentStatus: null,
+    };
+}
+
 export function buildingWordOffers(person: string): Offer[] {
   return [
     buildingOffer(person, 'promise_word', 'help', 2, {

@@ -122,6 +122,15 @@ export interface WorldState {
   residents: RState[];
   tasks: Task[];
   nextTask: number;
+  pendingWork: { who: Rid; task: number; label: string; found: boolean }[];
+  pendingReply: {
+    who: Rid;
+    accepted: boolean;
+    caretakerId: string;
+    residentId: string;
+    caretakerStatus: 'completed' | 'interrupted' | null;
+    residentStatus: 'completed' | 'interrupted' | null;
+  } | null;
   said: Said[];
   talks: Talk[];
   reports: DayReport[];
@@ -153,6 +162,8 @@ export interface WorldState {
 export type Input =
   | { at: number; kind: 'go'; to: Place }
   | { at: number; kind: 'start-work'; task: number }
+  | { at: number; kind: 'rest' }
+  | { at: number; kind: 'reply'; who: Rid; reply: 'thank' | 'listen' }
   | { at: number; kind: 'news'; who: Rid }
   | { at: number; kind: 'tell'; who: Rid; prop: string; value: boolean; sure: boolean }
   | { at: number; kind: 'invent'; who: Rid; about: Rid; trait: string }

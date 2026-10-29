@@ -17,6 +17,7 @@ import { exportNativeFile, readNativeFileText } from './native-file.ts';
 import { nativeNotebook, restoreNativeNotebook } from './native-notebook.ts';
 import { legsLine, type NativeProjection, readOf, tellables, wordHint } from './native-reads.ts';
 import { untilSomethingHappens } from './playback.ts';
+import { requirePortableWrite } from './portable-write-guard.ts';
 
 export type OwnerOperation = (
   | { kind: 'open'; args: Parameters<typeof openBuilding> }
@@ -100,7 +101,8 @@ export function createNativeOwnerDispatcher(
       if (operation.kind === 'export')
         return exportNativeFile(world, operation.provenance, operation.receipts);
       if (operation.kind === 'checkpoint') return buildingEngine(world).checkpoint();
-      if (operation.kind === 'person')
+      if (operation.kind === 'person') {
+        requirePortableWrite(operation.id);
         return {
           body: currentBody(buildingEngine(world), operation.id).state,
           now: buildingEngine(world).now,
@@ -108,6 +110,7 @@ export function createNativeOwnerDispatcher(
             ? { transfer: currentDeparture(buildingEngine(world), operation.id, []).transfer }
             : undefined,
         };
+      }
       if (operation.kind === 'act') {
         actBuilding(world, operation.input);
         revision++;

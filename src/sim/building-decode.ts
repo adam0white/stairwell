@@ -182,6 +182,8 @@ const input: Check = (v) => {
   const variants: Record<string, [Record<string, Check>, Record<string, Check>?]> = {
     go: [{ to: place }],
     'start-work': [{ task: nat }],
+    rest: [{}],
+    reply: [{ who: rid, reply: one('thank', 'listen') }],
     news: [{ who: rid }],
     tell: [{ who: rid, prop: str, value: bool, sure: bool }],
     invent: [{ who: rid, about: rid, trait: str }],
@@ -243,6 +245,17 @@ const world = obj(
     residents: array(resident),
     tasks: array(task),
     nextTask: nat,
+    pendingWork: array(obj({ who: rid, task: nat, label: str, found: bool })),
+    pendingReply: nullable(
+      obj({
+        who: rid,
+        accepted: bool,
+        caretakerId: str,
+        residentId: str,
+        caretakerStatus: nullable(one('completed', 'interrupted')),
+        residentStatus: nullable(one('completed', 'interrupted')),
+      }),
+    ),
     said: array(
       obj(
         { at: nat, who: str, text: str, kind: one('journal', 'voice', 'heard', 'margin', 'event') },
@@ -349,12 +362,7 @@ export function decodeBuildingWorld(inputValue: unknown): BuildingWorld {
       fail();
     if (
       w.applied > w.inputs.length ||
-      w.inputs.some(
-        (x, i) =>
-          x.at > w.minute ||
-          x.at < (w.inputs[i - 1]?.at ?? 0) ||
-          (x.kind === 'start-work' && w.version !== 'stairwell@16'),
-      )
+      w.inputs.some((x, i) => x.at > w.minute || x.at < (w.inputs[i - 1]?.at ?? 0))
     )
       fail();
     if (w.minute < 420 || w.protocol.phase >= 60000 || w.protocol.sequence < 1 || w.protocol.evidence < 1)
