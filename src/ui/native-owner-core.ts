@@ -179,7 +179,7 @@ export function createNativeOwnerDispatcher(
         if (denial) throw Error(denial.reason);
         if (!currentAuthority)
           throw Error(
-            'This saved chapter has no current character authority. Keep or export it; start fresh to save shared characters.',
+            'Hacer and Sevim cannot be saved for other games from this saved game. Start a new game to share them.',
           );
         requirePortableWrite(operation.id);
         return {

@@ -293,7 +293,7 @@ async function showLoadError(error: unknown, action: string) {
     : submitted
       ? 'The shared history may have changed, but no confirmation reached this page. Do not start another game yet.'
       : /opening work duty|opening is already on duty|already doing something at the start/i.test(detail)
-        ? 'A resident must finish their current work before this chapter can start. Continue in the earlier game, then return here.'
+        ? 'A resident must finish their current work before this week can start. Continue in the earlier game, then return here.'
         : /source.*(dues|account|duty)|obligations|duties/i.test(detail)
           ? 'This history still has duties or payments in the earlier game. Finish them there before returning.'
           : /closed|death|terminal/i.test(detail)
@@ -302,9 +302,11 @@ async function showLoadError(error: unknown, action: string) {
                   detail,
                 )
               ? 'This history cannot continue in this version of The Stairwell. You can keep playing your saved game or return to the earlier game through All games.'
-              : connection
-                ? 'The game could not check the shared history. You can try the connection again.'
-                : 'This game could not be checked. Use Feedback for help.';
+              : /began before an update/.test(detail)
+                ? detail
+                : connection
+                  ? 'The game could not check the shared history. You can try the connection again.'
+                  : 'This game could not be checked. Use Feedback for help.';
   const dialog = document.createElement('dialog');
   dialog.className = 'sw-feedback';
   dialog.setAttribute('aria-label', action);
@@ -1634,11 +1636,18 @@ function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof jour
   }
   const lines = s.said.filter((x) => dayOf(x.at) === dayOf(s.minute) || x.kind === 'margin').slice(-40);
   const refusals = continuityRefusals(s);
-  const key = JSON.stringify(refusals) + lines.map((x) => `${x.n}:${x.at}:${x.text}`).join('|');
+  const diagnostic =
+    new URLSearchParams(globalThis.location?.search ?? '').get('lab') === '1'
+      ? continuityRefusals(s, true)
+      : [];
+  const key = JSON.stringify([refusals, diagnostic]) + lines.map((x) => `${x.n}:${x.at}:${x.text}`).join('|');
   if (el.dataset.k !== key) {
     el.dataset.k = key;
     el.innerHTML =
       refusals.map((reason) => `<p role="status" class="character-refusal">${esc(reason)}</p>`).join('') +
+      (diagnostic.length
+        ? `<details><summary>Debug</summary>${diagnostic.map((reason) => `<p>${esc(reason)}</p>`).join('')}</details>`
+        : '') +
       lines.map(saidLine).join('');
     const observer = journalResizes.get(el);
     observer?.disconnect();

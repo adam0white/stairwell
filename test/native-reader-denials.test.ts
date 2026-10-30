@@ -161,6 +161,11 @@ test('allocated unsupported/v1 and occupied histories stay on the shelf with per
     expect(receipts.denials?.map((d) => d.castId).sort()).toEqual(parents.map((p) => p.castId).sort());
     for (const denial of receipts.denials ?? [])
       expect(denial.reason).toContain(denial.castId === hacer.castId ? 'Hacer' : 'Sevim');
+    expect(f.controller.continuityRefusals(world)).toEqual([
+      'Hacer could not join the building this time. Hacer starts fresh here. Their saved history in other games has not changed.',
+      'Sevim could not join the building this time. Sevim starts fresh here. Their saved history in other games has not changed.',
+    ]);
+    expect(f.controller.continuityRefusals(world, true)).toEqual(receipts.denials?.map((d) => d.reason));
     expect(receipts.owned).toEqual({});
     expect(receipts.sources).toEqual({});
     expect(receipts.chapter?.inputs).toEqual([]);
@@ -201,8 +206,8 @@ test('allocated unsupported/v1 and occupied histories stay on the shelf with per
     // A synthetic ending boundary tests the common publication guard before living/dead projection.
     world.phase = 'end';
     const publication = await f.controller.checkpointContinuity();
-    expect(publication.ok).toBe(false);
-    if (!publication.ok) expect(publication.failures.map((f) => f.name).sort()).toEqual(['Hacer', 'Sevim']);
+    expect(publication).toEqual({ ok: true });
+    expect(await f.controller.checkpointContinuity()).toEqual({ ok: true });
     expect(f.requests.length).toBe(writesBefore);
     expect(f.records.size).toBe(recordsBefore);
     expect(canonicalPersona(f.state())).toBe(before);
