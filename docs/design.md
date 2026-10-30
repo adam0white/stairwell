@@ -321,3 +321,9 @@ The detached continuation reaches1170 through ordinary steps. At1170 Derya is st
 meal interval begun at1141; the existing host waits for that interval before offering night
 work. The control then reaches the ordinary work offer and HF begin without forcing assent,
 editing a private clock/body, waiving duty or changing the returned990 world.
+
+## R2 reader candidate and Deferred browser gate — 2026-10-30
+
+The current uncommitted reader candidate admits supported people independently and pins named ID/revision/reason refusals for unsupported, occupied and peer-blocked Hacer/Sevim histories. Fresh local roles do not inherit refused histories. Original complete shelf records stay on the shelf. Every requested head, including refusal and absence, stays in the single atomic CAS. New explicit authority and denial metadata survives reload; denied actors cannot gain source, checkpoint, fork or terminal permission when the catalog changes. Earlier delivery receipts remain historical; this candidate is not deployed or certified.
+
+Deferred only to the director's genuine browser access/permission input: leased existing Chrome public UI at360×690 and1280×800, visible separate refusal notices, pointer input, complete export and reload. CUA access is unavailable; isolated browser launches are forbidden and this worker launches no browser. Target2026-11-03. Headless code, real SDK gates, CAS, full replay and build remain this candidate's completed implementation scope; owner/player acceptance is separate.

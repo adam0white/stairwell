@@ -14,7 +14,8 @@ import {
 
 test('complete checkpoint and active HF activity survive a detached JSON round trip', () => {
   const world = openBuilding(7, 'stairwell@16');
-  const receipts = { source: ['opaque'] };
+  // Historical provenance stays detached and readable without current write authority.
+  const receipts = { owned: {}, sources: { source: ['opaque'] }, authored: false, fileOrigin: false };
   const notebook = nativeNotebook(world, receipts);
   const before = structuredClone(notebook);
   const result = restoreNativeNotebook(JSON.parse(JSON.stringify(notebook)));
@@ -22,8 +23,13 @@ test('complete checkpoint and active HF activity survive a detached JSON round t
   expect(buildingEngine(result.world).active).toEqual(buildingEngine(world).active);
   expect(result.castReceipts).toEqual(receipts);
   expect(notebook).toEqual(before);
-  receipts.source.push('changed');
-  expect(notebook.castReceipts).toEqual({ source: ['opaque'] });
+  receipts.sources.source.push('changed');
+  expect(notebook.castReceipts).toEqual({
+    owned: {},
+    sources: { source: ['opaque'] },
+    authored: false,
+    fileOrigin: false,
+  });
 });
 
 test('metadata and full input log must match, and rejected old files stay untouched', () => {

@@ -1,4 +1,5 @@
 import type { BuildingWorld } from '../sim/hf-world.ts';
+import { validateNativeReceiptMetadata } from '../sim/native-cast-life.ts';
 import { type NativeFileNotebook, nativeFileNotebook, restoreNativeNotebook } from './native-notebook.ts';
 
 // The actual 4.6 month checkpoint is 59,573,010 bytes. Its notebook and two
@@ -102,6 +103,7 @@ export function readNativeFileText(
     provenance = { ...(provenance as Record<string, unknown>), nativeCast: restored.castReceipts };
   if (object(provenance) && Object.hasOwn(provenance, 'nativeCast')) {
     if (!object(provenance.nativeCast)) return invalid();
+    validateNativeReceiptMetadata(provenance.nativeCast);
     provenance = { ...provenance, nativeCast: { ...provenance.nativeCast, owned: {}, fileOrigin: true } };
   }
   return { world: restored.world, provenance };
@@ -114,6 +116,7 @@ export function exportNativeFile(
   limits: Limits = DEFAULT_LIMITS,
 ): NativeFileNotebook {
   if (!object(provenance) || !object(receipts)) return invalid();
+  validateNativeReceiptMetadata(receipts);
   checkStructure(provenance, limits);
   checkStructure(receipts, limits);
   const flat = { ...provenance, nativeCast: { ...receipts, owned: {}, fileOrigin: true } };

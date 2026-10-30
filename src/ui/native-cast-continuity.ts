@@ -5,6 +5,7 @@ import {
   anchorPersonaLife,
   canonicalPersona,
   claimCastChapterBatch,
+  claimPortablePerson,
   closePersonaBranch,
   createPersona,
   initialPersonaLife,
@@ -14,6 +15,9 @@ import {
   type PersonaLife,
   type PersonaRequest,
   personaChannel,
+  portablePassport,
+  portablePersonOwner,
+  preparePersonaLife,
   validatePersona,
   watchPersonaCheckpoint,
 } from '@adam0white/lab-client';
@@ -28,11 +32,13 @@ import type { BuildingEdition, BuildingWorld } from '../sim/hf-world.ts';
 import {
   ALLOCATION,
   admitNativeCast,
+  NATIVE_CAST_AUTHORITY,
   type NativeCastChapter,
+  type NativeCastDenial,
   refuseWorkTransfer,
   roleFor,
   validateNativeChapter,
-  validateNativeLifeInputs,
+  validateNativeReceiptMetadata,
 } from '../sim/native-cast-life.ts';
 import { type NativeNotebook, nativeNotebook, readNativeNotebook } from './native-notebook.ts';
 import { requirePortableWrite } from './portable-write-guard.ts';
@@ -41,6 +47,8 @@ import { fileMode } from './session-route.ts';
 type Shelf = ReturnType<typeof personaChannel>;
 type SourceProof = { checkpoint: BuildingCheckpoint<BuildingWorld> };
 export type CastReceipts = {
+  authority?: 'stairwell-authority/1' | typeof NATIVE_CAST_AUTHORITY;
+  denials?: NativeCastDenial[];
   owned: Record<string, PersonaEnvelope>;
   fileOrigin: boolean;
   authored: boolean;
@@ -236,6 +244,16 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
     recoveries ??= browserRecoveryStore();
     return recoveries;
   }
+  async function stageRecovery(
+    recovery: NativeRecovery,
+    serial: number,
+    captured: BuildingWorld | undefined,
+  ): Promise<void> {
+    // Capture can await worker work. Invalidation must prevent a new pre-CAS write.
+    requireCurrent(serial, captured);
+    await store().put(recovery);
+    requireCurrent(serial, captured);
+  }
   function runtime(world: BuildingWorld): Runtime {
     let value = runtimes.get(world);
     if (!value) {
@@ -269,6 +287,8 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
   function castReceipts(world: BuildingWorld): CastReceipts {
     const value = runtime(world);
     return structuredClone({
+      ...(value.authority ? { authority: value.authority } : {}),
+      ...(value.denials ? { denials: value.denials } : {}),
       owned: value.owned,
       sources: value.sources,
       authored: value.authored,
@@ -277,31 +297,18 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
     });
   }
   function restoreCastReceipts(world: BuildingWorld, input: unknown, imported = false): void {
+    const denials = validateNativeReceiptMetadata(input);
+    const record = input as CastReceipts | undefined;
     const value = runtime(world);
     value.owned = {};
     value.rawOwned = undefined;
-    value.sources = {};
-    value.chapter = undefined;
-    value.fileOrigin = file || imported;
-    value.authored = false;
-    if (input === undefined) return;
-    assertPlainBuildingData(input);
-    if (
-      !object(input) ||
-      Object.keys(input).some(
-        (key) => !['owned', 'sources', 'authored', 'fileOrigin', 'chapter'].includes(key),
-      ) ||
-      !object(input.owned) ||
-      !object(input.sources) ||
-      typeof input.authored !== 'boolean' ||
-      typeof input.fileOrigin !== 'boolean'
-    )
-      throw new Error('The saved character receipts are invalid. Keep the file.');
-    value.fileOrigin ||= input.fileOrigin;
-    value.authored = !value.fileOrigin && input.authored;
-    value.sources = structuredClone(input.sources) as Runtime['sources'];
-    value.chapter = input.chapter as NativeCastChapter | undefined;
-    if (!value.fileOrigin) value.rawOwned = structuredClone(input.owned);
+    value.sources = structuredClone(record?.sources ?? {});
+    value.chapter = structuredClone(record?.chapter);
+    value.fileOrigin = file || imported || !!record?.fileOrigin;
+    value.authored = !value.fileOrigin && !!record?.authored;
+    value.authority = denials ? NATIVE_CAST_AUTHORITY : undefined;
+    value.denials = denials;
+    if (!value.fileOrigin && record) value.rawOwned = structuredClone(record.owned);
   }
   async function validateContinuity(world: BuildingWorld): Promise<void> {
     const serial = generation,
@@ -309,6 +316,7 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
     const value = runtime(world);
     const checkpoint = await game.checkpoint(world);
     value.chapter = await game.chapter(world, value.chapter);
+    validateNativeReceiptMetadata(castReceipts(world));
     const life = (world as BuildingWorld & { nativeLife?: LifePreparation[] }).nativeLife ?? [];
     if (canonicalPersona(life) !== canonicalPersona(value.chapter?.inputs ?? []))
       throw new Error('The opening life inputs do not match their source recipe. Keep the file.');
@@ -345,6 +353,10 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
           )
             throw new Error(
               'The character source digest does not match the complete checkpoint. Keep the file.',
+            );
+          if (value.authority !== NATIVE_CAST_AUTHORITY)
+            throw new Error(
+              'This saved chapter has no current character authority. Keep or export it; start fresh to save shared characters.',
             );
           const person = await game.person(world, role),
             body = person.body;
@@ -398,28 +410,118 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
     options.recording('pending-cast-group', false);
     if (edition === 'stairwell@16') {
       if (!fresh) refuseWorkTransfer(edition);
-      return game.open(seed, edition);
+      const world = await game.open(seed, edition);
+      runtime(world).authority = NATIVE_CAST_AUTHORITY;
+      runtime(world).denials = [];
+      return world;
     }
-    if (fresh) return game.open(seed, edition);
+    if (fresh) {
+      const world = await game.open(seed, edition);
+      runtime(world).authority = NATIVE_CAST_AUTHORITY;
+      runtime(world).denials = [];
+      return world;
+    }
     const channel = await ready();
     requireCurrent(serial, previous);
-    const preparedBatch = await channel.request<LifeBatchPreparation>({
-      action: 'prepareBatch',
-      castIds: ALLOCATION.map((c) => c.castId),
-    });
+    const preparedBatch = structuredClone(
+      await channel.request<LifeBatchPreparation>({
+        action: 'prepareBatch',
+        castIds: ALLOCATION.map((c) => c.castId),
+      }),
+    );
     requireCurrent(serial, previous);
     assertPlainBuildingData(preparedBatch);
-    if (!preparedBatch || !object(preparedBatch.expectedHeads))
-      throw new Error('The prepared shelf heads are missing. Keep the source chapter.');
-    for (const person of ALLOCATION) {
-      if (!Object.hasOwn(preparedBatch.expectedHeads, person.castId))
-        throw new Error('The prepared shelf heads are missing. Keep the source chapter.');
-      if (preparedBatch.expectedHeads[person.castId] !== null) requirePortableWrite(roleFor(person.castId));
+    // Validate transport structure and parent integrity before creating a worker.
+    // These errors must never become per-person semantic refusals.
+    if (
+      !preparedBatch ||
+      Object.keys(preparedBatch).sort().join(',') !== 'blocked,expectedHeads,inputs' ||
+      !object(preparedBatch.expectedHeads) ||
+      !Array.isArray(preparedBatch.inputs) ||
+      !Array.isArray(preparedBatch.blocked) ||
+      Object.keys(preparedBatch.expectedHeads).sort().join(',') !==
+        ALLOCATION.map((person) => person.castId)
+          .sort()
+          .join(',')
+    )
+      throw new Error('The prepared character histories are invalid. Keep the source chapter.');
+    const preparedIds = new Set<string>();
+    for (const input of preparedBatch.inputs) {
+      if (!object(input) || !object(input.parent))
+        throw new Error('A prepared character parent is missing. Keep the source chapter.');
+      const parent = await validatePersona(input.parent);
+      if (
+        !ALLOCATION.some((person) => person.castId === parent.castId) ||
+        preparedIds.has(parent.castId) ||
+        preparedBatch.expectedHeads[parent.castId] !== parent.revision
+      )
+        throw new Error('The prepared parents do not match the requested shelf heads.');
+      if (
+        typeof input.clockMs !== 'number' ||
+        !Number.isFinite(input.clockMs) ||
+        canonicalPersona(preparePersonaLife(parent, input.clockMs)) !== canonicalPersona(input)
+      )
+        throw Error('The prepared time away does not match its parent. Keep the source chapter.');
+      preparedIds.add(parent.castId);
     }
+    for (const blocked of preparedBatch.blocked) {
+      if (
+        !object(blocked) ||
+        Object.keys(blocked).sort().join(',') !== 'castId,reason' ||
+        !ALLOCATION.some((person) => person.castId === blocked.castId) ||
+        typeof blocked.castId !== 'string' ||
+        preparedIds.has(blocked.castId) ||
+        typeof blocked.reason !== 'string' ||
+        !blocked.reason.trim() ||
+        blocked.reason.length > 1500 ||
+        preparedBatch.expectedHeads[blocked.castId] === null
+      )
+        throw new Error('A prepared character refusal is invalid. Keep the source chapter.');
+      preparedIds.add(blocked.castId);
+    }
+    for (const person of ALLOCATION) {
+      const revision = preparedBatch.expectedHeads[person.castId];
+      if (
+        revision !== null &&
+        (typeof revision !== 'string' || !/^[a-f0-9]{64}$/.test(revision) || !preparedIds.has(person.castId))
+      )
+        throw new Error('The prepared shelf revision is invalid. Keep the source chapter.');
+    }
+    const denials: NativeCastDenial[] = preparedBatch.blocked.map((blocked) => ({
+      castId: blocked.castId,
+      revision: preparedBatch.expectedHeads[blocked.castId] as string,
+      reason: `${RESIDENTS[roleFor(blocked.castId)].name}: ${blocked.reason}`,
+    }));
+    const candidates: LifePreparation[] = [];
+    for (const input of preparedBatch.inputs) {
+      // Pure SDK/HF semantics only. No channel or worker transport is inside this catch.
+      try {
+        if (portablePassport(input.parent)) {
+          const owner = portablePersonOwner(input.parent);
+          if (owner && owner !== 'stairwell')
+            throw Error(`The shared history is still in ${owner}. Continue or export that chapter.`);
+        }
+        await admitNativeCast(input, edition);
+        claimPortablePerson(input.parent, 'stairwell');
+        candidates.push(input);
+      } catch (error) {
+        denials.push({
+          castId: input.parent.castId,
+          revision: input.parent.revision,
+          reason: `${RESIDENTS[roleFor(input.parent.castId)].name}: ${text(error)} The shared history was kept. A local character starts here.`,
+        });
+      }
+    }
+    const admissionBatch = {
+      ...preparedBatch,
+      inputs: candidates,
+      blocked: denials.map(({ castId, reason }) => ({ castId, reason })),
+    };
+    requireCurrent(serial, previous);
     let world = await game.open(seed, edition);
     let inputs: LifePreparation[] = [],
       arrivals: NativeCastChapter['arrivals'] = [];
-    let expectedHeads: Record<string, string | null> = {};
+    const expectedHeads = structuredClone(preparedBatch.expectedHeads);
     const key = `admission:${uuid()}`;
     let submitted = false,
       accepted = false;
@@ -431,29 +533,8 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
       setEnabled: (value) => channel.setEnabled(value),
       async request<T>(request: PersonaRequest): Promise<T> {
         if (request.action === 'prepareBatch') {
-          const batch = preparedBatch;
+          const batch = admissionBatch;
           requireCurrent(serial, previous);
-          assertPlainBuildingData(batch);
-          if (
-            !batch ||
-            !Array.isArray(batch.inputs) ||
-            !Array.isArray(batch.blocked) ||
-            batch.blocked.length ||
-            !object(batch.expectedHeads)
-          )
-            throw new Error(
-              'A character still needs their source chapter. Keep it; no fresh substitute was created.',
-            );
-          inputs = validateNativeLifeInputs(batch.inputs);
-          await Promise.all(inputs.map((input) => game.admit(world, input, edition)));
-          expectedHeads = Object.fromEntries(
-            ALLOCATION.map((c) => [
-              c.castId,
-              inputs.find((input) => input.parent.castId === c.castId)?.parent.revision ?? null,
-            ]),
-          );
-          if (canonicalPersona(expectedHeads) !== canonicalPersona(batch.expectedHeads))
-            throw new Error('The prepared shelf heads do not match their character histories.');
           const uncertain = (await store().list()).find(
             (record) =>
               record.operation === 'admission' &&
@@ -473,14 +554,18 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
         if (canonicalPersona(request.expectedHeads) !== canonicalPersona(expectedHeads))
           throw new Error('The submitted parents differ from the prepared shelf heads.');
         const chapter: NativeCastChapter = {
-          version: 'stairwell-cast/2',
+          version: 'stairwell-cast/3',
+          denials,
           inputs,
           expectedHeads,
           arrivals,
           claims,
         };
         await game.chapter(world, chapter);
+        requireCurrent(serial, previous);
         const receipts: CastReceipts = {
+          authority: NATIVE_CAST_AUTHORITY,
+          denials,
           owned: Object.fromEntries(claims.map((claim) => [claim.castId, claim])),
           sources: {},
           fileOrigin: false,
@@ -494,7 +579,7 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
           expectedHeads,
           notebook: await game.notebook(world, receipts),
         };
-        await store().put(recovery);
+        await stageRecovery(recovery, serial, previous);
         requireCurrent(serial, previous);
         submitted = true;
         const reply = await channel.request<unknown>(request);
@@ -518,12 +603,20 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
           world = await game.reopen(world, seed, edition, arrivals, inputs);
           return arrivals;
         },
-        { isCurrent: () => serial === generation && options.current() === previous },
+        {
+          isCurrent: () => serial === generation && options.current() === previous,
+          admitPerson: async (input) => {
+            await admitNativeCast(input, edition);
+          },
+        },
       );
       requireCurrent(serial, previous);
       const value = runtime(world);
+      value.authority = NATIVE_CAST_AUTHORITY;
+      value.denials = denials;
       value.chapter = {
-        version: 'stairwell-cast/2',
+        version: 'stairwell-cast/3',
+        denials,
         inputs,
         expectedHeads,
         arrivals,
@@ -646,6 +739,12 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
   async function checkpointPerson(world: BuildingWorld, id: Rid, fork = false, serial = generation) {
     requireCurrent(serial, world);
     if (file) throw new Error('Saved-file play cannot write shared character history.');
+    if (runtime(world).authority !== NATIVE_CAST_AUTHORITY)
+      throw new Error(
+        'This saved chapter has no current character authority. Keep or export it; start fresh to save shared characters.',
+      );
+    const denial = runtime(world).denials?.find((item) => item.castId === RESIDENTS[id].castId);
+    if (denial) throw Error(denial.reason);
     requirePortableWrite(id);
     const channel = await ready();
     refuseWorkTransfer(world.version);
@@ -715,7 +814,9 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
       });
     }
     requireCurrent(serial, world);
-    if (canonicalPersona(await game.checkpoint(world)) !== canonicalPersona(checkpoint))
+    const finalCheckpoint = await game.checkpoint(world);
+    requireCurrent(serial, world);
+    if (canonicalPersona(finalCheckpoint) !== canonicalPersona(checkpoint))
       throw new Error('The game changed while its source was being saved. Pause and try again.');
     const sources = { ...value.sources, [id]: { checkpoint } };
     const receipts = { ...castReceipts(world), owned: { ...value.owned, [castId]: envelope }, sources };
@@ -727,7 +828,7 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
       expectedHeads,
       notebook: await game.notebook(world, receipts),
     };
-    await store().put(recovery);
+    await stageRecovery(recovery, serial, world);
     requireCurrent(serial, world);
     let submitted = false,
       accepted = false;
@@ -848,6 +949,8 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
   return {
     arrive,
     castReceipts,
+    continuityRefusals: (world: BuildingWorld) =>
+      (runtime(world).denials ?? []).map((denial) => denial.reason),
     restoreCastReceipts,
     validateContinuity,
     gateContinuity,
@@ -918,3 +1021,5 @@ export const continuityPanel = () => active().continuityPanel();
 export const recoveryPending = () => installed?.recoveryPending() ?? false;
 export const chooseContinuityRecording = async (value: boolean) => active().chooseContinuityRecording(value);
 export const acknowledgeContinuity = (_world: BuildingWorld) => {};
+
+export const continuityRefusals = (world: BuildingWorld) => active().continuityRefusals(world);
