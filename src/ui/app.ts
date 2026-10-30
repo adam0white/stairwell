@@ -59,6 +59,7 @@ import {
   checkpointContinuity,
   chooseContinuityRecording,
   continuityPanel,
+  continuityRefusals,
   gateContinuity,
   installContinuity,
   invalidateContinuity,
@@ -1632,10 +1633,13 @@ function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof jour
     journalResizes.set(el, observer);
   }
   const lines = s.said.filter((x) => dayOf(x.at) === dayOf(s.minute) || x.kind === 'margin').slice(-40);
-  const key = lines.map((x) => `${x.n}:${x.at}:${x.text}`).join('|');
+  const refusals = continuityRefusals(s);
+  const key = JSON.stringify(refusals) + lines.map((x) => `${x.n}:${x.at}:${x.text}`).join('|');
   if (el.dataset.k !== key) {
     el.dataset.k = key;
-    el.innerHTML = lines.map(saidLine).join('');
+    el.innerHTML =
+      refusals.map((reason) => `<p role="status" class="character-refusal">${esc(reason)}</p>`).join('') +
+      lines.map(saidLine).join('');
     const observer = journalResizes.get(el);
     observer?.disconnect();
     for (const row of el.children) observer?.observe(row);

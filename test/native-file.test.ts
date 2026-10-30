@@ -9,7 +9,7 @@ test('complete command replay round trips with detached flat provenance and no o
   const before = buildingEngine(world).checkpoint();
   const provenance = {
     opaque: { text: 'source' },
-    nativeCast: { owned: { x: 1 }, fileOrigin: false, sources: { x: 'proof' } },
+    nativeCast: { authored: false, owned: { x: 1 }, fileOrigin: false, sources: { x: 'proof' } },
   };
   const receipts = structuredClone(provenance.nativeCast);
   const saved = exportNativeFile(world, provenance, receipts);
@@ -17,14 +17,14 @@ test('complete command replay round trips with detached flat provenance and no o
   expect(buildingEngine(loaded.world).checkpoint()).toEqual(before);
   expect(loaded.provenance).toEqual({
     opaque: { text: 'source' },
-    nativeCast: { owned: {}, fileOrigin: true, sources: { x: 'proof' } },
+    nativeCast: { authored: false, owned: {}, fileOrigin: true, sources: { x: 'proof' } },
   });
   expect(provenance.nativeCast.owned).toEqual({ x: 1 });
   expect(receipts.owned).toEqual({ x: 1 });
   const fromNotebook = readNativeFileText(JSON.stringify(nativeNotebook(world, receipts)));
   expect(buildingEngine(fromNotebook.world).checkpoint()).toEqual(before);
   expect(fromNotebook.provenance).toEqual({
-    nativeCast: { owned: {}, fileOrigin: true, sources: { x: 'proof' } },
+    nativeCast: { authored: false, owned: {}, fileOrigin: true, sources: { x: 'proof' } },
   });
   const again = exportNativeFile(
     loaded.world,

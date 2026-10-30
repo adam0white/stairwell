@@ -443,13 +443,19 @@ test('unrelated account-bound shelf histories do not block the explicitly eligib
   expect(f.currentHead(burak.castId)).toEqual(burak);
 });
 
-test('uncertified shared heads refuse admission without a claim or recovery write', async () => {
+test('uncertified shared heads keep their source while an unowned local role begins', async () => {
   const f = await fixture();
   const before = structuredClone(f.head());
-  await expect(f.controller.arrive(7)).rejects.toThrow(/read-only|still in|source chapter/i);
+  const world = await f.controller.arrive(7);
+  const receipts = f.controller.castReceipts(world);
+  expect(receipts.denials?.map((denial) => denial.castId)).toEqual([f.parent.castId]);
+  expect(receipts.owned).toEqual({});
+  expect(receipts.sources).toEqual({});
   expect(f.head()).toEqual(before);
-  expect(f.requests.some((request) => request.action === 'putBatch')).toBe(false);
-  expect(f.records.size).toBe(0);
+  expect(f.requests.find((request) => request.action === 'putBatch')?.expectedHeads?.[f.parent.castId]).toBe(
+    before?.revision,
+  );
+  expect(f.requests.find((request) => request.action === 'putBatch')?.envelopes).toEqual([]);
 });
 
 test('uncertified shared people refuse an explicit fork before writing recovery or shelf', async () => {

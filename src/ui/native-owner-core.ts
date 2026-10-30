@@ -1,7 +1,8 @@
 /** Game operations stay beside the actual public HF Run. No actor crosses this boundary. */
 
 import type { RunJournalCursor } from '@adam0white/human-framework';
-import { RIDS, type Rid } from '../sim/building-cast.ts';
+import { canonicalPersona } from '@adam0white/lab-client';
+import { RESIDENTS, RIDS, type Rid } from '../sim/building-cast.ts';
 import type { Place } from '../sim/building-types.ts';
 import { currentDeparture } from '../sim/hf-cast.ts';
 import {
@@ -14,7 +15,12 @@ import {
 import { currentBody } from '../sim/hf-readings.ts';
 import { binsWarning } from '../sim/hf-view.ts';
 import type { BuildingWorld } from '../sim/hf-world.ts';
-import { admitNativeCast, validateNativeChapter } from '../sim/native-cast-life.ts';
+import {
+  admitNativeCast,
+  type NativeCastDenial,
+  validateNativeChapter,
+  validateNativeReceiptMetadata,
+} from '../sim/native-cast-life.ts';
 import { exportNativeFile, readNativeFileText } from './native-file.ts';
 import { nativeNotebook, restoreNativeNotebook } from './native-notebook.ts';
 import { legsLine, type NativeProjection, readOf, selfReading, tellables, wordHint } from './native-reads.ts';
@@ -76,6 +82,9 @@ export function createNativeOwnerDispatcher(
 ) {
   let world: BuildingWorld | undefined;
   let revision = 0;
+  let currentAuthority = false;
+  let openingRecipeBound = true;
+  let denials: NativeCastDenial[] = [];
   let journalCursor: RunJournalCursor | undefined;
   let journalProposal: { token: number; cursor: RunJournalCursor } | undefined;
   let journalToken = 0;
@@ -87,18 +96,31 @@ export function createNativeOwnerDispatcher(
     if (operation.kind === 'open') {
       journalCursor = undefined;
       world = openBuilding(...operation.args);
+      currentAuthority = true;
+      openingRecipeBound = false;
+      denials = [];
       revision++;
     } else if (operation.kind === 'notebook') {
       journalCursor = undefined;
       const restored = restoreNativeNotebook(operation.input);
+      const checked = validateNativeReceiptMetadata(restored.castReceipts);
       world = restored.world;
       receipts = restored.castReceipts;
+      currentAuthority = checked !== undefined;
+      openingRecipeBound = true;
+      denials = checked ?? [];
       revision++;
     } else if (operation.kind === 'file') {
       journalCursor = undefined;
       const restored = readNativeFileText(operation.input);
+      const checked = validateNativeReceiptMetadata(
+        (restored.provenance as { nativeCast?: unknown } | undefined)?.nativeCast,
+      );
       world = restored.world;
       provenance = restored.provenance;
+      currentAuthority = checked !== undefined;
+      openingRecipeBound = true;
+      denials = checked ?? [];
       revision++;
     } else {
       if (!world) throw Error('No game is open in this worker.');
@@ -135,12 +157,30 @@ export function createNativeOwnerDispatcher(
           world.version,
           buildingEngine(world).checkpoint().archive.initial.people,
           operation.value,
-        );
+        ).then((chapter) => {
+          if (chapter?.version === 'stairwell-cast/3') {
+            // A recipe cannot grant restored receipt authority or replace its denials.
+            if (openingRecipeBound) {
+              if (currentAuthority && canonicalPersona(denials) !== canonicalPersona(chapter.denials))
+                throw Error('The opening refusals differ from the saved character authority. Keep the file.');
+            } else {
+              denials = structuredClone(chapter.denials ?? []);
+              openingRecipeBound = true;
+            }
+          } else if (chapter) currentAuthority = false;
+          return chapter;
+        });
       if (operation.kind === 'snapshot') return nativeNotebook(world, operation.receipts);
       if (operation.kind === 'export')
         return exportNativeFile(world, operation.provenance, operation.receipts);
       if (operation.kind === 'checkpoint') return buildingEngine(world).checkpoint();
       if (operation.kind === 'person') {
+        const denial = denials.find((item) => item.castId === RESIDENTS[operation.id].castId);
+        if (denial) throw Error(denial.reason);
+        if (!currentAuthority)
+          throw Error(
+            'This saved chapter has no current character authority. Keep or export it; start fresh to save shared characters.',
+          );
         requirePortableWrite(operation.id);
         return {
           body: currentBody(buildingEngine(world), operation.id).state,

@@ -27,12 +27,91 @@ export const ALLOCATION = castForGame('stairwell').filter(
   (person) => person.castId === RESIDENTS.hacer.castId || person.castId === RESIDENTS.sevim.castId,
 );
 export type NativeCastChapter = {
-  version: 'stairwell-cast/2';
+  version: 'stairwell-cast/2' | 'stairwell-cast/3';
+  denials?: NativeCastDenial[];
   inputs: LifePreparation[];
   expectedHeads: Record<string, string | null>;
   arrivals: PersonAuthoring[];
   claims: PersonaEnvelope[];
 };
+export const NATIVE_CAST_AUTHORITY = 'stairwell-authority/2' as const;
+export type NativeCastDenial = { castId: string; revision: string; reason: string };
+
+/** Only denial metadata belongs to an opening; refused raw histories stay on the shelf. */
+export function validateNativeDenials(value: unknown): NativeCastDenial[] {
+  assertPlainBuildingData(value);
+  if (!Array.isArray(value) || value.length > ALLOCATION.length)
+    throw Error('The saved character refusals are missing or invalid. Keep the file.');
+  const ids = new Set<string>();
+  for (const denial of value) {
+    if (
+      !denial ||
+      typeof denial !== 'object' ||
+      Array.isArray(denial) ||
+      Object.keys(denial).sort().join(',') !== 'castId,reason,revision' ||
+      !ALLOCATION.some((person) => person.castId === denial.castId) ||
+      ids.has(denial.castId) ||
+      typeof denial.revision !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(denial.revision) ||
+      typeof denial.reason !== 'string' ||
+      !denial.reason.trim() ||
+      denial.reason.length > 2000 ||
+      !denial.reason.includes(RESIDENTS[roleFor(denial.castId)].name)
+    )
+      throw Error('A saved character refusal is invalid. Keep the file.');
+    ids.add(denial.castId);
+  }
+  return structuredClone(value);
+}
+
+/** Structural authority gate shared by the controller and worker, before activation. */
+export function validateNativeReceiptMetadata(input: unknown): NativeCastDenial[] | undefined {
+  if (input === undefined) return undefined;
+  assertPlainBuildingData(input);
+  const record = input as Record<string, unknown>;
+  const object = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === 'object' && !Array.isArray(value);
+  if (
+    !object(record) ||
+    Object.keys(record).some(
+      (key) =>
+        !['authority', 'denials', 'owned', 'sources', 'authored', 'fileOrigin', 'chapter'].includes(key),
+    ) ||
+    !object(record.owned) ||
+    !object(record.sources) ||
+    typeof record.authored !== 'boolean' ||
+    typeof record.fileOrigin !== 'boolean' ||
+    (record.authority !== undefined &&
+      record.authority !== 'stairwell-authority/1' &&
+      record.authority !== NATIVE_CAST_AUTHORITY)
+  )
+    throw Error('The saved character receipts are invalid. Keep the file.');
+  if (record.authority !== NATIVE_CAST_AUTHORITY) return undefined;
+  const denials = validateNativeDenials(record.denials);
+  const chapter = record.chapter as NativeCastChapter | undefined;
+  if (
+    chapter !== undefined &&
+    (!object(chapter) ||
+      chapter.version !== 'stairwell-cast/3' ||
+      canonicalPersona(chapter.denials) !== canonicalPersona(denials))
+  )
+    throw Error('The saved character refusals do not match the opening. Keep the file.');
+  if (!chapter && denials.length)
+    throw Error('The refused characters have no opening recipe. Keep the file.');
+  if (chapter && (!Array.isArray(chapter.inputs) || !Array.isArray(chapter.claims)))
+    throw Error('The saved character opening is invalid. Keep the file.');
+  for (const denial of denials) {
+    if (
+      Object.hasOwn(record.owned, denial.castId) ||
+      Object.hasOwn(record.sources, roleFor(denial.castId)) ||
+      chapter?.inputs.some((input) => input?.parent?.castId === denial.castId) ||
+      chapter?.claims.some((claim) => claim?.castId === denial.castId)
+    )
+      throw Error('A refused character cannot own a claim or source pin. Keep the file.');
+  }
+  return denials;
+}
+
 export function roleFor(castId: string): Rid {
   const role = (Object.keys(RESIDENTS) as Rid[]).find((id) => RESIDENTS[id].castId === castId);
   if (!role) throw new Error('This person has no role in this building. Keep the file.');
@@ -170,8 +249,11 @@ export async function validateNativeChapter(
     !chapter ||
     typeof chapter !== 'object' ||
     Array.isArray(chapter) ||
-    Object.keys(chapter).sort().join(',') !== 'arrivals,claims,expectedHeads,inputs,version' ||
-    chapter.version !== 'stairwell-cast/2' ||
+    !['stairwell-cast/2', 'stairwell-cast/3'].includes(chapter.version) ||
+    Object.keys(chapter).sort().join(',') !==
+      (chapter.version === 'stairwell-cast/3'
+        ? 'arrivals,claims,denials,expectedHeads,inputs,version'
+        : 'arrivals,claims,expectedHeads,inputs,version') ||
     !Array.isArray(chapter.inputs) ||
     !Array.isArray(chapter.arrivals) ||
     !Array.isArray(chapter.claims) ||
@@ -180,10 +262,19 @@ export async function validateNativeChapter(
   )
     throw new Error('The retained opening recipe is invalid. Keep the file.');
   validateNativeLifeInputs(chapter.inputs);
+  const denials = chapter.version === 'stairwell-cast/3' ? validateNativeDenials(chapter.denials) : [];
+  for (const denial of denials)
+    if (
+      chapter.inputs.some((input) => input.parent.castId === denial.castId) ||
+      chapter.claims.some((claim) => claim?.castId === denial.castId)
+    )
+      throw Error('A refused character cannot have an opening claim. Keep the file.');
   const expectedHeads = Object.fromEntries(
     ALLOCATION.map((c) => [
       c.castId,
-      chapter.inputs.find((input) => input.parent.castId === c.castId)?.parent.revision ?? null,
+      chapter.inputs.find((input) => input.parent.castId === c.castId)?.parent.revision ??
+        denials.find((denial) => denial.castId === c.castId)?.revision ??
+        null,
     ]),
   );
   if (canonicalPersona(expectedHeads) !== canonicalPersona(chapter.expectedHeads))

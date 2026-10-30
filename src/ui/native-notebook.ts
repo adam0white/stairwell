@@ -11,6 +11,7 @@ import { buildingEngine } from '../sim/hf-game.ts';
 import { replayBuilding } from '../sim/hf-replay.ts';
 import type { BuildingCheckpoint } from '../sim/hf-run.ts';
 import type { BuildingEdition, BuildingWorld } from '../sim/hf-world.ts';
+import { validateNativeReceiptMetadata } from '../sim/native-cast-life.ts';
 
 export type NativeJournalSnapshot = {
   token: number;
@@ -140,6 +141,7 @@ export function readNativeNotebook(input: unknown): NativeNotebook {
     !same(input.inputs, world.inputs)
   )
     return invalid();
+  validateNativeReceiptMetadata(input.castReceipts);
   return structuredClone(input) as NativeNotebook;
 }
 
