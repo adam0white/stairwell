@@ -356,7 +356,7 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
             );
           if (value.authority !== NATIVE_CAST_AUTHORITY)
             throw new Error(
-              'This saved chapter has no current character authority. Keep or export it; start fresh to save shared characters.',
+              'This saved game began before an update and cannot continue. Download it if you want to keep it, then start a new game.',
             );
           const person = await game.person(world, role),
             body = person.body;
@@ -741,7 +741,7 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
     if (file) throw new Error('Saved-file play cannot write shared character history.');
     if (runtime(world).authority !== NATIVE_CAST_AUTHORITY)
       throw new Error(
-        'This saved chapter has no current character authority. Keep or export it; start fresh to save shared characters.',
+        'Hacer and Sevim cannot be saved for other games from this saved game. Start a new game to share them.',
       );
     const denial = runtime(world).denials?.find((item) => item.castId === RESIDENTS[id].castId);
     if (denial) throw Error(denial.reason);
@@ -874,7 +874,13 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
             return accepted.length || failures.length
               ? { ok: false, cancelled: true, accepted, failures }
               : { ok: true, cancelled: true };
-          if (!endedBoundary(world, id)) continue;
+          const value = runtime(world);
+          if (
+            !endedBoundary(world, id) ||
+            value.authority !== NATIVE_CAST_AUTHORITY ||
+            value.denials?.some((denial) => denial.castId === RESIDENTS[id].castId)
+          )
+            continue;
           try {
             const key = await checkpointPerson(world, id, false, serial);
             if (key) accepted.push(key);
@@ -949,8 +955,12 @@ export function createNativeContinuity(options: NativeContinuityOptions) {
   return {
     arrive,
     castReceipts,
-    continuityRefusals: (world: BuildingWorld) =>
-      (runtime(world).denials ?? []).map((denial) => denial.reason),
+    continuityRefusals: (world: BuildingWorld, diagnostic = false) =>
+      (runtime(world).denials ?? []).map((denial) => {
+        if (diagnostic) return denial.reason;
+        const name = RESIDENTS[roleFor(denial.castId)].name;
+        return `${name} could not join the building this time. ${name} starts fresh here. Their saved history in other games has not changed.`;
+      }),
     restoreCastReceipts,
     validateContinuity,
     gateContinuity,
@@ -1022,4 +1032,5 @@ export const recoveryPending = () => installed?.recoveryPending() ?? false;
 export const chooseContinuityRecording = async (value: boolean) => active().chooseContinuityRecording(value);
 export const acknowledgeContinuity = (_world: BuildingWorld) => {};
 
-export const continuityRefusals = (world: BuildingWorld) => active().continuityRefusals(world);
+export const continuityRefusals = (world: BuildingWorld, diagnostic = false) =>
+  active().continuityRefusals(world, diagnostic);

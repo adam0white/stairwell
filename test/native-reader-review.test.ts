@@ -51,7 +51,7 @@ test('validating a restored native/file chapter never reconstructs missing recei
       await worker(input);
       const refusal =
         receipts === legacy
-          ? /no current character authority/i
+          ? /Start a new game to share them/i
           : receipts === denied
             ? denial.reason
             : /read-only until/i;

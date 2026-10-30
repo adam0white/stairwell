@@ -530,3 +530,31 @@ test('native file-picker cancel prevents an already selected pending file from i
   expect(_debug.s).toBe(original);
   expect(io.save).not.toHaveBeenCalled();
 });
+
+test('an accepted pre-update save explains starting fresh and leaves New game reachable', async () => {
+  const packet = nativeNotebook(openBuilding(7));
+  const before = structuredClone(packet);
+  io.load.mockResolvedValue(packet);
+  io.candidate = openBuilding(7);
+  const { _debug } = await import('../src/ui/app.ts');
+  await _debug.titlePage();
+  const message =
+    'This saved game began before an update and cannot continue. Download it if you want to keep it, then start a new game.';
+  io.validate.mockRejectedValueOnce(Error(message));
+  await _debug.continueNotebook(packet);
+  const dialog = body.children.find((element) => element.tag === 'dialog');
+  const words = (element: ElementStub): string => element.textContent + element.children.map(words).join(' ');
+  expect(dialog?.open).toBe(true);
+  expect(words(dialog as ElementStub)).toContain(message);
+  expect(words(dialog as ElementStub)).not.toContain('This game could not be checked');
+  const buttons = (element: ElementStub): ElementStub[] => [element, ...element.children.flatMap(buttons)];
+  buttons(dialog as ElementStub)
+    .find((element) => element.textContent === 'Back')
+    ?.click();
+  expect(dialog?.open).toBe(false);
+  expect(app.innerHTML).toContain('data-a="new"');
+  app.querySelector('[data-a=new]')?.click();
+  expect(app.querySelector('.new-confirm')?.hidden).toBe(false);
+  expect(packet).toEqual(before);
+  expect(io.save).not.toHaveBeenCalled();
+});

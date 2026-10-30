@@ -59,7 +59,7 @@ test('same-engine receipts without current authority remain read-only before any
   const world = openBuilding(7);
   const worker = createNativeOwnerDispatcher();
   worker({ kind: 'notebook', input: nativeNotebook(openBuilding(7)) });
-  expect(() => worker({ kind: 'person', id: 'hacer' })).toThrow(/current character authority/i);
+
   let requests = 0;
   const controller = createNativeContinuity({
     current: () => world,
@@ -77,6 +77,10 @@ test('same-engine receipts without current authority remain read-only before any
     },
   });
   controller.restoreCastReceipts(world, { owned: {}, sources: {}, authored: true, fileOrigin: false });
-  await expect(controller.forkPerson('hacer')).rejects.toThrow(/current character authority/i);
+  world.phase = 'end';
+  expect(await controller.checkpointContinuity()).toEqual({ ok: true });
+  expect(await controller.checkpointContinuity()).toEqual({ ok: true });
+  await expect(controller.forkPerson('hacer')).rejects.toThrow(/Start a new game to share them/i);
+  expect(() => worker({ kind: 'person', id: 'hacer' })).toThrow(/Start a new game to share them/i);
   expect(requests).toBe(0);
 });

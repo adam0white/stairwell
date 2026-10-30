@@ -364,6 +364,16 @@ test('an authored ending boundary publishes eligible idle people once and recove
   const controller = createNativeContinuity(f.deps);
   controller.restoreCastReceipts(restored.world, restored.castReceipts);
   await controller.validateContinuity(restored.world);
+  // Same-engine accepted save from before authority metadata: retain it, refuse honestly.
+  const olderReceipts = structuredClone(notebook.castReceipts) as ReturnType<typeof controller.castReceipts>;
+  delete olderReceipts.authority;
+  delete olderReceipts.denials;
+  const older = restoreBuilding(JSON.parse(JSON.stringify(notebook.engine)));
+  const olderController = createNativeContinuity(f.deps);
+  olderController.restoreCastReceipts(older, olderReceipts);
+  await expect(olderController.validateContinuity(older)).rejects.toThrow(
+    'This saved game began before an update and cannot continue. Download it if you want to keep it, then start a new game.',
+  );
   const head = f.head();
   if (!head) throw Error('Missing actual accepted source');
   const { revision: _revision, ...body } = head;
