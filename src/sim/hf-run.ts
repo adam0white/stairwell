@@ -10,6 +10,7 @@ import {
   createRun,
   type DeepReadonly,
   exportRun,
+  exportRunJournal,
   type HostRequest,
   type Input,
   type InspectQuery,
@@ -22,6 +23,7 @@ import {
   type Result,
   type Run,
   type RunArchive,
+  type RunJournalCursor,
   type RunSpec,
   restoreRun,
   type StepResult,
@@ -47,7 +49,11 @@ export type BuildingActivity = {
   offerRevision: number;
   start: number;
 };
-export type BuildingLedger = { format: 'stairwell-hf-world/1'; receipts: number; active: BuildingActivity[] };
+export type BuildingLedger = {
+  format: 'stairwell-hf-world/1';
+  receipts: number;
+  active: BuildingActivity[];
+};
 export type ActionReply = Pick<ActionResolution, 'disposition' | 'observations' | 'outcome'>;
 export type CommunicationReply = Pick<CommunicationResolution, 'emittedItemIds' | 'received'>;
 export interface BuildingResolver<W> {
@@ -141,7 +147,11 @@ function readLedger(archive: DeepReadonly<RunArchive>, receipts: ColdActionRecei
       )
     )
       throw new Error('The HF archive has an activity without its accepted building receipt.');
-  return { format: 'stairwell-hf-world/1', receipts: data.receipts as number, active };
+  return {
+    format: 'stairwell-hf-world/1',
+    receipts: data.receipts as number,
+    active,
+  };
 }
 
 export class BuildingRun<W> {
@@ -177,7 +187,11 @@ export class BuildingRun<W> {
   }
   static open<W>(spec: RunSpec, people: readonly PersonAuthoring[], world: W): BuildingRun<W> {
     const authored = structuredClone(spec);
-    const ledger: BuildingLedger = { format: 'stairwell-hf-world/1', receipts: 0, active: [] };
+    const ledger: BuildingLedger = {
+      format: 'stairwell-hf-world/1',
+      receipts: 0,
+      active: [],
+    };
     authored.world.hostState = json(ledger);
     const run = admitted(createRun(authored));
     for (const person of people) admitted(createPerson(run, person));
@@ -320,6 +334,10 @@ export class BuildingRun<W> {
       world: structuredClone(this.#world),
       archive,
     };
+  }
+  exportJournal(cursor?: RunJournalCursor) {
+    this.usable();
+    return admitted(exportRunJournal(this.#run, cursor));
   }
   ingest(until: number, inputs: readonly Input[] = []): DeepReadonly<StepResult> {
     this.usable();

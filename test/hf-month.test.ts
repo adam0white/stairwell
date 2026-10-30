@@ -1,6 +1,6 @@
 /** Prepared building positions/money below are explicit host fixtures. Choices,
  * activities, interruption, completion and replay use the normal public Run. */
-import { replay } from '@adam0white/human-framework';
+import { readRunHistory, replay } from '@adam0white/human-framework';
 import { expect, test } from 'vitest';
 import {
   advanceBuildingMinute,
@@ -97,9 +97,8 @@ test('dues require actual dual consent and conserved transfer before material ou
     paymentLedger: [{ amount: 200, supplierPaid: 0, remaining: 400 }],
   });
   expect(need(need(world.month).visits[0]).outcome).toBe('completed');
-  const outcomes = engine
-    .checkpoint()
-    .archive.history.flatMap((transaction) => transaction.inputs)
+  const outcomes = readRunHistory(engine.checkpoint().archive)
+    .flatMap((transaction) => transaction.inputs)
     .filter((i) => i.kind === 'action.resolved' && i.payload.outcome?.offerId === 'dues-payment');
   expect(outcomes).toHaveLength(1);
   if (outcomes[0]?.kind !== 'action.resolved') throw Error('Missing actual dues outcome');
@@ -326,9 +325,8 @@ test('a receiver can interrupt a real rest to accept the invitation, with its ac
   });
   depart(world);
   expect(need(world.month).visits).toHaveLength(1);
-  const rest = buildingEngine(world)
-    .checkpoint()
-    .archive.history.flatMap((t) => t.inputs)
+  const rest = readRunHistory(buildingEngine(world).checkpoint().archive)
+    .flatMap((t) => t.inputs)
     .find((i) => i.kind === 'action.resolved' && i.payload.outcome?.offerId === 'actual-rest');
   expect(rest?.kind === 'action.resolved' && rest.payload.outcome?.status).toBe('interrupted');
   const checkpoint = buildingEngine(world).checkpoint();

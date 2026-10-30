@@ -1,4 +1,6 @@
 /** Game operations stay beside the actual public HF Run. No actor crosses this boundary. */
+
+import type { RunJournalCursor } from '@adam0white/human-framework';
 import { RIDS, type Rid } from '../sim/building-cast.ts';
 import type { Place } from '../sim/building-types.ts';
 import { currentDeparture } from '../sim/hf-cast.ts';
@@ -15,7 +17,7 @@ import type { BuildingWorld } from '../sim/hf-world.ts';
 import { admitNativeCast, validateNativeChapter } from '../sim/native-cast-life.ts';
 import { exportNativeFile, readNativeFileText } from './native-file.ts';
 import { nativeNotebook, restoreNativeNotebook } from './native-notebook.ts';
-import { legsLine, type NativeProjection, readOf, tellables, wordHint } from './native-reads.ts';
+import { legsLine, type NativeProjection, readOf, selfReading, tellables, wordHint } from './native-reads.ts';
 import { untilSomethingHappens } from './playback.ts';
 import { requirePortableWrite } from './portable-write-guard.ts';
 
@@ -27,6 +29,8 @@ export type OwnerOperation = (
   | { kind: 'step' }
   | { kind: 'wait' }
   | { kind: 'snapshot'; receipts?: unknown }
+  | { kind: 'journal'; receipts?: unknown }
+  | { kind: 'journal-commit'; token: number }
   | { kind: 'export'; provenance: unknown; receipts: unknown }
   | { kind: 'person'; id: Rid }
   | { kind: 'checkpoint' }
@@ -56,6 +60,7 @@ const places: Place[] = [
 ];
 export function nativeOwnerProjection(world: BuildingWorld, forecasts: Place[]): NativeProjection {
   return {
+    selfReading: selfReading(world),
     reads: Object.fromEntries(RIDS.map((id) => [id, readOf(world, id)])) as NativeProjection['reads'],
     words: Object.fromEntries(RIDS.map((id) => [id, wordHint(world, id)])) as NativeProjection['words'],
     tell: Object.fromEntries(RIDS.map((id) => [id, tellables(world, id)])) as NativeProjection['tell'],
@@ -71,25 +76,59 @@ export function createNativeOwnerDispatcher(
 ) {
   let world: BuildingWorld | undefined;
   let revision = 0;
+  let journalCursor: RunJournalCursor | undefined;
+  let journalProposal: { token: number; cursor: RunJournalCursor } | undefined;
+  let journalToken = 0;
+  let committedJournalToken = 0;
   const dispatch = (operation: OwnerOperation): unknown => {
     if (operation.expectedRevision !== undefined && operation.expectedRevision !== revision)
       throw Error('Stale game worker request.');
     let provenance: unknown, receipts: unknown;
     if (operation.kind === 'open') {
+      journalCursor = undefined;
       world = openBuilding(...operation.args);
       revision++;
     } else if (operation.kind === 'notebook') {
+      journalCursor = undefined;
       const restored = restoreNativeNotebook(operation.input);
       world = restored.world;
       receipts = restored.castReceipts;
       revision++;
     } else if (operation.kind === 'file') {
+      journalCursor = undefined;
       const restored = readNativeFileText(operation.input);
       world = restored.world;
       provenance = restored.provenance;
       revision++;
     } else {
       if (!world) throw Error('No game is open in this worker.');
+      if (operation.kind === 'journal-commit') {
+        if (operation.token === committedJournalToken) return;
+        if (!journalProposal || journalProposal.token !== operation.token)
+          throw Error('Stale journal commit.');
+        journalCursor = journalProposal.cursor;
+        committedJournalToken = operation.token;
+        journalProposal = undefined;
+        return;
+      }
+      if (operation.kind === 'journal') {
+        let result: ReturnType<ReturnType<typeof buildingEngine>['exportJournal']>;
+        try {
+          result = buildingEngine(world).exportJournal(journalCursor);
+        } catch (error) {
+          if (!journalCursor) throw error;
+          result = buildingEngine(world).exportJournal();
+        }
+        const { cursor, ...journal } = result;
+        const token = ++journalToken;
+        journalProposal = { token, cursor };
+        return structuredClone({
+          token,
+          journal,
+          world,
+          receipts: operation.receipts,
+        });
+      }
       if (operation.kind === 'admit') return admitNativeCast(operation.input, operation.edition);
       if (operation.kind === 'chapter')
         return validateNativeChapter(
@@ -107,7 +146,9 @@ export function createNativeOwnerDispatcher(
           body: currentBody(buildingEngine(world), operation.id).state,
           now: buildingEngine(world).now,
           departure: currentBody(buildingEngine(world), operation.id).state.alive
-            ? { transfer: currentDeparture(buildingEngine(world), operation.id, []).transfer }
+            ? {
+                transfer: currentDeparture(buildingEngine(world), operation.id, []).transfer,
+              }
             : undefined,
         };
       }

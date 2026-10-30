@@ -1,3 +1,5 @@
+> Current HF4.14 migration (2026-10-29): exact HF4.14.0/client0.5.13/kit0.5.30. History uses `readRunHistory`; autosave uses committed HF journals; complete archives remain downloads. The notebook shows live readings as words, and advice replies use game-authored HF phrasebook verdicts/reasons. Older engines require a fresh run. See HANDOFF and ~/code/.lab-scratch/codex/stairwell-hf414.md for release receipts. Earlier evidence below remains historical. Hosted review for this task is waived by coordinator ruling2026-10-29T09:25Z.
+
 > Current follow-through (2026-10-29): HF4.8.1/client0.5.7/kit0.5.24. Public portableWriteBlockers protects shared projection and every publication/terminal/fork boundary. The empty released reader registry blocks shared peers; native journals and blocked heads remain unchanged. Incompatible older files refuse with original bytes preserved. The receipts below retain their original release/horizon; they do not prove a current month. See HANDOFF and games-deferred/recovery-stairwell-followthrough-report.md.
 
 # Native HF4 port

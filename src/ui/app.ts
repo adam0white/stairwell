@@ -68,12 +68,13 @@ import {
   validateContinuity,
 } from './native-cast-continuity.ts';
 import { NATIVE_FILE_MAX_BYTES } from './native-file.ts';
-import type { NativeNotebook } from './native-notebook.ts';
+import type { NativeJournalSnapshot, NativeNotebook } from './native-notebook.ts';
 import { bindNativeOwner, createNativeOwner, type NativeOwner, nativeOwner } from './native-owner.ts';
 import type { OwnerOperation } from './native-owner-core.ts';
 import {
   projectedBins as binsWarning,
   hasNativeForecast,
+  selfReading,
   projectedTravel as travelMinutes,
 } from './native-reads.ts';
 import { createNativeSaveCoordinator } from './native-save-coordinator.ts';
@@ -81,7 +82,7 @@ import {
   clearNativeSaved,
   LegacyNativeSaveError,
   loadNativeSaved,
-  saveNativeSaved,
+  saveNativeJournal,
   UnreadableNativeSaveError,
 } from './native-storage.ts';
 import { canWait, playback } from './playback.ts';
@@ -130,7 +131,10 @@ const gameAccess: NativeGameAccess = {
     if (owner === activeOwner) throw Error('An active game cannot be reopened as a candidate.');
     return (await owner.update({ kind: 'open', args })).world;
   },
-  checkpoint: (world) => nativeOwner(world).request<BuildingCheckpoint<GameState>>({ kind: 'checkpoint' }),
+  checkpoint: (world) =>
+    nativeOwner(world).request<BuildingCheckpoint<GameState>>({
+      kind: 'checkpoint',
+    }),
   person: (world, id) => nativeOwner(world).person(id),
   notebook: (world, receipts) => nativeOwner(world).snapshot(receipts),
   discard: discardCandidate,
@@ -143,7 +147,10 @@ async function mutate(world: GameState, operation: OwnerOperation) {
   if (gameBusy) return false;
   gameBusy = true;
   try {
-    await nativeOwner(world).update({ ...operation, forecasts: selection ? [selection.to] : [] });
+    await nativeOwner(world).update({
+      ...operation,
+      forecasts: selection ? [selection.to] : [],
+    });
     return ui.s === world;
   } finally {
     gameBusy = false;
@@ -157,6 +164,13 @@ async function latestRun(world = ui.s): Promise<unknown> {
       ? await nativeOwner(world).export(originalProvenance, castReceipts(world))
       : await nativeOwner(world).snapshot(castReceipts(world));
   completeSnapshots.set(world, packet);
+  // Full recording snapshots belong to explicit export/feedback boundaries;
+  // autosave writes only the incremental journal.
+  try {
+    lab.captureSave(packet);
+  } catch (error) {
+    console.error('The complete notebook could not be attached to recording.', error);
+  }
   return packet;
 }
 async function downloadLatest(world = ui.s) {
@@ -344,7 +358,7 @@ async function showLoadError(error: unknown, action: string) {
   games.textContent = 'All games';
   actions.append(games);
   add('Feedback', () => {
-    openFeedback(() => runOf());
+    openFeedback(() => latestRun());
   });
   add('Back', () => {});
   dialog.append(heading, body, actions);
@@ -368,16 +382,24 @@ let legacySaved = false;
 let unreadableSaved: { value: unknown } | undefined;
 let savedReadFailed = false;
 let saveFailure = '';
-let capturedPacket: NativeNotebook | undefined;
-const saves = createNativeSaveCoordinator<GameState>({
+let savedWorld: GameState | undefined;
+let pendingJournalCommit: { world: GameState; token: number } | undefined;
+const saves = createNativeSaveCoordinator<GameState, NativeJournalSnapshot>({
   current: () => ui.s ?? undefined,
   enabled: () => fileMode !== 'file',
   snapshot: async (world) => {
-    const packet = await nativeOwner(world).snapshot(castReceipts(world));
-    completeSnapshots.set(world, packet);
-    return packet;
+    if (pendingJournalCommit?.world === world) {
+      await nativeOwner(world).commitJournal(pendingJournalCommit.token);
+      pendingJournalCommit = undefined;
+    } else pendingJournalCommit = undefined;
+    return nativeOwner(world).journal(castReceipts(world));
   },
-  save: saveNativeSaved,
+  save: async (packet, world) => {
+    await saveNativeJournal(packet);
+    pendingJournalCommit = { world, token: packet.token };
+    await nativeOwner(world).commitJournal(packet.token);
+    pendingJournalCommit = undefined;
+  },
   clear: clearNativeSaved,
 });
 async function save(): Promise<boolean> {
@@ -385,19 +407,12 @@ async function save(): Promise<boolean> {
   try {
     const result = await saves.requestSave();
     if (result.kind === 'saved' && result.current) {
-      cachedSaved = result.notebook;
+      cachedSaved = null;
+      savedWorld = result.notebook.world;
       unreadableSaved = undefined;
       savedReadFailed = false;
       saveFailure = '';
       mountSaveStatus();
-      if (capturedPacket !== cachedSaved) {
-        capturedPacket = cachedSaved;
-        try {
-          lab.captureSave(cachedSaved);
-        } catch (error) {
-          console.error('The complete saved notebook could not be attached to telemetry.', error);
-        }
-      }
       return true;
     }
     return false;
@@ -516,7 +531,10 @@ function importRun(file: File) {
       .arrayBuffer()
       .then((bytes) => {
         if (serial !== fileImportSerial) return;
-        const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+        const text = new TextDecoder('utf-8', {
+          fatal: true,
+          ignoreBOM: true,
+        }).decode(bytes);
         return importFileCandidate(text, serial);
       })
       .catch(() => {
@@ -649,7 +667,12 @@ async function send(inp: NewInput) {
     return inp.kind === 'next'
       ? {
           ok: false as const,
-          failures: [{ name: 'This game', error: 'The closing action could not be completed.' }],
+          failures: [
+            {
+              name: 'This game',
+              error: 'The closing action could not be completed.',
+            },
+          ],
         }
       : undefined;
   }
@@ -949,7 +972,7 @@ function mountMenu(target: Element | null, s: GameState | null) {
       newGame: () => {
         void startFresh();
       },
-      getRun: () => runOf(ui.s),
+      getRun: () => latestRun(ui.s),
       chooseRecording: chooseContinuityRecording,
       speed: () => selectedSpeed,
       setSpeed: (speed) => {
@@ -1070,7 +1093,7 @@ async function titlePage() {
   const saved = loaded;
   const unopened = unreadableSaved ?? (titleFailure && saved ? { value: saved } : undefined);
   const needsReplacement = !!saved || !!unopened || savedReadFailed;
-  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${unopened ? '<p role="status">This saved notebook could not be opened. It has been kept. Download it before starting a new game.</p><button data-download-unopened>Download unopened notebook</button>' : ''}${olderNotebook() ? '<p role="status">This old notebook cannot open in this version. The old save has been kept.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label><label><input type="checkbox" data-work-start>Play four weeks without earlier shared character history. Character transfer is unavailable. You can download this run.</label><button data-a="other">Other ways to begin ▸</button><div class="title-spacer"></div></main><div class="action-bar">
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${unopened ? '<p role="status">This saved notebook could not be opened. It has been kept. Download it, then start fresh.</p><button data-download-unopened>Download unopened notebook</button>' : ''}${olderNotebook() ? '<p role="status">This old notebook cannot open in this version. The old save has been kept. Start fresh.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label><label><input type="checkbox" data-work-start>Play four weeks without earlier shared character history. Character transfer is unavailable. You can download this run.</label><button data-a="other">Other ways to begin ▸</button><div class="title-spacer"></div></main><div class="action-bar">
     ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Check and continue</button><span class="soft small" id="saved-summary" data-save-summary>${dayLabel(savedState)} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
     <button class="${needsReplacement ? '' : 'primary'}" data-a="new">${needsReplacement ? 'New game' : 'Begin on Monday'}</button><div class="new-confirm" hidden>${savedReadFailed ? 'The saved notebook could not be checked. Beginning may replace an existing notebook.' : 'The old notebook will be replaced.'}<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
   mountNotice();
@@ -1593,7 +1616,10 @@ function rememberJournalScroll(el: HTMLElement) {
   if (el.clientHeight === 0) return;
   const saved = journalPositions.get(el);
   if (saved && el.scrollTop !== saved.top)
-    journalPositions.set(el, { position: journalPosition(el), top: el.scrollTop });
+    journalPositions.set(el, {
+      position: journalPosition(el),
+      top: el.scrollTop,
+    });
 }
 
 function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof journalPosition>) {
@@ -1626,7 +1652,10 @@ function restoreJournalPosition(el: HTMLElement, position: ReturnType<typeof jou
       el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - position.offset;
     else el.scrollTop = 0; // The entry was removed: resume at the oldest surviving entry.
   }
-  journalPositions.set(el, { position: journalPosition(el), top: el.scrollTop });
+  journalPositions.set(el, {
+    position: journalPosition(el),
+    top: el.scrollTop,
+  });
 }
 
 // ---------- the sheet: whoever is in front of you ----------
@@ -1636,7 +1665,7 @@ function sheet(s: GameState, el: HTMLElement) {
   const at = s.k.at;
   let key = '';
   if (ui.sheet === 'orders' || ui.sheet === 'residents') key = `${ui.sheet}:${s.minute}`;
-  else if (ui.sheet === 'notebook') key = `nb:${Object.keys(s.secrets).length}:${s.minute >> 4}`;
+  else if (ui.sheet === 'notebook') key = `nb:${Object.keys(s.secrets).length}:${s.minute}`;
   else if (s.k.walk) key = `walk:${s.k.walk.to}`;
   else if (s.k.busyTask !== null) key = 'busy';
   else
@@ -2009,7 +2038,13 @@ function wireDoor(s: GameState, el: HTMLElement, who: Rid) {
     const t = displayedTellables[Number(b.dataset.tell)];
     if (!t) return;
     ui.sheet = 'none';
-    send({ kind: 'tell', who, prop: t.prop, value: t.value, sure: b.dataset.sure === '1' });
+    send({
+      kind: 'tell',
+      who,
+      prop: t.prop,
+      value: t.value,
+      sure: b.dataset.sure === '1',
+    });
   });
   on('[data-entrust]', (b) => send({ kind: 'entrust', who, task: Number(b.dataset.entrust) }));
   on('[data-help-story]', () => send({ kind: 'help-story', who }));
@@ -2033,6 +2068,9 @@ function notebookHtml(s: GameState): string {
   }).join('');
   return `<div class="who"><b>The notebook</b><button class="x" data-a="close">✕</button></div>
     <div class="nb">
+    <h3>How you feel</h3>${selfReading(s)
+      .map((line) => `<div>${esc(line)}</div>`)
+      .join('')}
     <h3>The flats</h3>${flats}
     <h3>What you have learned <span class="soft small">${found.length} of ${props.length}</span></h3>
     ${props.map((x) => (s.secrets[x.prop] !== undefined ? `<div>· ${esc(x.title)}</div>` : `<div class="soft">· …</div>`)).join('')}
@@ -2184,7 +2222,7 @@ function sundayPage(s: GameState) {
       const r = rOf(s, id);
       const kept = r.word === 'yes' && r.vote === 'yes';
       const broke = r.word === 'yes' && r.vote === 'no';
-      return `<div class="flatline"><b>${RESIDENTS[id].name}</b> <span class="hand ${r.vote === 'yes' ? 'moss' : 'soft'}">${r.vote === 'yes' ? (s.month?.stay !== null && s.month ? 'voted to renew your agreement' : 'voted for your raise') : r.vote === 'away' ? 'did not come' : (s.month?.stay !== null && s.month ? 'voted against renewing your agreement' : 'voted against your raise')}</span>${kept ? ' <span class="soft small">as promised</span>' : broke ? ' <span class="rope small">despite a promise</span>' : ''}</div>`;
+      return `<div class="flatline"><b>${RESIDENTS[id].name}</b> <span class="hand ${r.vote === 'yes' ? 'moss' : 'soft'}">${r.vote === 'yes' ? (s.month?.stay !== null && s.month ? 'voted to renew your agreement' : 'voted for your raise') : r.vote === 'away' ? 'did not come' : s.month?.stay !== null && s.month ? 'voted against renewing your agreement' : 'voted against your raise'}</span>${kept ? ' <span class="soft small">as promised</span>' : broke ? ' <span class="rope small">despite a promise</span>' : ''}</div>`;
     }).join('')}</div>
     <p>You received <span class="money">₺${total}</span> in tips ${s.month ? 'so far this month' : 'over six days'}.${m?.raise ? ' Your tea money will increase.' : ''} You have <span class="money">₺${s.k.money}</span> in your tin.</p>
     <p>${s.ring.answer === 'yes' ? 'Burak showed his moving paper ferry. ' : s.ring.answer === 'not yet' ? 'Burak kept his paper project private. ' : 'Burak has his own unfinished work. '}${s.catHome ? 'Pamuk sleeps on the step.' : ''}</p>
@@ -2192,7 +2230,7 @@ function sundayPage(s: GameState) {
     <div class="margin hand">${s.month ? (s.month.stay === null ? 'There is another working week ahead. The building remembers this one.' : s.month.stay ? 'Your agreement is renewed. The building still needs its daily work.' : 'The agreement ends here. Your work and the people you met remain in this notebook.') : m?.raise ? 'You did well in your first week. They will want more next week.' : 'Your first week is over. Next week they will know you better.'} <span class="soft">— R.</span></div>
     <button data-a="see-tally" aria-controls="week-tally" aria-expanded="false">See the tally</button>${weekTallyHtml(s)}
     <div class="share"><div class="soft small">To share:</div><div class="hand">${esc(share)}</div><button data-a="copy">Copy</button></div>
-    <p class="soft small" data-save-status>${fileMode === 'file' ? 'Progress stays in this page. Download this run before closing.' : saveFailure ? esc(saveFailure) : cachedSaved ? `Saved through ${dayLabel(cachedSaved.engine.world)} ${clockOf(cachedSaved.minute)}.` : 'The complete notebook has not been saved yet.'}</p>
+    <p class="soft small" data-save-status>${fileMode === 'file' ? 'Progress stays in this page. Download this run before closing.' : saveFailure ? esc(saveFailure) : savedWorld ? `Saved through ${dayLabel(savedWorld)} ${clockOf(savedWorld.minute)}.` : cachedSaved ? `Saved through ${dayLabel(cachedSaved.engine.world)} ${clockOf(cachedSaved.minute)}.` : 'The complete notebook has not been saved yet.'}</p>
     ${closingFailures.has(s) ? `<section data-publication-failure><p role="status">Character progress could not be saved to ${PEOPLE_ACROSS_GAMES}. Your local notebook is saved. ${esc(closingFailures.get(s) ?? '')} Download this run to keep a copy. Use the recovery controls below if the local recovery archive is full, then retry Close the notebook.</p><a href="https://human.adamwhite.work/lab/people/" target="_blank" rel="noopener">Check ${PEOPLE_ACROSS_GAMES} (Hacer and Sevim can transfer here)</a></section>` : ''}
     </main><div class="action-bar"><div class="row"><button data-a="feedback">Feedback</button><button data-a="download">Download this run</button></div>${s.month && s.month.stay === null ? '<button class="primary" data-a="next">Begin the next week</button>' : `<button class="primary" data-a="title" ${closingPending.has(s) ? 'disabled' : ''}>Close the notebook</button>`}</div>
   </div>`;
@@ -2214,7 +2252,7 @@ function sundayPage(s: GameState) {
     ?.addEventListener('click', () => navigator.clipboard?.writeText(share).catch(() => {}));
   app()
     .querySelector('[data-a="feedback"]')
-    ?.addEventListener('click', () => openFeedback(() => runOf(s), undefined, chooseContinuityRecording));
+    ?.addEventListener('click', () => openFeedback(() => latestRun(s), undefined, chooseContinuityRecording));
   app()
     .querySelector('[data-a="download"]')
     ?.addEventListener('click', () => {

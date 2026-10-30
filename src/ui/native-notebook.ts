@@ -1,9 +1,54 @@
+import {
+  exportRun,
+  type RunJournalChunk,
+  type RunJournalHead,
+  type RunJournalOpening,
+  restoreRunJournal,
+} from '@adam0white/human-framework';
 import { assertPlainBuildingData } from '../sim/building-decode.ts';
 import type { Input } from '../sim/building-types.ts';
 import { buildingEngine } from '../sim/hf-game.ts';
 import { replayBuilding } from '../sim/hf-replay.ts';
 import type { BuildingCheckpoint } from '../sim/hf-run.ts';
 import type { BuildingEdition, BuildingWorld } from '../sim/hf-world.ts';
+
+export type NativeJournalSnapshot = {
+  token: number;
+  world: BuildingWorld;
+  receipts?: unknown;
+  journal: {
+    opening?: RunJournalOpening;
+    chunk: RunJournalChunk | null;
+    head: RunJournalHead;
+  };
+};
+
+export function notebookFromJournal(
+  world: BuildingWorld,
+  receipts: unknown,
+  journal: {
+    opening: RunJournalOpening;
+    chunks: RunJournalChunk[];
+    head: RunJournalHead;
+  },
+): NativeNotebook {
+  const restored = restoreRunJournal(journal);
+  if (!restored.ok)
+    throw new Error('The saved journal cannot be restored. Start fresh. Keep the original notebook.');
+  return readNativeNotebook({
+    format: 'stairwell-notebook/4',
+    game: world.version,
+    seed: world.seed,
+    minute: world.minute,
+    inputs: world.inputs,
+    engine: {
+      format: 'stairwell-engine/1',
+      world,
+      archive: exportRun(restored.value.run),
+    },
+    ...(receipts === undefined ? {} : { castReceipts: receipts }),
+  });
+}
 
 export type NativeNotebook = {
   format: 'stairwell-notebook/4';
@@ -32,7 +77,7 @@ const same = (a: unknown, b: unknown): boolean => {
   return keys.length === other.length && keys.every((key, i) => key === other[i] && same(a[key], b[key]));
 };
 const invalid = (): never => {
-  throw new Error('This notebook cannot be opened by this game version. Keep the file.');
+  throw new Error('This notebook cannot be opened by this game version. Start fresh. Keep the file.');
 };
 
 /** Complete detached checkpoint; receipts are provenance, never ownership. */
@@ -78,6 +123,15 @@ export function readNativeNotebook(input: unknown): NativeNotebook {
   )
     return invalid();
   const world = input.engine.world;
+  const archive = input.engine.archive;
+  if (
+    !object(archive) ||
+    !object(archive.engine) ||
+    archive.engine.package !== '@adam0white/human-framework@4.14.0' ||
+    archive.engine.build !== 'c82ab38fa5565c2afbb976f644a75346316608842deaccdc65c13a4bd4a8c4c0' ||
+    archive.engine.schema !== 'f951128cd79e831ee5225eb0bf04b4d30b61d206f75b85f957a90c475f0665e0'
+  )
+    throw new Error('This save needs an older game version. Keep the original notebook and start fresh.');
   if (
     world.version !== input.game ||
     world.seed !== input.seed ||
@@ -89,7 +143,10 @@ export function readNativeNotebook(input: unknown): NativeNotebook {
   return structuredClone(input) as NativeNotebook;
 }
 
-export function restoreNativeNotebook(input: unknown): { world: BuildingWorld; castReceipts?: unknown } {
+export function restoreNativeNotebook(input: unknown): {
+  world: BuildingWorld;
+  castReceipts?: unknown;
+} {
   const notebook = readNativeNotebook(input);
   const world = replayBuilding(notebook.engine);
   return {
