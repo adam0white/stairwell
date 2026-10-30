@@ -34,7 +34,14 @@ function memory() {
 test('retains a complete notebook larger than four megabytes', async () => {
   const m = memory();
   const storage = createNativeStorage({ store: () => m.store, fileMode: () => false, legacy: () => null });
-  const notebook = nativeNotebook(openBuilding(7), { opaque: 'x'.repeat(4 * 1024 * 1024 + 1) });
+  // Large historical source provenance grants no current character authority.
+  const notebook = nativeNotebook(openBuilding(7), {
+    owned: {},
+    sources: { opaque: 'x'.repeat(4 * 1024 * 1024 + 1) },
+    authored: false,
+    fileOrigin: false,
+  });
+  expect(JSON.stringify(notebook).length).toBeGreaterThan(4 * 1024 * 1024);
   await storage.saveNativeSaved(notebook);
   expect(await storage.loadNativeSaved()).toEqual(notebook);
   await storage.clearNativeSaved();
