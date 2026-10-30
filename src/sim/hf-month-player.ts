@@ -1,7 +1,7 @@
 /** Authored monthly requests. Call inside the sole building transaction. Every
  * choice, activity and promise enters through the existing public HF route. */
 
-import type { DeepReadonly, HostRequest } from '@adam0white/human-framework';
+import { type DeepReadonly, type HostRequest, readRunHistory } from '@adam0white/human-framework';
 import { canonicalPersona } from '@adam0white/lab-client';
 import { KAPICI, RESIDENTS, type Rid } from './building-cast.ts';
 import { buildingOffer } from './hf-authoring.ts';
@@ -419,7 +419,7 @@ export function settleMeetingSeatsBuilding(w: BuildingWorld): void {
  * books, accepted starts and matching terminal outcomes in the public archive. */
 export function validateMeetingSeatsBuilding(w: BuildingWorld, engine: BuildingRun<BuildingWorld>): void {
   if (!w.protocol.seatMeetings.length) return;
-  const inputs = engine.checkpoint().archive.history.flatMap((t) => t.inputs),
+  const inputs = readRunHistory(engine.checkpoint().archive).flatMap((t) => t.inputs),
     used = new Set<string>(),
     days = new Set<string>();
   const accepted = (id: string, person: Rid) => {

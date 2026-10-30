@@ -1,5 +1,5 @@
 import type { BuildingWorld } from '../sim/hf-world.ts';
-import type { NativeFileNotebook, NativeNotebook } from './native-notebook.ts';
+import type { NativeFileNotebook, NativeJournalSnapshot, NativeNotebook } from './native-notebook.ts';
 import type { OwnerOperation, OwnerPerson, OwnerView } from './native-owner-core.ts';
 import type { NativeReaderWorker } from './native-reader.ts';
 import { installNativeProjection } from './native-reads.ts';
@@ -8,7 +8,9 @@ import { installNativeProjection } from './native-reads.ts';
  * serialize through response validation, so reads bind to an accepted revision. */
 export function createNativeOwner(
   createWorker: () => NativeReaderWorker = () =>
-    new Worker(new URL('./native-owner.worker.ts', import.meta.url), { type: 'module' }),
+    new Worker(new URL('./native-owner.worker.ts', import.meta.url), {
+      type: 'module',
+    }),
 ) {
   const worker = createWorker();
   let disposed = false,
@@ -102,9 +104,17 @@ export function createNativeOwner(
         throw Error('An active game cannot be replaced inside its owner.');
       const id = ++sequence;
       return new Promise<T>((resolve, reject) => {
-        pending.set(id, { operation, expected: revision, resolve: (value) => resolve(value as T), reject });
+        pending.set(id, {
+          operation,
+          expected: revision,
+          resolve: (value) => resolve(value as T),
+          reject,
+        });
         try {
-          worker.postMessage({ id, operation: { ...operation, expectedRevision: revision } });
+          worker.postMessage({
+            id,
+            operation: { ...operation, expectedRevision: revision },
+          });
         } catch (error) {
           pending.delete(id);
           reject(error);
@@ -129,6 +139,8 @@ export function createNativeOwner(
       return revision;
     },
     snapshot: (receipts?: unknown) => request<NativeNotebook>({ kind: 'snapshot', receipts }),
+    journal: (receipts?: unknown) => request<NativeJournalSnapshot>({ kind: 'journal', receipts }),
+    commitJournal: (token: number) => request<void>({ kind: 'journal-commit', token }),
     export: (provenance: unknown, receipts: unknown) =>
       request<NativeFileNotebook>({ kind: 'export', provenance, receipts }),
     person: (id: import('../sim/building-cast.ts').Rid) => request<OwnerPerson>({ kind: 'person', id }),

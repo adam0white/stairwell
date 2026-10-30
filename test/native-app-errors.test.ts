@@ -33,7 +33,11 @@ vi.mock('../src/ui/lab.ts', () => ({
   get fileMode() {
     return io.mode;
   },
-  lab: { captureSave: vi.fn(), setPersonaRecording: vi.fn(), trackRun: vi.fn() },
+  lab: {
+    captureSave: vi.fn(),
+    setPersonaRecording: vi.fn(),
+    trackRun: vi.fn(),
+  },
   labScreen: vi.fn(),
   downloadRun: vi.fn(),
   downloadRawRun: vi.fn(),
@@ -44,7 +48,7 @@ vi.mock('../src/ui/lab.ts', () => ({
 vi.mock('../src/ui/native-storage.ts', async (original) => ({
   ...(await original<object>()),
   loadNativeSaved: io.load,
-  saveNativeSaved: io.save,
+  saveNativeJournal: io.save,
 }));
 vi.mock('../src/ui/native-owner.ts', () => {
   // These controls deliberately install local, faulted host worlds. Production
@@ -52,6 +56,8 @@ vi.mock('../src/ui/native-owner.ts', () => {
   return {
     bindNativeOwner: vi.fn(),
     nativeOwner: (world: Parameters<typeof nativeNotebook>[0]) => ({
+      journal: async () => ({ token: 1, world }),
+      commitJournal: async () => {},
       snapshot: async (receipts: unknown) =>
         (await import('../src/ui/native-notebook.ts')).nativeNotebook(world, receipts),
       update: async (operation: unknown) => {

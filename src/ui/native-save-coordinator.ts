@@ -1,7 +1,7 @@
 import type { NativeNotebook } from './native-notebook.ts';
 
-export type NativeSaveResult =
-  | { kind: 'saved'; current: boolean; notebook: NativeNotebook }
+export type NativeSaveResult<Snapshot = NativeNotebook> =
+  | { kind: 'saved'; current: boolean; notebook: Snapshot }
   | { kind: 'cleared'; current: boolean }
   | { kind: 'cancelled' };
 
@@ -18,11 +18,11 @@ export class NativeSaveFailure extends Error {
 /** The caller chooses save boundaries. This helper starts no timer and exports
  * only when a queued write starts. A completed stale write is still a write;
  * newer saves and clears always follow it on the same serialized queue. */
-export function createNativeSaveCoordinator<World>(options: {
+export function createNativeSaveCoordinator<World, Snapshot = NativeNotebook>(options: {
   current(): World | undefined;
   enabled?(): boolean;
-  snapshot(world: World): NativeNotebook | Promise<NativeNotebook>;
-  save(notebook: NativeNotebook): Promise<void>;
+  snapshot(world: World): Snapshot | Promise<Snapshot>;
+  save(notebook: Snapshot, world: World): Promise<void>;
   clear(): Promise<void>;
 }) {
   type Job = {
@@ -30,8 +30,8 @@ export function createNativeSaveCoordinator<World>(options: {
     world: World | undefined;
     generation: number;
     request: number;
-    promise: Promise<NativeSaveResult>;
-    resolve(result: NativeSaveResult): void;
+    promise: Promise<NativeSaveResult<Snapshot>>;
+    resolve(result: NativeSaveResult<Snapshot>): void;
     reject(error: unknown): void;
   };
   let generation = 0,
@@ -67,7 +67,10 @@ export function createNativeSaveCoordinator<World>(options: {
           if (job.kind === 'clear') {
             await options.clear();
             completed = 'cleared';
-            job.resolve({ kind: 'cleared', current: valid(job) && request === capturedRequest });
+            job.resolve({
+              kind: 'cleared',
+              current: valid(job) && request === capturedRequest,
+            });
           } else {
             if (job.world === undefined) {
               job.resolve({ kind: 'cancelled' });
@@ -80,9 +83,13 @@ export function createNativeSaveCoordinator<World>(options: {
               job.resolve({ kind: 'cancelled' });
               continue;
             }
-            await options.save(notebook);
+            await options.save(notebook, job.world);
             completed = 'saved';
-            job.resolve({ kind: 'saved', current: valid(job) && request === capturedRequest, notebook });
+            job.resolve({
+              kind: 'saved',
+              current: valid(job) && request === capturedRequest,
+              notebook,
+            });
           }
         } catch (error) {
           const failure = new NativeSaveFailure(error, completed);
@@ -95,7 +102,7 @@ export function createNativeSaveCoordinator<World>(options: {
       else resolve();
     });
   }
-  function enqueue(kind: Job['kind']): Promise<NativeSaveResult> {
+  function enqueue(kind: Job['kind']): Promise<NativeSaveResult<Snapshot>> {
     if (!enabled()) return Promise.resolve({ kind: 'cancelled' });
     const world = options.current();
     if (kind === 'save' && world === undefined) return Promise.resolve({ kind: 'cancelled' });
@@ -106,12 +113,20 @@ export function createNativeSaveCoordinator<World>(options: {
       return tail.promise;
     }
     let resolve!: Job['resolve'], reject!: Job['reject'];
-    const promise = new Promise<NativeSaveResult>((done, fail) => {
+    const promise = new Promise<NativeSaveResult<Snapshot>>((done, fail) => {
       resolve = done;
       reject = fail;
     });
     void promise.catch(() => {});
-    queue.push({ kind, world, generation, request: next, promise, resolve, reject });
+    queue.push({
+      kind,
+      world,
+      generation,
+      request: next,
+      promise,
+      resolve,
+      reject,
+    });
     schedule();
     return promise;
   }
@@ -124,7 +139,7 @@ export function createNativeSaveCoordinator<World>(options: {
     try {
       return enqueue(kind);
     } catch (cause) {
-      const rejected = Promise.reject<NativeSaveResult>(new NativeSaveFailure(cause));
+      const rejected = Promise.reject<NativeSaveResult<Snapshot>>(new NativeSaveFailure(cause));
       void rejected.catch(() => {});
       return rejected;
     }

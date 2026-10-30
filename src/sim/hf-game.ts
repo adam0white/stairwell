@@ -534,6 +534,24 @@ export function chooseBuilding(
   ]);
   const event = result.events.find((event) => event.person === person && event.data.kind === 'decision');
   if (event?.data.kind !== 'decision') throw Error('HF did not provide the resident decision.');
+  if (suggestion) {
+    // HF records both the verdict and wording at the decision boundary. The
+    // game displays that reading; it never selects or paraphrases a verdict.
+    const reply = buildingEngine(world)
+      .inspect({
+        perspective: { kind: 'person', observer: person },
+        people: [person],
+        select: ['events'],
+      })
+      .events.find(
+        (entry) =>
+          'access' in entry &&
+          entry.data.kind === 'suggestion-resolved' &&
+          entry.data.adviceId === suggestion.adviceId,
+      );
+    const text = reply?.narration.map((line) => line.text).join(' ');
+    if (text) sayBuilding(world, person, text, 'voice');
+  }
   // These were the options at this actual host choice, not standing offers to
   // repeat the same job forever. Withdrawing the book leaves accepted work and
   // its original binding intact; the next host choice authors its own new book.

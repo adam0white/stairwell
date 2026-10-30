@@ -205,7 +205,6 @@ export function askWordBuilding(world: BuildingWorld, who: Rid): void {
   person.until = world.minute + 2;
   if (decision.chosenAffordanceId !== 'promise_word') {
     person.word = 'no';
-    sayBuilding(world, who, 'Let’s see how the week goes.', 'voice');
     return;
   }
   person.word = 'yes';
@@ -235,7 +234,6 @@ export function askWordBuilding(world: BuildingWorld, who: Rid): void {
       },
     },
   ]);
-  sayBuilding(world, who, 'All right. I’ll say something.', 'voice');
 }
 
 export function knockBuilding(world: BuildingWorld, who: Rid): void {

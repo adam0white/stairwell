@@ -165,21 +165,20 @@ settings:
 overrides:
   sharp: 0.35.5
   miniflare>undici: 7.30.1
-  '@adam0white/lab-client@0.5.7>@adam0white/human-framework': 4.8.1
 
 importers:
 
   .:
     dependencies:
       '@adam0white/human-framework':
-        specifier: 4.8.1
-        version: 4.8.1
+        specifier: 4.14.0
+        version: 4.14.0
       '@adam0white/lab-client':
-        specifier: file:vendor/adam0white-lab-client-0.5.7.tgz
-        version: file:vendor/adam0white-lab-client-0.5.7.tgz
+        specifier: file:vendor/adam0white-lab-client-0.5.13.tgz
+        version: file:vendor/adam0white-lab-client-0.5.13.tgz
       '@adam0white/lab-kit':
-        specifier: file:vendor/adam0white-lab-kit-0.5.24.tgz
-        version: file:vendor/adam0white-lab-kit-0.5.24.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.7.tgz)
+        specifier: file:vendor/adam0white-lab-kit-0.5.30.tgz
+        version: file:vendor/adam0white-lab-kit-0.5.30.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.13.tgz)
       '@stairwell/garden-replay-history':
         specifier: workspace:*
         version: link:historical/garden
@@ -193,6 +192,9 @@ importers:
       '@types/node':
         specifier: 26.6.5
         version: 26.6.5
+      fake-indexeddb:
+        specifier: 6.2.6
+        version: 6.2.6
       playwright:
         specifier: 1.64.1
         version: 1.64.1
@@ -256,8 +258,8 @@ packages:
     resolution: {integrity: sha512-O0t7AytAqP3ZKNdNbyfJk4sSpeniQRJ6M29IPxXe9YQOaQVnr7C8VZ945PTkc6mao/zZpxPAjK0Cuuvz/0uR1A==}
     engines: {node: '>=24'}
 
-  '@adam0white/human-framework@4.8.1':
-    resolution: {integrity: sha512-o64zOnyR6B5OymP0AJ4taAEOCCsIvZ6VYcw5zH1vl+3lFXjKdwikZ6LIDEX799yiITvz+Wq5+aW0Yo4JAfaulA==}
+  '@adam0white/human-framework@4.14.0':
+    resolution: {integrity: sha512-96QMGFgEEGkG4yHqvKALrconahkRlWR59INxmTcNgO5Lz+k7q7tO54YuWy4FpPRH1OXHqNYzpBnV4i/VLV8cVw==}
     engines: {node: '>=24'}
 
   '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.11.tgz':
@@ -268,9 +270,9 @@ packages:
     resolution: {integrity: sha512-hE6zVE3qg7TYWVJ1VRcf1+NssqGGdkUQzkYVFhaU14l4etEhWGSocsOIbE4AcjSdGORd6/lFsXpdzPenaJ3u5Q==, tarball: file:vendor/adam0white-lab-client-0.4.15.tgz}
     version: 0.4.15
 
-  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.7.tgz':
-    resolution: {integrity: sha512-Fln5Jx0q9wwH+fluUKMZk+PaveJEbvKX9c1etkZV2NwatvWEYJcqskyWWBE8SGK2a+buaf5FEnDhVUvWwjFyoQ==, tarball: file:vendor/adam0white-lab-client-0.5.7.tgz}
-    version: 0.5.7
+  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.13.tgz':
+    resolution: {integrity: sha512-tDd9vK2kQY19jAdibdqms/2XTQoIfgsskj/A+e+H7iixza7kOBzKs2LN20DKi9P8gWaUP79aW1YI2IYeGvMZMQ==, tarball: file:vendor/adam0white-lab-client-0.5.13.tgz}
+    version: 0.5.13
 
   '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.17.tgz':
     resolution: {integrity: sha512-nNPaIhh2nbQvuxGb2S3oUYISI/+OsP4wZvRi0c5o7h5SO2LSahm5g/kegImV/v5SM652u+RN2ooipku2U5pQHg==, tarball: file:vendor/adam0white-lab-kit-0.5.17.tgz}
@@ -283,13 +285,13 @@ packages:
       '@adam0white/lab-client':
         optional: true
 
-  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.24.tgz':
-    resolution: {integrity: sha512-ymor8uDESxyfxjYhIH1G560jMwVtqdSEQWwW78r7Ym23i0cy1RPr6dUsEaxICpxyYgYBaBakUnS6ZqhoJzOj0w==, tarball: file:vendor/adam0white-lab-kit-0.5.24.tgz}
-    version: 0.5.24
+  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.30.tgz':
+    resolution: {integrity: sha512-01pshSnpw/XGpUXZq5+cwiLTqVEdNrE3SqNe+p5W+2b31ShvYuWjd69puK2C+lW95qMfH2cnGWzcwYqrrb3Fhg==, tarball: file:vendor/adam0white-lab-kit-0.5.30.tgz}
+    version: 0.5.30
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
-      '@adam0white/lab-client': 0.4.11 || 0.4.12 || 0.4.13 || 0.4.14 || 0.4.15 || 0.5.0 || 0.5.1 || 0.5.2 || 0.5.3 || 0.5.4 || 0.5.5 || 0.5.6 || 0.5.7
+      '@adam0white/lab-client': 0.4.11 || 0.4.12 || 0.4.13 || 0.4.14 || 0.4.15 || 0.5.0 || 0.5.1 || 0.5.2 || 0.5.3 || 0.5.4 || 0.5.5 || 0.5.6 || 0.5.7 || 0.5.8 || 0.5.9 || 0.5.10 || 0.5.11 || 0.5.12 || 0.5.13
     peerDependenciesMeta:
       '@adam0white/lab-client':
         optional: true
@@ -1045,6 +1047,10 @@ packages:
     resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
     engines: {node: '>=12.0.0'}
 
+  fake-indexeddb@6.2.6:
+    resolution: {integrity: sha512-ihhmr0KoET51jT8R4YhbUYuLLvr1qqO6INISygtN16i8loR8kAxtAUr4+EKHTSMjL+lggaAn4OC7DRqzrNgnuQ==}
+    engines: {node: '>=18'}
+
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
     engines: {node: '>=12.0.0'}
@@ -1373,7 +1379,7 @@ snapshots:
 
   '@adam0white/human-framework@3.0.0': {}
 
-  '@adam0white/human-framework@4.8.1': {}
+  '@adam0white/human-framework@4.14.0': {}
 
   '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.11.tgz':
     dependencies:
@@ -1383,18 +1389,18 @@ snapshots:
     dependencies:
       '@adam0white/human-framework': 3.0.0
 
-  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.7.tgz':
+  '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.13.tgz':
     dependencies:
       '@adam0white/hf-legacy': '@adam0white/human-framework@3.0.0'
-      '@adam0white/human-framework': 4.8.1
+      '@adam0white/human-framework': 4.14.0
 
   '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.17.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.4.15.tgz)':
     optionalDependencies:
       '@adam0white/lab-client': file:vendor/adam0white-lab-client-0.4.15.tgz
 
-  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.24.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.7.tgz)':
+  '@adam0white/lab-kit@file:vendor/adam0white-lab-kit-0.5.30.tgz(@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.13.tgz)':
     optionalDependencies:
-      '@adam0white/lab-client': file:vendor/adam0white-lab-client-0.5.7.tgz
+      '@adam0white/lab-client': file:vendor/adam0white-lab-client-0.5.13.tgz
 
   '@biomejs/biome@2.6.3':
     optionalDependencies:
@@ -1866,6 +1872,8 @@ snapshots:
       '@types/estree': 1.0.9
 
   expect-type@1.4.0: {}
+
+  fake-indexeddb@6.2.6: {}
 
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:

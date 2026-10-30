@@ -1,5 +1,5 @@
 /** These are explicitly prepared host scenes, not a full month or owner journey. */
-import { replay, restoreRun } from '@adam0white/human-framework';
+import { readRunHistory, replay, restoreRun } from '@adam0white/human-framework';
 import { expect, test } from 'vitest';
 import {
   applyBuildingEvents,
@@ -136,9 +136,8 @@ test('reciprocal chairs produce social evidence only after the real two-person t
   buildingTransaction(world, meetingSeatsBuilding);
   expect(world.protocol.seatMeetings).toHaveLength(1);
   expect(
-    buildingEngine(world)
-      .checkpoint()
-      .archive.history.flatMap((t) => t.inputs)
+    readRunHistory(buildingEngine(world).checkpoint().archive)
+      .flatMap((t) => t.inputs)
       .filter(
         (i) => i.kind === 'social.received' && i.payload.evidenceId.startsWith('stairwell:meeting-company:'),
       ),
@@ -222,9 +221,8 @@ test('actual interrupted company produces no premature or late social reward', (
   expect(world.protocol.seatMeetings[0]).toMatchObject({ done: 600, outcome: 'interrupted' });
   expect(buildingEngine(world).active.some((a) => a.person === 'hacer' || a.person === 'sevim')).toBe(false);
   expect(
-    buildingEngine(world)
-      .checkpoint()
-      .archive.history.flatMap((t) => t.inputs)
+    readRunHistory(buildingEngine(world).checkpoint().archive)
+      .flatMap((t) => t.inputs)
       .filter(
         (i) => i.kind === 'social.received' && i.payload.evidenceId.startsWith('stairwell:meeting-company:'),
       ),

@@ -76,7 +76,7 @@ export function replayBuilding(checkpoint: unknown): BuildingWorld {
       throw new Error('The complete host state or HF archive differs from the recorded game.');
     return world;
   } catch (cause) {
-    throw new Error('This notebook could not reproduce its complete recorded building. Keep the file.', {
+    throw new Error('This notebook cannot be opened by this game version. Start fresh. Keep the file.', {
       cause,
     });
   }

@@ -9,7 +9,7 @@ export const NATIVE_FILE_MAX_BYTES = 256 * 1024 * 1024;
 export const NATIVE_FILE_MAX_NODES = 16_000_000;
 export const NATIVE_FILE_MAX_DEPTH = 64;
 const invalid = (): never => {
-  throw new Error('This file cannot be opened by this game version. Keep the file.');
+  throw new Error('This file cannot be opened by this game version. Start fresh. Keep the file.');
 };
 const object = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === 'object' && !Array.isArray(v);

@@ -9,6 +9,7 @@ import {
   type Offer,
   type Run,
   type RunArchive,
+  readRunHistory,
 } from '@adam0white/human-framework';
 import { admitted } from './hf-run.ts';
 
@@ -55,7 +56,7 @@ export class ColdActionReceipts {
       )
         requests.set(event.data.request.id, event.data.request);
     }
-    for (const transaction of this.#archive.history) {
+    for (const transaction of readRunHistory(this.#archive)) {
       for (const input of transaction.inputs) {
         if (input.kind === 'offers.received')
           books.set(`${input.payload.person}:${input.payload.revision}`, input.payload.offers);

@@ -27,9 +27,9 @@ interface MenuOptions {
 const NAME_KEY = 'hf-lab-feedback-name';
 /** SDK0.5.2 owns the single Recording gate. A complete replay archive cannot
  * be partially redacted while retaining its verification contract. */
-function feedbackRun(getRun: () => unknown): unknown {
+async function feedbackRun(getRun: () => unknown): Promise<unknown> {
   try {
-    return getRun();
+    return await getRun();
   } catch {
     return undefined;
   }
@@ -329,7 +329,7 @@ export function openFeedback(
       const sharePlay = feedbackSharePlay(choice);
       const receipt = await lab.sendFeedback(text, {
         name: submittedName,
-        run: feedbackRun(getRun),
+        run: await feedbackRun(getRun),
         sharePlay,
       });
       rememberName(submittedName);
