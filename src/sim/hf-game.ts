@@ -840,6 +840,8 @@ function pickupBuilding(world: BuildingWorld, place: Place): void {
       task.done !== undefined ||
       task.carried ||
       task.custody ||
+      // A parcel left with a neighbour is no longer in the room to collect.
+      task.wrongDoor ||
       task.pickup !== place ||
       task.from > world.minute
     )

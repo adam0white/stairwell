@@ -86,6 +86,31 @@ import {
   saveNativeJournal,
   UnreadableNativeSaveError,
 } from './native-storage.ts';
+import {
+  EDITION_EXPLAINED,
+  GATE_NOTE,
+  isWitnessLine,
+  type JournalRow,
+  journalRows,
+  NOTEBOOK_EXPLAINED,
+  parcelNotices,
+  parcelStatus,
+  pauseNotice,
+  REPLY_EXPLAINED,
+  ROLE_EXPLAINED,
+  replyWording,
+  resumeNote,
+  SAVE_EXPLAINED,
+  SKIP_ENDPOINT,
+  SWAP_NOTE,
+  speakerLabel,
+  splitTip,
+  spokenLine,
+  TELL_EXPLAINED,
+  tellLabel,
+  VOTE_EXPLAINED,
+  WITNESS_NOTE,
+} from './plain-guidance.ts';
 import { canWait, playback } from './playback.ts';
 
 const candidates = new Set<NativeOwner>();
@@ -852,6 +877,7 @@ async function loop(t: number) {
     const s = ui.s;
     const dt = ui.last ? Math.min(0.25, (t - ui.last) / 1000) : 0;
     ui.last = t;
+    if (s && s.phase === 'day' && readHoldShown && t >= ui.readUntil && canAdvance(s)) render(false);
     if (s && s.phase === 'day' && canAdvance(s)) {
       const timing = clockPlayback(s);
       const rate = s.month && t < ui.readUntil ? Math.min(0.6, timing.rate) : timing.rate;
@@ -908,6 +934,9 @@ async function loop(t: number) {
   }
 }
 
+/** True while the strip says the clock is waiting for the reader; cleared by the loop when the wait ends. */
+let readHoldShown = false;
+
 function pacingContext(s: GameState) {
   const faces = faceToFace(s);
   const who = ui.sheetFor ?? faces[0];
@@ -950,11 +979,11 @@ function infoContent(s: GameState | null) {
         : who && ui.dismissed !== `${s.k.at}:${who}`
           ? [
               'Talking',
-              'Ask for news once a day. Choose Tell… to repeat what you heard. Say whether you are certain. If you make up a story, people may find out. You can sit together once a day. From Thursday you can ask residents to support your raise on Sunday. They may break a promise.',
+              `Ask for news once a day. Choose Tell… to repeat what you heard. Say whether you are certain. If you make up a story, people may find out. You can sit together once a day. From Thursday you can ask residents to support your raise on Sunday. They may break a promise. ${VOTE_EXPLAINED} ${ROLE_EXPLAINED}`,
             ]
           : [
               'Orders and the stairs',
-              'Tap an order, a name or a place on the building to see the trip. Choose Go to start walking. You cannot turn back during a walk. You pick up or deliver items automatically when you arrive. A dot over a door means you have something to deliver to that flat. Climbing tires you. The trip preview tells you how tiring it will be. Time slows while orders wait. When you are waiting at a door with a parcel, it follows your chosen speed. Time pauses while you talk or read a list in the week.',
+              `Tap an order, a name or a place on the building to see the trip. Choose Go to start walking. You cannot turn back during a walk. You pick up or deliver items automatically when you arrive. A dot over a door means you have something to deliver to that flat. Climbing tires you. The trip preview tells you how tiring it will be. Time slows while orders wait. When you are waiting at a door with a parcel, it follows your chosen speed. Time pauses while you talk or read a list in the week. ${VOTE_EXPLAINED} ${ROLE_EXPLAINED} Skip is offered when no orders are open.`,
             ];
   return `<h2>${heading}</h2><p>${text}</p>`;
 }
@@ -1096,7 +1125,7 @@ async function titlePage() {
   const saved = loaded;
   const unopened = unreadableSaved ?? (titleFailure && saved ? { value: saved } : undefined);
   const needsReplacement = !!saved || !!unopened || savedReadFailed;
-  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${unopened ? '<p role="status">This saved notebook could not be opened. It has been kept. Download it, then start fresh.</p><button data-download-unopened>Download unopened notebook</button>' : ''}${olderNotebook() ? '<p role="status">This old notebook cannot open in this version. The old save has been kept. Start fresh.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away.</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label><label><input type="checkbox" data-work-start>Play four weeks without earlier shared character history. Character transfer is unavailable. You can download this run.</label><button data-a="other">Other ways to begin ▸</button><div class="title-spacer"></div></main><div class="action-bar">
+  app().innerHTML = `<div class="page title">${topbar('', true)}<main class="page-body"><div class="title-premise"><h1>The Stairwell</h1>${unopened ? '<p role="status">This saved notebook could not be opened. It has been kept. Download it, then start fresh.</p><button data-download-unopened>Download unopened notebook</button>' : ''}${olderNotebook() ? '<p role="status">This old notebook cannot open in this version. The old save has been kept. Start fresh.</p>' : ''}<p>Deliver supplies to the five occupied flats through Saturday. On Sunday, the residents vote on your tea money, the extra pay for your work.</p><p>You are the building’s caretaker. Rıza left you his notebook.</p><p class="soft small">You work for six days, then attend the Sunday meeting. Nothing happens while you are away. ${SAVE_EXPLAINED}</p></div><label><input type="checkbox" data-month>Play four weeks, ending with a vote on whether you stay.</label><label><input type="checkbox" data-work-start>Play four weeks without earlier shared character history. Character transfer is unavailable. You can download this run.</label><p class="soft small">${EDITION_EXPLAINED}</p><button data-a="other">Other ways to begin ▸</button><div class="title-spacer"></div></main><div class="action-bar">
     ${savedState ? `<button class="primary" data-a="continue" aria-describedby="saved-summary">Check and continue</button><span class="soft small" id="saved-summary" data-save-summary>${dayLabel(savedState)} · ${clockOf(savedState.minute)} · ${esc(placeName(savedState.k.at))}${savedState.phase !== 'day' ? ` · ${savedState.phase === 'night' ? 'night page' : 'the meeting'}` : ''}</span>` : ''}
     <button class="${needsReplacement ? '' : 'primary'}" data-a="new">${needsReplacement ? 'New game' : 'Begin on Monday'}</button><div class="new-confirm" hidden>${savedReadFailed ? 'The saved notebook could not be checked. Beginning may replace an existing notebook.' : 'The old notebook will be replaced.'}<div class="row"><button data-a="yes-new">Yes, begin</button><button data-a="no-new">No</button></div></div>${footer}</div></div>`;
   mountNotice();
@@ -1222,15 +1251,21 @@ function dayView(s: GameState, full: boolean) {
   requiredUiValue(root.querySelector('.info-content'), 'day information content').innerHTML = infoContent(s);
   const ctx = pacingContext(s);
   const who = ui.sheetFor ?? faces[0];
-  const slowed = ctx.inspecting
-    ? s.month
-      ? 'You are reading. Time moves slowly.'
-      : 'You are reading. Time is paused.'
-    : ctx.talking
-      ? `${who ? RESIDENTS[who].name : 'Someone'} is talking. Time ${s.month ? 'moves slowly' : 'is paused'}.`
-      : !s.k.walk && s.k.busyUntil <= s.minute && openTasks(s).length
-        ? playback(s, false, false, selectedSpeed).reason
-        : `${clockPlayback(s).rate} game minutes/second`;
+  const holding = !ctx.inspecting && !ctx.talking && performance.now() < ui.readUntil;
+  readHoldShown = holding;
+  const slowed =
+    pauseNotice({
+      ...ctx,
+      holding,
+      month: !!s.month,
+      who,
+      reading: infoOpen
+        ? 'information'
+        : (['notebook', 'orders', 'residents', 'tell', 'invent'] as const).find((name) => name === ui.sheet),
+    }) ??
+    (!s.k.walk && s.k.busyUntil <= s.minute && openTasks(s).length
+      ? playback(s, false, false, selectedSpeed).reason
+      : `${clockPlayback(s).rate} game minutes/second`);
   requiredUiValue(root.querySelector('.clock-rate'), 'day clock rate').textContent = slowed;
   const tasks = openTasks(s).sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
   requiredUiValue(root.querySelector('.order-pips'), 'day order pips').innerHTML = s.tasks
@@ -1271,7 +1306,9 @@ function dayView(s: GameState, full: boolean) {
   }
   const voice = [...s.said].reverse().find((x) => x.kind === 'voice');
   requiredUiValue(root.querySelector<HTMLElement>('.speech-overlay'), 'day speech overlay').textContent =
-    voice && performance.now() < ui.readUntil ? `${nameOf(voice.who)}: ${voice.text}` : '';
+    voice && performance.now() < ui.readUntil
+      ? `${speakerLabel(voice.who)}: ${replyWording(voice.who, voice.text)}`
+      : '';
   const panel = requiredUiValue(root.querySelector<HTMLElement>('.sheet'), 'day sheet');
   const action = requiredUiValue(root.querySelector<HTMLElement>('.action-bar'), 'day action bar');
   const previousVerbs = action.querySelector('.verbs');
@@ -1324,7 +1361,7 @@ function choose(s: GameState, to: Place, person: Rid | null = null, task: number
 }
 function tripActions(s: GameState, el: HTMLElement) {
   if (s.k.walk) {
-    el.innerHTML = `<div class="travel-status">${s.k.walk.from === s.k.walk.to ? 'Sitting together · finished' : `On the way to ${esc(placeName(s.k.walk.to))} · there`} about ${clockOf(s.k.walk.at1)}</div>`;
+    el.innerHTML = `<div class="travel-status">${s.k.walk.from === s.k.walk.to ? 'Staying here (sitting, resting or replying) · until' : `On the way to ${esc(placeName(s.k.walk.to))} · there`} about ${clockOf(s.k.walk.at1)}</div>`;
     return;
   }
   if (s.k.busyTask !== null) {
@@ -1332,7 +1369,9 @@ function tripActions(s: GameState, el: HTMLElement) {
     el.innerHTML = `<div class="travel-status">Working: ${esc(t?.label ?? '')} · done about ${clockOf(s.k.busyUntil)}</div>`;
     return;
   }
-  const tasks = openTasks(s).sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
+  const tasks = openTasks(s)
+    .filter((t) => !t.wrongDoor)
+    .sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
   const task = selection
     ? selection.task !== null
       ? tasks.find((t) => t.id === selection?.task)
@@ -1387,9 +1426,13 @@ function tripActions(s: GameState, el: HTMLElement) {
     });
   } else {
     const { talking, inspecting } = pacingContext(s);
+    const waitingOn = openTasks(s).find((t) => t.wrongDoor !== undefined && t.done === undefined);
     el.innerHTML = canWait(s, talking, inspecting)
-      ? '<button class="primary" data-a="wait" aria-label="Skip to the next event">Skip ⏩</button>'
-      : '';
+      ? `<button class="primary" data-a="wait" aria-label="Skip to the next event">Skip ⏩<span class="h">${SKIP_ENDPOINT}</span></button>`
+      : waitingOn?.wrongDoor
+        ? `<div class="trip-line"><span>Waiting for ${esc(nameOf(waitingOn.wrongDoor))} to pass on ${esc(RESIDENTS[waitingOn.for].name)}’s parcel.</span></div><button data-rest-trip>Take a ten-minute break</button>`
+        : '';
+    el.querySelector('[data-rest-trip]')?.addEventListener('click', () => send({ kind: 'rest' }));
     el.querySelector('[data-a=wait]')?.addEventListener('click', async () => {
       const ctx = pacingContext(s);
       if (!canWait(s, ctx.talking, ctx.inspecting)) return;
@@ -1573,21 +1616,33 @@ function taskLine(s: GameState, t: Task, current: boolean): string {
     : t.pickup
       ? `from ${placeName(t.pickup)}`
       : `at ${placeName(t.place)}`;
+  const parcel = parcelStatus(t);
+  const left = parcel.kind === 'left';
   const what = t.kind === 'bins' ? 'down from the fourth floor' : t.label;
   const when = t.kind === 'bins' ? 'by 20:45' : `by ${clockOf(t.by)}`;
+  if (left)
+    return `<button class="task left" data-t="${t.id}" aria-pressed="false" disabled>
+    <span class="t">${esc(who)}</span> <span>${esc(what)}</span>
+    <span class="hand soft">${esc(parcel.text)}. Nothing to collect from your room. By ${clockOf(t.by)}</span></button>`;
   return `<button class="task${current ? ' current' : ''}${late ? ' late' : ''}${t.carried ? ' carried' : ''}" data-t="${t.id}" aria-pressed="${current}">
     <span class="t">${t.carried ? '◼ ' : ''}${esc(who)}</span> <span>${esc(what)}</span>
     <span class="hand soft">${t.custody ? `safe with ${esc(nameOf(t.custody))}; waiting for both residents to be home` : where}, ${when}${late ? ' · late' : ''} · ${travelMinutes(s, s.k.at, t.carried || !t.pickup ? t.place : t.pickup)}${!t.carried && t.pickup ? ` + ${travelMinutes(s, t.pickup, t.place)}` : ''} min${t.kind === 'bins' ? ` · ${esc(binsWarning(s, t.carried ? 'step' : requiredUiValue(t.pickup, 'bins pickup')))}` : ''}</span></button>`;
 }
 
 function saidLine(x: Said): string {
-  const id = `data-n="${x.n ?? ''}"`;
+  return saidRow({ said: x, key: String(x.n ?? '') });
+}
+
+function saidRow({ said: x, key }: JournalRow): string {
+  const id = `data-n="${key}"`;
   if (x.kind === 'margin')
     return `<div ${id} class="margin hand">${esc(x.text)} <span class="soft">— R.</span></div>`;
-  if (x.kind === 'voice')
-    return `<div ${id}><span class="soft small">${esc(nameOf(x.who))}:</span> <span class="hand">${esc(x.text)}</span></div>`;
+  if (x.kind === 'voice') {
+    const { text, tip } = splitTip(replyWording(x.who, x.text));
+    return `<div ${id}><span class="soft small">${esc(speakerLabel(x.who))}:</span> <span class="hand">${esc(text)}</span>${tip === undefined ? '' : ` <span class="soft small">(a ₺${tip} tip for you)</span>`}</div>`;
+  }
   if (x.kind === 'heard') return `<div ${id} class="heard">… ${esc(x.text)}</div>`;
-  return `<div ${id} class="${x.kind === 'event' ? 'event' : ''}">${esc(x.text)}</div>`;
+  return `<div ${id} class="${x.kind === 'event' ? 'event' : ''}">${esc(x.text)}${x.kind === 'event' && isWitnessLine(x.text) ? ` <span class="soft small">${WITNESS_NOTE}</span>` : ''}</div>`;
 }
 
 function journalPosition(el: HTMLElement | null) {
@@ -1634,13 +1689,17 @@ function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof jour
     });
     journalResizes.set(el, observer);
   }
-  const lines = s.said.filter((x) => dayOf(x.at) === dayOf(s.minute) || x.kind === 'margin').slice(-40);
+  const lines = journalRows(s.said, parcelNotices(s.tasks))
+    .filter((x) => dayOf(x.said.at) === dayOf(s.minute) || x.said.kind === 'margin')
+    .slice(-40);
   const refusals = continuityRefusals(s);
   const diagnostic =
     new URLSearchParams(globalThis.location?.search ?? '').get('lab') === '1'
       ? continuityRefusals(s, true)
       : [];
-  const key = JSON.stringify([refusals, diagnostic]) + lines.map((x) => `${x.n}:${x.at}:${x.text}`).join('|');
+  const key =
+    JSON.stringify([refusals, diagnostic]) +
+    lines.map((x) => `${x.key}:${x.said.at}:${x.said.text}`).join('|');
   if (el.dataset.k !== key) {
     el.dataset.k = key;
     el.innerHTML =
@@ -1648,7 +1707,7 @@ function journal(s: GameState, el: HTMLElement, position: ReturnType<typeof jour
       (diagnostic.length
         ? `<details><summary>Debug</summary>${diagnostic.map((reason) => `<p>${esc(reason)}</p>`).join('')}</details>`
         : '') +
-      lines.map(saidLine).join('');
+      lines.map(saidRow).join('');
     const observer = journalResizes.get(el);
     observer?.disconnect();
     for (const row of el.children) observer?.observe(row);
@@ -1692,7 +1751,7 @@ function sheet(s: GameState, el: HTMLElement) {
     const kind = ui.sheet;
     const orders = kind === 'orders';
     if (el.dataset.directory !== kind) {
-      el.innerHTML = `<div class="who"><b>${orders ? 'All orders' : 'Residents'}</b><button class="x" data-a="close" aria-label="Close">✕</button></div><div class="directory-items${orders ? '' : ' resident-list'}"></div>`;
+      el.innerHTML = `<div class="who"><b>${orders ? 'All orders' : 'Residents'}</b><button class="x" data-a="close" aria-label="Close">✕</button></div><p class="soft small">${resumeNote('reading', !!s.month)}</p><div class="directory-items${orders ? '' : ' resident-list'}"></div>`;
       el.dataset.directory = kind;
       el.querySelector('[data-a=close]')?.addEventListener('click', () => {
         ui.sheet = 'none';
@@ -1708,7 +1767,8 @@ function sheet(s: GameState, el: HTMLElement) {
       const b = document.createElement('button');
       b.className = 'prank';
       b.dataset.a = 'swap';
-      b.textContent = 'Swap Hacer’s and Sevim’s newspapers';
+      b.setAttribute('aria-label', 'Swap Hacer’s and Sevim’s newspapers');
+      b.innerHTML = `Swap Hacer’s and Sevim’s newspapers<span class="h">${SWAP_NOTE}</span>`;
       b.addEventListener('click', () => send({ kind: 'prank', what: 'swap' }));
       el.insertBefore(b, items);
     }
@@ -1728,6 +1788,7 @@ function sheet(s: GameState, el: HTMLElement) {
           items.append(button);
         } else {
           button.className = next.className;
+          button.disabled = next.disabled;
           if (button.innerHTML !== next.innerHTML) button.innerHTML = next.innerHTML;
         }
       }
@@ -1878,7 +1939,9 @@ function placeHtml(s: GameState, _small = false): string {
   const at = s.k.at;
   const bits: string[] = [];
   if (canSwap(s))
-    bits.push('<button class="prank" data-a="swap">Swap Hacer’s and Sevim’s newspapers</button>');
+    bits.push(
+      `<button class="prank" data-a="swap" aria-label="Swap Hacer’s and Sevim’s newspapers">Swap Hacer’s and Sevim’s newspapers<span class="h">${SWAP_NOTE}</span></button>`,
+    );
 
   if (at.startsWith('door:')) {
     const id = at.slice(5) as Rid;
@@ -1890,7 +1953,9 @@ function placeHtml(s: GameState, _small = false): string {
     else if (r.where !== 'home') bits.push(`<div class="hand soft">${esc(RESIDENTS[id].name)} is out.</div>`);
   }
   if ((at === 'step' || at === 'room') && s.gateUntil < s.minute)
-    bits.push(`<button class="prank" data-a="gate">Leave the courtyard gate open</button>`);
+    bits.push(
+      `<button class="prank" data-a="gate" aria-label="Leave the courtyard gate open">Leave the courtyard gate open<span class="h">${GATE_NOTE}</span></button>`,
+    );
   return bits.join('');
 }
 
@@ -1912,14 +1977,14 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
       ? `<div class="faces">${faces.map((f) => `<button class="${f === who ? 'on' : ''}" data-face="${f}" aria-pressed="${f === who}">${RESIDENTS[f].name}</button>`).join('')}</div>`
       : '';
   const head = `${tabs}<div class="who"><b>${esc(info.call)}</b><span class="soft small">flat ${info.flat} · ${esc(read.warmth)} ${esc(read.word)}</span><button class="x" data-a="close" aria-label="Close conversation">✕</button></div>
-    <div class="availability soft" aria-live="polite"></div>${lastLine ? `<div class="hand said">${esc(lastLine.text)}</div>` : `<div class="soft small">${esc(info.blurb)}</div>`}`;
+    <div class="availability soft" aria-live="polite"></div>${lastLine ? `<div class="hand said">${esc(spokenLine(lastLine.who, lastLine.text))}</div>` : `<div class="soft small">${esc(info.blurb)}</div>`}`;
   const grudge = r.grudges.find((g) => !ui.grudgeSaid.has(`${who}:${g.at}`));
   if (ui.sheet === 'tell') {
     const items = tellables(s, who);
-    return `${head}<div class="soft small">Tell ${esc(info.name)}…</div><div class="tells">${items
+    return `${head}<div class="soft small">Tell ${esc(info.name)}…</div><p class="soft small">${TELL_EXPLAINED}</p><div class="tells">${items
       .map(
         (t, i) => `<div class="tell"><span>${esc(t.words)} <span class="hand soft">${t.sure}</span></span>
-        <span class="row"><button data-tell="${i}" data-sure="0">as I heard it</button><button data-tell="${i}" data-sure="1">for certain</button></span></div>`,
+        <span class="row"><button data-tell="${i}" data-sure="0" aria-label="${esc(tellLabel(t, false))}">as I heard it</button><button data-tell="${i}" data-sure="1" aria-label="${esc(tellLabel(t, true))}">for certain</button></span></div>`,
       )
       .join('')}${items.length === 0 ? '<div class="soft">You have no news to pass on yet.</div>' : ''}</div>
       <div class="row"><button data-a="invent">Make something up…</button><button data-a="back">Back</button></div>`;
@@ -1948,7 +2013,7 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
   const departure = departureLine(s, who);
   const asked = r.newsDay === dayOf(s.minute);
   const sat = r.sitDay === dayOf(s.minute);
-  const speech = lastLine?.text ?? '';
+  const speech = lastLine ? spokenLine(lastLine.who, lastLine.text) : '';
   const longSpeech = speech.length > 240;
   const spoken = longSpeech
     ? `<details><summary>Read ${esc(info.name)}’s full answer</summary><div class="hand said">${esc(speech)}</div></details>`
@@ -1956,6 +2021,7 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
   const title = `<div class="who"><b>${esc(info.call)}</b><button class="x" data-a="close" aria-label="Close conversation">✕</button></div>`;
   return `${title}<div class="door-context">${tabs}<div class="soft small">flat ${info.flat} · ${esc(read.warmth)} ${esc(read.word)}</div>
     ${present ? (lastLine ? spoken : `<div class="soft small">${esc(info.blurb)}</div>`) : `<div class="hand departure">${esc(departure)}</div>`}
+    ${present ? `<div class="soft small">${resumeNote('talking', !!s.month)}</div>` : ''}
     ${grudge ? `<div class="hand rope">“I hear you’ve been saying things about me.”</div>` : ''}
     ${present && s.month ? carriedOther.map((t) => `<button data-entrust="${t.id}">Ask ${esc(info.name)} to keep ${esc(nameOf(t.for))}’s parcel sealed</button>`).join('') : ''}
     ${present ? carriedOther.map((t) => `<button class="prank" data-mis="${t.id}">Leave ${esc(RESIDENTS[t.for].name)}’s ${esc(t.label.replace(/^a /, ''))} here</button>`).join('') : ''}</div>
@@ -1963,7 +2029,7 @@ function doorHtml(s: GameState, who: Rid, faces: Rid[]): string {
       <button data-a="news" ${asked || !present ? 'disabled' : ''}>Anything new?${asked ? '<span class="h">You asked today. Ask again tomorrow.</span>' : ''}</button>
       <button data-rest>Take a ten-minute break</button>
       <button data-a="tell" ${!present ? 'disabled' : ''}>Tell…</button>
-      ${canReplyBuilding(s, who) ? `<button data-reply="thank">Thank you for telling me</button><button data-reply="listen">I am listening</button><p class="soft small">A reply takes two minutes. They can choose to leave the subject.</p>` : ''}
+      ${canReplyBuilding(s, who) ? `<button data-reply="thank">Thank you for telling me</button><button data-reply="listen">I am listening</button><p class="soft small">${REPLY_EXPLAINED}</p>` : ''}
       <button data-a="sit" ${sat || !present ? 'disabled' : ''}>Sit together${sat ? '<span class="h">You sat together today. Return tomorrow.</span>' : ''}</button>
       ${who === 'derya' ? `<button data-a="sit-boundaries" ${sat || !present ? 'disabled' : ''}>Ask about work boundaries and training${sat ? '<span class="h">You sat together today. Return tomorrow.</span>' : ''}</button>` : ''}
 ${s.month && dayOf(s.minute) >= 15 && s.secrets[PRIVATE_FACTS[who]] !== undefined && !s.month.helped[who] ? `<button data-help-story ${!present || s.k.at !== `door:${who}` ? 'disabled' : ''}>Offer to ${esc(PRIVATE_WORK[who].label)}<span class="h">A private confidence and their agreement are needed. It takes time before seven.</span></button>` : ''}
@@ -2080,7 +2146,9 @@ function notebookHtml(s: GameState): string {
     return `<div class="flatline"><b>flat ${RESIDENTS[id].flat}</b> <span class="hand soft">${esc(rd.warmth)} ${esc(rd.word)}</span></div>`;
   }).join('');
   return `<div class="who"><b>The notebook</b><button class="x" data-a="close">✕</button></div>
+    <p class="soft small">${resumeNote('reading', !!s.month)}</p>
     <div class="nb">
+    <p class="soft small">${NOTEBOOK_EXPLAINED}</p>
     <h3>How you feel</h3>${selfReading(s)
       .map((line) => `<div>${esc(line)}</div>`)
       .join('')}
@@ -2282,6 +2350,7 @@ function sundayPage(s: GameState) {
 }
 
 export const _debug = {
+  doorHtml,
   begin,
   titlePage,
   continueNotebook,
