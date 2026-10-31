@@ -1157,3 +1157,27 @@ body {
 .native-save-status button {
   margin-inline-start: 0.75rem;
 }
+
+/* Notes inside action buttons: what the prank does, where Skip stops. */
+.prank .h,
+.action-bar [data-a="wait"] .h {
+  display: block;
+  font-family: var(--hand);
+  font-weight: normal;
+  font-size: 0.85em;
+}
+.task.left {
+  opacity: 0.7;
+}
+/* The desktop status line shares a short strip with the order squares; let it wrap rather than clip. */
+@media (min-width: 900px) {
+  .game > .state-strip {
+    justify-content: flex-end;
+  }
+  .game > .state-strip > .clock-rate {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    text-align: right;
+  }
+}

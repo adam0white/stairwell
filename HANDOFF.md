@@ -307,3 +307,16 @@ Both findings in `~/code/.lab-scratch/games-deferred/resume-stairwell-reader-ind
 Admission now checks generation/current world after awaited chapter validation. Admission and checkpoint/fork/terminal preparation share a pre-CAS recovery-staging guard after notebook capture and immediately before starting the recovery write. Checkpoint preparation also checks generation/current world after its final awaited checkpoint. Invalidated pre-submission capture cannot write a stale recovery or submit CAS. Already-submitted exact CAS acceptance is still durably marked accepted before checking invalidation; this path was not moved behind the new pre-submission guard.
 
 R3 controls use the real owner dispatcher and installed SDK with isolated synthetic transport, without changing peer guards/catalogs. Missing-authority native/file chapter validation, current empty authority, persistent denial binding, cancellation during chapter/capture, retry after cancellation and accepted late-CAS recovery pass. Source/proof/check limits and final cumulative patch/hash are in `~/code/.lab-scratch/games-deferred/resume-stairwell-reader-r3-report.md` and JSON. Root resumes the same reviewer; no new review was requested. The existing browser guardrail/2026-11-03 target remains. No browser, screenshot, commit, push, PR or deployment occurred. Keep this backed-up tree for director review/integration.
+
+## LIGHT candidate F2286–F2300 — 2026-10-30
+
+Unsigned, uncommitted tree on base c2bfaae (HF4.14.0, client0.5.13, kit0.5.30); pins unchanged. Changed paths: `src/sim/hf-game.ts` (one pickup guard), `src/ui/app.ts`, `src/ui/plain-guidance.ts` (new), `src/ui/style.css`, `test/plain-guidance.test.ts` (new), plus docs. The per-ask table is in `docs/design.md`.
+
+Remaining, in order:
+1. The same reviewer verifies the exact signed identity. A separate written Opus CLEAR on that exact SHA follows.
+2. Normal lane and the full suite (not rerun here after the corrections), exact source and main CI, normal deploy, and a matching clean live `/release.json`.
+3. Phone 360×690 and desktop 1280×800 in the existing Chrome profile: title and checkboxes, desktop clock wrap, long notebook/orders/Tell/conversation text, Skip and prank notes, pointer use, hold-expiry display, save text.
+4. The standing player's retests, tapping the unchanged Skip, Swap and Gate names and the new Tell names.
+5. Adam: feel, and the three design questions (reply meaning, witnessed-deed reaction, other people's feeling and trust cue). Date 2026-11-03.
+
+Known limits: a save that re-collected a left parcel will refuse replay and offer a fresh start. Reply wording and the "<Name> says …" claim attribution are display-only (conversation panel, journal and overlay for replies); stored text is unchanged. The three design questions are open choices with the reasons in `docs/design.md`, not blanket impossibilities. Geometry is unverified. No player or owner acceptance is claimed.
