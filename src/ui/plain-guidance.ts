@@ -1,7 +1,8 @@
 /** Plain-language display projections. Nothing here changes game state or the stored journal text. */
 import { RESIDENTS, type Rid } from '../sim/building-cast.ts';
-import type { Said, Task } from '../sim/building-types.ts';
+import type { Place, Said, Task } from '../sim/building-types.ts';
 import { claimWords, nameOf } from '../sim/building-words.ts';
+import type { GameState } from '../sim/hf-view.ts';
 import { clockOf } from '../sim/hf-view.ts';
 import type { Tellable } from './native-reads.ts';
 
@@ -81,6 +82,11 @@ export function spokenLine(who: string, text: string): string {
 export function splitTip(text: string): { text: string; tip?: number } {
   const match = /^(.*?)\s*\(₺(\d+)\)$/s.exec(text);
   return match ? { text: match[1] ?? text, tip: Number(match[2]) } : { text };
+}
+
+/** Display a learned claim without adding details that were not spoken. */
+export function notebookClaimTitle(prop: string, title: string): string {
+  return prop === 'tarik:kind' ? 'Tarık is said to be kind.' : title;
 }
 
 /** Witness lines record that someone noticed. The game shows no reading of what they made of it. */
@@ -210,4 +216,20 @@ export function parcelStatus(task: Pick<Task, 'carried' | 'wrongDoor' | 'done'>)
     : task.carried
       ? { kind: 'carried', text: 'you are carrying it' }
       : { kind: 'collect', text: 'waiting to be collected' };
+}
+
+/** Only a carried parcel at its own absent recipient's door is awaiting handover here. */
+export function pendingParcelAtDoor(s: GameState, task: Task, to: Place): boolean {
+  return (
+    task.kind === 'parcel' &&
+    task.done === undefined &&
+    task.from <= s.minute &&
+    !!task.carried &&
+    task.wrongDoor === undefined &&
+    task.custody === undefined &&
+    task.place === `door:${task.for}` &&
+    to === task.place &&
+    s.k.at === task.place &&
+    s.residents.some((resident) => resident.id === task.for && resident.where !== 'home')
+  );
 }

@@ -1,4 +1,5 @@
 import { PEOPLE_ACROSS_GAMES } from '@adam0white/lab-kit';
+import { orderRows } from './order-rows.ts';
 /**
  * The Stairwell UI: a page from the kapıcı's notebook. Plain DOM, no framework. The shared native Run owns people.
  * This file reads public projections and queues host inputs. IndexedDB stores complete checkpoints at save boundaries.
@@ -31,7 +32,6 @@ import {
   rOf,
   type Said,
   SECRET_PROPS,
-  type Task,
   TOP_FLOOR,
   tellables,
   WORK_START_VERSION,
@@ -72,12 +72,7 @@ import { NATIVE_FILE_MAX_BYTES } from './native-file.ts';
 import type { NativeJournalSnapshot, NativeNotebook } from './native-notebook.ts';
 import { bindNativeOwner, createNativeOwner, type NativeOwner, nativeOwner } from './native-owner.ts';
 import type { OwnerOperation } from './native-owner-core.ts';
-import {
-  projectedBins as binsWarning,
-  hasNativeForecast,
-  selfReading,
-  projectedTravel as travelMinutes,
-} from './native-reads.ts';
+import { hasNativeForecast, selfReading, projectedTravel as travelMinutes } from './native-reads.ts';
 import { createNativeSaveCoordinator } from './native-save-coordinator.ts';
 import {
   clearNativeSaved,
@@ -93,9 +88,10 @@ import {
   type JournalRow,
   journalRows,
   NOTEBOOK_EXPLAINED,
+  notebookClaimTitle,
   parcelNotices,
-  parcelStatus,
   pauseNotice,
+  pendingParcelAtDoor,
   REPLY_EXPLAINED,
   ROLE_EXPLAINED,
   replyWording,
@@ -1205,6 +1201,7 @@ function render(full: boolean) {
 // ---------- the day ----------
 
 function dayView(s: GameState, full: boolean) {
+  refreshSelection(s);
   const oldLog = app().querySelector<HTMLElement>('.journal');
   const position =
     oldLog && oldLog.clientHeight === 0
@@ -1229,19 +1226,7 @@ function dayView(s: GameState, full: boolean) {
         render(false);
       });
     });
-    root.querySelector('.scene')?.addEventListener('click', (e) => {
-      const hit = (e.target as Element).closest('[data-go]');
-      if (hit) choose(s, hit.getAttribute('data-go') as Place);
-    });
-    root.querySelector('.scene')?.addEventListener('keydown', (e) => {
-      if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') {
-        const hit = (e.target as Element).closest('[data-go]');
-        if (hit) {
-          e.preventDefault();
-          choose(s, hit.getAttribute('data-go') as Place);
-        }
-      }
-    });
+    bindSceneChoices(root.querySelector('.scene'), () => ui.s);
     ui.sheetKey = '';
   }
   const d = dayOf(s.minute);
@@ -1298,12 +1283,7 @@ function dayView(s: GameState, full: boolean) {
   root.classList.toggle('decision', ['tell', 'invent'].includes(ui.sheet));
   root.classList.toggle('travelling', !!s.k.walk || s.k.busyTask !== null);
   requiredUiValue(root.querySelector('.scene-drawing'), 'day scene drawing').innerHTML = sceneSvg(s);
-  for (const hit of root.querySelectorAll<SVGElement>('.scene [data-go]')) {
-    hit.setAttribute('tabindex', s.k.walk || s.k.busyTask !== null ? '-1' : '0');
-    hit.setAttribute('role', 'button');
-    hit.setAttribute('aria-label', placeName(hit.getAttribute('data-go') as Place));
-    hit.setAttribute('aria-pressed', String(selection?.to === hit.getAttribute('data-go')));
-  }
+  sceneChoices(s, root.querySelectorAll<SVGElement>('.scene [data-go]'));
   const voice = [...s.said].reverse().find((x) => x.kind === 'voice');
   requiredUiValue(root.querySelector<HTMLElement>('.speech-overlay'), 'day speech overlay').textContent =
     voice && performance.now() < ui.readUntil
@@ -1349,8 +1329,39 @@ function dayView(s: GameState, full: boolean) {
   journal(s, requiredUiValue(root.querySelector<HTMLElement>('.journal'), 'day journal'), position);
 }
 
+function sceneChoices(s: GameState, hits: Iterable<SVGElement>) {
+  for (const hit of hits) {
+    hit.setAttribute('tabindex', s.k.walk || s.k.busyTask !== null ? '-1' : '0');
+    hit.setAttribute('role', 'button');
+    hit.setAttribute('aria-label', placeName(hit.getAttribute('data-go') as Place));
+    hit.setAttribute('aria-pressed', String(selection?.to === hit.getAttribute('data-go')));
+  }
+}
+function bindSceneChoices(scene: Element | null, getWorld: () => GameState | null) {
+  if (!scene) return;
+  scene.addEventListener('click', (e) => {
+    const hit = (e.target as Element).closest('[data-go]');
+    const s = getWorld();
+    if (hit && s) choose(s, hit.getAttribute('data-go') as Place);
+  });
+  scene.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') {
+      const hit = (e.target as Element).closest('[data-go]');
+      const s = getWorld();
+      if (hit && s) {
+        e.preventDefault();
+        choose(s, hit.getAttribute('data-go') as Place);
+      }
+    }
+  });
+}
 function choose(s: GameState, to: Place, person: Rid | null = null, task: number | null = null) {
-  if (s.k.walk || s.k.busyTask !== null) return;
+  if (s.k.walk || s.k.busyTask !== null || s.k.busyUntil > s.minute) return;
+  if (task !== null) {
+    const current = openTasks(s).find((entry) => entry.id === task);
+    if (!current || current.done !== undefined || current.wrongDoor || current.custody) return;
+    to = current.carried || !current.pickup ? current.place : current.pickup;
+  }
   if (to === s.k.at && task === null) {
     selection = null;
     goTo(s, to, person);
@@ -1358,6 +1369,16 @@ function choose(s: GameState, to: Place, person: Rid | null = null, task: number
   }
   selection = { to, person, task };
   render(false);
+}
+function refreshSelection(s: GameState) {
+  if (selection?.task !== null && selection?.task !== undefined) {
+    const current = openTasks(s).find(
+      (entry) => entry.id === selection?.task && !entry.wrongDoor && !entry.custody,
+    );
+    selection = current
+      ? { ...selection, to: current.carried || !current.pickup ? current.place : current.pickup }
+      : null;
+  }
 }
 function tripActions(s: GameState, el: HTMLElement) {
   if (s.k.walk) {
@@ -1369,8 +1390,9 @@ function tripActions(s: GameState, el: HTMLElement) {
     el.innerHTML = `<div class="travel-status">Working: ${esc(t?.label ?? '')} · done about ${clockOf(s.k.busyUntil)}</div>`;
     return;
   }
+  refreshSelection(s);
   const tasks = openTasks(s)
-    .filter((t) => !t.wrongDoor)
+    .filter((t) => !t.wrongDoor && !t.custody)
     .sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
   const task = selection
     ? selection.task !== null
@@ -1385,6 +1407,11 @@ function tripActions(s: GameState, el: HTMLElement) {
       selection = null;
       render(false);
     });
+    return;
+  }
+  if (to && task && pendingParcelAtDoor(s, task, to)) {
+    el.innerHTML = `<div class="trip-line"><b>${esc(RESIDENTS[task.for].name)} · ${esc(task.label)}</b><span>You are waiting here with the parcel. ${esc(RESIDENTS[task.for].name)} is out.</span></div><button data-rest-trip>Take a ten-minute break</button>`;
+    el.querySelector('[data-rest-trip]')?.addEventListener('click', () => send({ kind: 'rest' }));
     return;
   }
   if (to) {
@@ -1608,27 +1635,6 @@ function sceneSvg(s: GameState): string {
   return `<svg viewBox="0 ${cropped ? cropY : 0} ${W} ${cropped ? 88 : H}" preserveAspectRatio="none" role="group" aria-label="${cropped ? 'Current floor' : 'The building'}">${parts.join('')}</svg>`;
 }
 
-function taskLine(s: GameState, t: Task, current: boolean): string {
-  const late = s.minute > t.by;
-  const who = t.kind === 'bins' ? 'Bins' : RESIDENTS[t.for].name;
-  const where = t.carried
-    ? `to ${placeName(t.place)}`
-    : t.pickup
-      ? `from ${placeName(t.pickup)}`
-      : `at ${placeName(t.place)}`;
-  const parcel = parcelStatus(t);
-  const left = parcel.kind === 'left';
-  const what = t.kind === 'bins' ? 'down from the fourth floor' : t.label;
-  const when = t.kind === 'bins' ? 'by 20:45' : `by ${clockOf(t.by)}`;
-  if (left)
-    return `<button class="task left" data-t="${t.id}" aria-pressed="false" disabled>
-    <span class="t">${esc(who)}</span> <span>${esc(what)}</span>
-    <span class="hand soft">${esc(parcel.text)}. Nothing to collect from your room. By ${clockOf(t.by)}</span></button>`;
-  return `<button class="task${current ? ' current' : ''}${late ? ' late' : ''}${t.carried ? ' carried' : ''}" data-t="${t.id}" aria-pressed="${current}">
-    <span class="t">${t.carried ? '◼ ' : ''}${esc(who)}</span> <span>${esc(what)}</span>
-    <span class="hand soft">${t.custody ? `safe with ${esc(nameOf(t.custody))}; waiting for both residents to be home` : where}, ${when}${late ? ' · late' : ''} · ${travelMinutes(s, s.k.at, t.carried || !t.pickup ? t.place : t.pickup)}${!t.carried && t.pickup ? ` + ${travelMinutes(s, t.pickup, t.place)}` : ''} min${t.kind === 'bins' ? ` · ${esc(binsWarning(s, t.carried ? 'step' : requiredUiValue(t.pickup, 'bins pickup')))}` : ''}</span></button>`;
-}
-
 function saidLine(x: Said): string {
   return saidRow({ said: x, key: String(x.n ?? '') });
 }
@@ -1742,7 +1748,8 @@ function sheet(s: GameState, el: HTMLElement) {
   else if (s.k.busyTask !== null) key = 'busy';
   else
     key = `at:${at}:${faces.join(',')}:${ui.sheet}:${ui.sheetFor}:${ui.inventAbout}:${ui.dismissed}:${s.minute}:${lastVoice(s)}`;
-  if (key === ui.sheetKey) return;
+  // Retained directories depend on live task state and selection, including within one minute.
+  if (key === ui.sheetKey && ui.sheet !== 'orders' && ui.sheet !== 'residents') return;
   ui.sheetKey = key;
   const directory = ui.sheet === 'orders' || ui.sheet === 'residents';
   el.classList.toggle('directory', directory);
@@ -1773,32 +1780,7 @@ function sheet(s: GameState, el: HTMLElement) {
       el.insertBefore(b, items);
     }
     if (orders) {
-      // Keep existing rows in place. Requests that arrive while reading append below.
-      const open = openTasks(s).sort((a, b) => Number(!!b.carried) - Number(!!a.carried) || a.by - b.by);
-      for (const task of open) {
-        let button = items.querySelector<HTMLButtonElement>(`[data-t="${task.id}"]`);
-        const fresh = document.createElement('div');
-        fresh.innerHTML = taskLine(s, task, task.id === (selection?.task ?? open[0]?.id));
-        const next = fresh.firstElementChild as HTMLButtonElement;
-        if (!button) {
-          button = next;
-          button.addEventListener('click', () => {
-            if (!task.done) choose(s, task.carried || !task.pickup ? task.place : task.pickup, null, task.id);
-          });
-          items.append(button);
-        } else {
-          button.className = next.className;
-          button.disabled = next.disabled;
-          if (button.innerHTML !== next.innerHTML) button.innerHTML = next.innerHTML;
-        }
-      }
-      for (const button of items.querySelectorAll<HTMLButtonElement>('[data-t]')) {
-        if (open.some((task) => task.id === Number(button.dataset.t))) continue;
-        button.disabled = true;
-        button.classList.remove('current');
-        button.setAttribute('aria-label', `${button.textContent} · delivered`);
-      }
-      if (!items.children.length) items.textContent = 'There are no orders on the board.';
+      orderRows(s, items, selection, choose, () => ui.s);
     } else {
       for (const id of RIDS) {
         const info = RESIDENTS[id];
@@ -1823,7 +1805,8 @@ function sheet(s: GameState, el: HTMLElement) {
           button.dataset.resident = id;
           button.addEventListener('click', () => {
             const row = items.querySelector<HTMLButtonElement>(`[data-resident=${id}]`);
-            if (row) choose(s, row.dataset.go as Place, id);
+            const current = ui.s;
+            if (row && current) choose(current, row.dataset.go as Place, id);
           });
           items.append(button);
         }
@@ -2154,7 +2137,7 @@ function notebookHtml(s: GameState): string {
       .join('')}
     <h3>The flats</h3>${flats}
     <h3>What you have learned <span class="soft small">${found.length} of ${props.length}</span></h3>
-    ${props.map((x) => (s.secrets[x.prop] !== undefined ? `<div>· ${esc(x.title)}</div>` : `<div class="soft">· …</div>`)).join('')}
+    ${props.map((x) => (s.secrets[x.prop] !== undefined ? `<div>· ${esc(notebookClaimTitle(x.prop, x.title))}</div>` : `<div class="soft">· …</div>`)).join('')}
     <h3>Stamps: things you have done</h3><div>${s.stamps.length ? s.stamps.map((x) => esc(STAMPS[x.id] ?? x.id)).join(' · ') : '<span class="soft">none yet</span>'}</div>
     </div>`;
 }
@@ -2351,6 +2334,22 @@ function sundayPage(s: GameState) {
 
 export const _debug = {
   doorHtml,
+  tripActions,
+  bindSceneChoices,
+  sceneChoices,
+  sheet,
+  setSheet: (value: Ui['sheet']) => {
+    ui.sheet = value;
+    ui.sheetKey = '';
+  },
+  notebookHtml,
+  choose,
+  get selection() {
+    return selection;
+  },
+  clearSelection() {
+    selection = null;
+  },
   begin,
   titlePage,
   continueNotebook,

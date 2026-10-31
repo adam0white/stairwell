@@ -1,3 +1,7 @@
+# Retest 1 UI candidate — 2026-10-31
+
+Remaining: exact Opus review stays held; phone/desktop geometry and real pointer journeys are unrun. This unsigned candidate repairs current-state retained order selection and pressed state, and adds actual consumer controls for pending parcels and generic notebook claims. Complete current HF full-hash replay and native checkpoint/next-input receipts belong to `~/code/.lab-scratch/games-deferred/restart-stairwell-retest1-correction1.md`. All 20 routes and the folded table lead remain open in [the game’s Deferred record](docs/design.md#retest-1-deferred--2026-10-31). No commit, delivery, canonical fixed marker, whole-ask closure or owner acceptance is claimed. Root retains this worktree.
+
 # Stairwell — current handoff
 
 ## HF4.14 migration — 2026-10-29
