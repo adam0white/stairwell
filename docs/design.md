@@ -353,3 +353,185 @@ This section adds the current checkpoint for these fifteen asks. It rewrites non
 | F2300 vote, ₺, trust meaning, Skip               | The vote rule (five separate votes, four yes needed), the ₺ meaning and the notebook readings are explained at use. Skip lists its real stops: first new journal line, changed orders, someone arriving or leaving, day end, never past 14 hours.                                                                                                                                                                                                                                                                                                                                                           | Layout of these lines is unchecked.                                                                                                                                                                                                                                                                                                                                                                                                                                  | Browser guardrail.                                                                                                                                                                                                                                                                                                      | Director (Chrome lease) | 2026-11-03   |
 
 The ledger rows for these asks stay open in the central ledger; this section does not close them. The reply wording and the claim attribution are display projections, so a save that contains a completed reply or a passed-on claim replays unchanged.
+
+## Retest 1 Deferred — 2026-10-31
+
+Remaining: exact Opus review is held. Geometry and real pointer journeys at 360×690 and 1280×800 are unrun. The unsigned bounded UI candidate addresses selection, pending-parcel presentation and the generic notebook title. No whole ask is closed. Technical delivery, canonical fixed markers, player return and owner acceptance are separate and unclaimed.
+
+All 15 ranked asks and 5 return decisions below remain **Deferred / open**. Literal quotations come from the sealed `light-1031-stairwell-retest1` reports. Sources include exact report lines. Reasons and routes retain the independent review. The scratch correction report records the candidate and command evidence. Earlier missing-helper RED and partial implementation reports remain historical evidence. Full history stdout does not establish model delivery or comprehension. Image viewing remains self-reported and unverified; the earlier root two-PNG inspection is a separate bounded receipt.
+
+### F-2671 — Maya Chen, return
+
+> Would I return voluntarily? I would come back another evening only if I could expect neighbours to respond to my choices and hear something beyond the familiar Monday stories; I would not return tonight or leave it running.
+
+Source: [maya/report.md, lines 1–1](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/maya/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Maya would return another evening only for responses to her choices and fresher stories, not tonight or left running. Hacer saw the gate and swap; no later consequence was reached. Root separately inspected two Maya screenshots, without establishing tester image viewing.
+
+### F-2672 — Jonas Berg, return
+
+> **I would not return voluntarily as it stands: the notebook now moves, but I do not want to play through six days of similar conversations to find out what the Sunday vote does.** I would not leave it running, and I would not come back another evening unless talking offered more distinct, visible consequences.
+
+Source: [jonas/report.md, lines 1–1](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/jonas/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Jonas would consider another evening if talking produced distinct visible consequences; he would not return as it stands or leave it running. He saw the notebook move but did not reach Sunday. The first bakery tap was acknowledged but movement began after a second tap; cause unknown.
+
+### F-2673 — Leila Mansour, return
+
+> **Would I return voluntarily?** Maybe another evening on my laptop, only if conversations gave me more distinct responses to what I say and less repeated gossip; I would not leave it running.
+
+Source: [leila/report.md, lines 1–1](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/leila/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Leila might return on laptop only for distinct responses and less repeated gossip. She says none beyond ranked asks are new blockers; lemon-candy provenance confused her but repeated conversation caused her stop. Surprise and pastry coincided without a proven causal link.
+
+### F-2674 — Rosa Alvarez, return
+
+> I would return voluntarily another evening, on either device, to spend more time with the neighbours and see the Sunday vote; I would close the game now, not leave it running.
+
+Source: [rosa/report.md, lines 1–1](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/rosa/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Rosa would return voluntarily another evening on either device even without an explanation of the vote, and would close the game. She did not reach Skip or Sunday. A wish for vote explanation is not a condition of return.
+
+### F-2675 — Ivo Almeida, return
+
+> I would not return voluntarily soon: I liked the clear delivery results and some resident details, but the repeated jobs and similar conversations lost me.
+
+Source: [ivo/report.md, lines 1–1](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/ivo/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Ivo would not return soon but might be curious another evening if he could continue into different situations without repeating the opening. The director treats parcel and order-selection issues as blocking candidates pending source investigation; Ivo gives no explicit new-blocker classification.
+
+### F-2676 — Maya Chen, ranked ask 1
+
+> Let neighbours respond to things they saw me do. Hacer saw the gate and the newspaper swap, but greeted me with familiar praise; Sevim did not mention the swapped paper in the conversation I reached.
+
+Source: [maya/report.md, lines 5–5](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/maya/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Inspect responses to the gate and swapped paper in the conversations Maya reached. Witnessing was visible, but later consequences were not reached; do not infer none exist.
+
+### F-2677 — Maya Chen, ranked ask 2
+
+> Give conversations more varied responses. Hacer and Sevim both said “Tarık is kind,” and Hacer and Tarık both declined to continue after my replies, though in slightly different words.
+
+Source: [maya/report.md, lines 6–6](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/maya/report.md). Owner: **Stairwell**. Date: **2026-11-10**. Status: **Deferred / open**.
+
+Reason and route: Review Maya’s preference for varied neighbour responses and gossip; Hacer and Tarik used slightly different words but both declined to continue. Preserve resident agency and do not infer hidden belief.
+
+### F-2678 — Maya Chen, ranked ask 3
+
+> Give Tarık something on the first “Anything new?” ask. He said he had no news, then told the ferry story when I sat with him.
+
+Source: [maya/report.md, lines 7–7](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/maya/report.md). Owner: **Stairwell**. Date: **2026-11-10**. Status: **Deferred / open**.
+
+Reason and route: Inspect Tarik’s first news answer alongside the separate ferry story reached by sitting. Maya wants something on the initial ask; this is a variety preference, not a proven broken response.
+
+### F-2679 — Jonas Berg, ranked ask 1
+
+> Give sitting and replying a visible consequence I can understand before the Sunday vote.
+
+Source: [jonas/report.md, lines 5–5](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/jonas/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Review whether sitting and reply effects can be made understandable before Sunday while preserving hidden feelings and trust. Jonas did not reach the vote; no missing effect is established.
+
+### F-2680 — Jonas Berg, ranked ask 2
+
+> Make conversations produce more distinct outcomes; the two replies I tried both ended the discussion.
+
+Source: [jonas/report.md, lines 6–6](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/jonas/report.md). Owner: **Stairwell**. Date: **2026-11-10**. Status: **Deferred / open**.
+
+Reason and route: Review the two observed conversation outcomes for variety. The game said reply wording does not control continuation; do not force resident agreement or change difficulty automatically.
+
+### F-2681 — Jonas Berg, ranked ask 3
+
+> Show why a story I hear does or does not enter the notebook.
+
+Source: [jonas/report.md, lines 7–7](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/jonas/report.md). Owner: **Stairwell**. Date: **2026-11-10**. Status: **Deferred / open**.
+
+Reason and route: Inspect how heard stories reach the notebook. Jonas saw news add a line while a personal story did not appear when checked; do not infer hidden facts or a general missing-record defect.
+
+Candidate scope: the actual notebook shows a received generic `tarik:kind` claim as “Tarık is said to be kind.” Unknown claims and separately gated private disclosures stay hidden. Stored journal, facts and HF words remain exact. Automatic recording of every heard story and broader provenance design remain open.
+
+### F-2682 — Leila Mansour, ranked ask 1
+
+> Give residents more distinct answers to my words, including the replies after their stories. Hacer’s surprise at my invented romance held me; the repeated refusals did not.
+
+Source: [leila/report.md, lines 5–5](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/leila/report.md). Owner: **Stairwell**. Date: **2026-11-10**. Status: **Deferred / open**.
+
+Reason and route: Review Leila’s preference for distinct reactions to her words. Hacer showed surprise at invented romance, while story replies ended similarly; the observed pastry is not proven caused by the story.
+
+### F-2683 — Leila Mansour, ranked ask 2
+
+> Put the stories I hear into the notebook, and make it clear where a detail came from.
+
+Source: [leila/report.md, lines 6–6](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/leila/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Inspect notebook story recording and provenance including the unexplained lemon-candy detail. Preserve uncertainty and do not reveal private feelings or invent a source.
+
+Candidate scope: the actual notebook shows a received generic `tarik:kind` claim as “Tarık is said to be kind.” Unknown claims and separately gated private disclosures stay hidden. Stored journal, facts and HF words remain exact. Automatic recording of every heard story and broader provenance design remain open.
+
+### F-2684 — Leila Mansour, ranked ask 3
+
+> Vary the everyday gossip between residents. Hacer and Sevim both told me Tarık was kind.
+
+Source: [leila/report.md, lines 7–7](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/leila/report.md). Owner: **Stairwell**. Date: **2026-11-10**. Status: **Deferred / open**.
+
+Reason and route: Review repeated everyday gossip between Hacer and Sevim as a variety preference, not a causally established simulation fault.
+
+### F-2685 — Rosa Alvarez, ranked ask 1
+
+> Tell me, in plain words, how the Sunday vote works. I know it concerns my extra pay, but I did not learn how the decision is made.
+
+Source: [rosa/report.md, lines 5–5](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/rosa/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Explain the Sunday vote in plain words where the rules support it. Rosa did not reach the vote and would return even without this explanation; do not invent a voting rule or expose private state.
+
+### F-2686 — Rosa Alvarez, ranked ask 2
+
+> Keep the explanation of the newspaper swap, and add that it may upset someone.
+
+Source: [rosa/report.md, lines 6–6](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/rosa/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Review whether the swap warning can convey the possibility that someone may be upset without promising a reaction. Rosa saw the prank and witness warning; an upset outcome was not observed.
+
+### F-2687 — Rosa Alvarez, ranked ask 3
+
+> Say how far Skip will take me. I did not reach it on this visit, so my earlier question remains open.
+
+Source: [rosa/report.md, lines 7–7](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/rosa/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Review how Skip communicates its destination. Rosa did not reach Skip in this visit; this is her earlier unresolved question, not an observed current failure.
+
+### F-2688 — Ivo Almeida, ranked ask 1
+
+> Make it clear what to do with a parcel when its recipient is out, and why the order still says “Go to” the flat I am already at.
+
+Source: [ivo/report.md, lines 5–5](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/ivo/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Inspect parcel status and Go-to label when the recipient is out. Ivo later saw a waiting message; no automatic delivery or underlying defect is established. Director blocking candidate pending cause.
+
+Candidate scope: actual tripActions controls cover the public pending parcel, alternate destinations and negative states. Geometry and real pointer verification remain unrun. No whole-ask closure.
+
+### F-2689 — Ivo Almeida, ranked ask 2
+
+> Make selecting another order give a visible result, or explain why it cannot be selected.
+
+Source: [ivo/report.md, lines 6–6](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/ivo/report.md). Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason and route: Inspect order-list selection and the map-flat path. Ivo saw no visible switch after tapping another order and the flat route worked; native input acknowledgment is not proof of action and cause is unknown. Director blocking candidate.
+
+Candidate scope: production retained-row behavioral RED established captured old state and stale pressed state. Handlers resolve current world and task identity. Same-minute sheet, preview, disabled/removed/completed choices, map and walking/busy controls are covered. These source bugs do not prove Ivo’s historical tap cause. Geometry and real pointer verification remain unrun.
+
+### F-2690 — Ivo Almeida, ranked ask 3
+
+> Give residents more varied things to say when asked what is new.
+
+Source: [ivo/report.md, lines 7–7](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/ivo/report.md). Owner: **Stairwell**. Date: **2026-11-10**. Status: **Deferred / open**.
+
+Reason and route: Review Ivo’s preference for varied responses to news; he heard the same remark from two residents. Do not infer a global repetition defect.
+
+### Folded table wording lead — open
+
+> I was surprised that the game reported the work done while she was out, because the request was to help carry a table.
+
+Source: [ivo/report.md, section 5](/Users/abdul/code/.lab-scratch/playtest/light-1030/source-packets/stairwell-retest1/ivo/report.md). Folded under F-2675 / F-2689; no fourth ranked ask. Owner: **Stairwell**. Date: **2026-11-03**. Status: **Deferred / open**.
+
+Reason: the stored task label “help carry a folding work table” also appears in HF activity and recorded completion words. This UI candidate has no verified projection for every display surface. A partial replacement could contradict retained activity or journal words. Keep the lead open for a complete display-only wording review. Do not change stored text, HF words, job rules, resident presence or clock to resolve it.
